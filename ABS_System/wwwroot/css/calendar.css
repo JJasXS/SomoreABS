@@ -1,0 +1,79 @@
+/* ===== Calendar toolbar (top row) ===== */
+.calendar-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+
+/* LEFT search */
+.calendar-search-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+}
+
+.calendar-month-select {
+  width: 160px;
+}
+
+.calendar-year-select {
+  width: 120px;
+}
+
+/* RIGHT buttons */
+.calendar-nav-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* ===== Table ===== */
+.calendar-table {
+  table-layout: fixed;
+}
+
+/* cells */
+.calendar-cell {
+  height: 120px;
+}
+
+.calendar-cell-empty {
+  /* empty cell - nothing needed, height already set */
+}
+
+.calendar-cell-day {
+  vertical-align: top;
+}
+
+/* header inside a day cell */
+.calendar-cell-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ===== Events list ===== */
+.calendar-event-list {
+  padding-left: 16px;
+  margin-top: 6px;
+}
+
+.calendar-event-item {
+  margin-bottom: 8px;
+}
+
+/* buttons under each event */
+.calendar-event-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.calendar-delete-form {
+  display: inline;
+}

@@ -1,0 +1,184 @@
+@model List<YourApp.Controllers.CalendarEventVm>
+@{
+    ViewData["Title"] = "Calendar";
+
+    int year = (int)ViewBag.Year;
+    int month = (int)ViewBag.Month;
+
+    DateTime firstDay = (DateTime)ViewBag.FirstDay;
+    int daysInMonth = DateTime.DaysInMonth(year, month);
+
+    // Sunday=0 ... Saturday=6
+    int startOffset = (int)firstDay.DayOfWeek;
+
+    // ✅ Pick-date mode: show + in each day only when pickDate=1
+    bool pickDate = false;
+    if (Context.Request.Query.ContainsKey("pickDate"))
+    {
+        var v = Context.Request.Query["pickDate"].ToString();
+        pickDate = (v == "1" || v.Equals("true", StringComparison.OrdinalIgnoreCase) || v.Equals("y", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Month dropdown source
+    var monthItems = System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.MonthNames
+        .Take(12)
+        .Select((name, idx) => new { Text = name, Value = idx + 1 })
+        .ToList();
+
+    // Year dropdown range (adjust if you want wider range)
+    int startYear = DateTime.Today.Year - 5;
+    int endYear = DateTime.Today.Year + 5;
+}
+
+<link rel="stylesheet" href="~/css/calendar.css" />
+
+<h2>Calendar - @firstDay.ToString("MMMM yyyy")</h2>
+
+<!-- ✅ Top row: Search (left) + Nav buttons (right) -->
+<div class="calendar-toolbar">
+
+    <!-- LEFT: Month + Year search -->
+    <form method="get" action="@Url.Action("Index")" class="calendar-search-form">
+        <select name="month" class="form-select calendar-month-select">
+            @foreach (var m in monthItems)
+            {
+                <option value="@m.Value" selected="@(m.Value == month ? "selected" : null)">@m.Text</option>
+            }
+        </select>
+
+        <select name="year" class="form-select calendar-year-select">
+            @for (int y = startYear; y <= endYear; y++)
+            {
+                <option value="@y" selected="@(y == year ? "selected" : null)">@y</option>
+            }
+        </select>
+
+        <!-- preserve pickDate on search if already in pick mode -->
+        @if (pickDate)
+        {
+            <input type="hidden" name="pickDate" value="1" />
+        }
+
+        <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+
+    <!-- RIGHT: Prev / Today / Next / New Event -->
+    <div class="calendar-nav-actions">
+        <a class="btn btn-secondary"
+           href="@Url.Action("Index", new { year = firstDay.AddMonths(-1).Year, month = firstDay.AddMonths(-1).Month, pickDate = pickDate ? 1 : (int?)null })">
+            ◀ Prev
+        </a>
+
+        <a class="btn btn-secondary"
+           href="@Url.Action("Index", new { year = DateTime.Today.Year, month = DateTime.Today.Month, pickDate = pickDate ? 1 : (int?)null })">
+            Today
+        </a>
+
+        <a class="btn btn-secondary"
+           href="@Url.Action("Index", new { year = firstDay.AddMonths(1).Year, month = firstDay.AddMonths(1).Month, pickDate = pickDate ? 1 : (int?)null })">
+            Next ▶
+        </a>
+
+        @if (!pickDate)
+        {
+            <!-- ✅ Enter pick-date mode -->
+            <a class="btn btn-primary"
+               href="@Url.Action("Index", new { year = year, month = month, pickDate = 1 })">
+                + New Event
+            </a>
+        }
+        else
+        {
+            <!-- ✅ Exit pick-date mode -->
+            <a class="btn btn-outline-secondary"
+               href="@Url.Action("Index", new { year = year, month = month })">
+                Cancel
+            </a>
+        }
+    </div>
+</div>
+
+@if (pickDate)
+{
+   
+}
+
+<table class="table table-bordered calendar-table">
+    <thead>
+        <tr>
+            <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
+        </tr>
+    </thead>
+    <tbody>
+        @{
+            int day = 1;
+            int cell = 0;
+
+            while (day <= daysInMonth)
+            {
+                <tr>
+                    @for (int i = 0; i < 7; i++)
+                    {
+                        if (cell < startOffset || day > daysInMonth)
+                        {
+                            <td class="calendar-cell calendar-cell-empty"></td>
+                        }
+                        else
+                        {
+                            var date = new DateTime(year, month, day);
+                            var dayEvents = Model.Where(e => e.Date.Date == date.Date).ToList();
+
+                            <td class="calendar-cell calendar-cell-day">
+                                <div class="calendar-cell-header">
+                                    <strong>@day</strong>
+
+                                    @* ✅ Show + only in pick-date mode *@
+                                    @if (pickDate)
+                                    {
+                                        <a class="btn btn-sm btn-outline-primary"
+                                           href="@Url.Action("Create", new { date = date.ToString("yyyy-MM-dd") })">
+                                            +
+                                        </a>
+                                    }
+                                </div>
+
+                                @if (dayEvents.Count > 0)
+                                {
+                                    <ul class="calendar-event-list">
+                                        @foreach (var ev in dayEvents)
+                                        {
+                                            <li class="calendar-event-item">
+                                                <div><span>@ev.Title</span></div>
+
+                                                <div class="calendar-event-actions">
+                                                    <a class="btn btn-sm btn-outline-secondary"
+                                                       href="@Url.Action("Edit", new { id = ev.Id })">
+                                                        Edit
+                                                    </a>
+
+                                                    <form method="post"
+                                                          action="@Url.Action("Delete", new { id = ev.Id })"
+                                                          class="calendar-delete-form">
+                                                        @Html.AntiForgeryToken()
+                                                        <button class="btn btn-sm btn-outline-danger" type="submit"
+                                                                onclick="return confirm('Delete this event?');">
+                                                            Delete
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </td>
+
+                            day++;
+                        }
+
+                        cell++;
+                    }
+                </tr>
+            }
+        }
+    </tbody>
+</table>
