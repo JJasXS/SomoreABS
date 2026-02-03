@@ -150,6 +150,25 @@ ORDER BY APPT_START";
         {
             var d = (date ?? DateTime.Today).Date;
             var model = new CalendarEventVm { Date = d };
+
+            // Query ST_ITEM for service products
+            List<string> serviceDescriptions = new();
+            try
+            {
+                using var scope = HttpContext.RequestServices.CreateScope();
+                var db = (YourApp.Data.FirebirdDb)scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                using var conn = db.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"SELECT DESCRIPTION FROM ST_ITEM WHERE STOCKGROUP = 'service' ORDER BY DESCRIPTION";
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    serviceDescriptions.Add(r.IsDBNull(0) ? "" : r.GetString(0).Trim());
+                }
+            }
+            catch { }
+
+            ViewBag.ServiceItems = serviceDescriptions;
             return View(model);
         }
 

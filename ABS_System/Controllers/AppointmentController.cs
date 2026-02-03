@@ -60,6 +60,29 @@ ORDER BY APPT_START DESC";
             ViewBag.Agents = agents;
             ViewBag.Customers = customers;
 
+            // Load service items for dropdown
+            List<YourApp.Models.ST_ITEM> serviceItems = new();
+            try
+            {
+                using var scope = HttpContext.RequestServices.CreateScope();
+                var db = (YourApp.Data.FirebirdDb)scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                using var conn = db.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"SELECT CODE, DESCRIPTION FROM ST_ITEM WHERE STOCKGROUP = 'SERVICE' ORDER BY DESCRIPTION";
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    serviceItems.Add(new YourApp.Models.ST_ITEM
+                    {
+                        CODE = r.IsDBNull(0) ? "" : r.GetString(0).Trim(),
+                        DESCRIPTION = r.IsDBNull(1) ? "" : r.GetString(1).Trim(),
+                        STOCKGROUP = "service"
+                    });
+                }
+            }
+            catch { }
+            ViewBag.ServiceItems = serviceItems;
+
             return View(new Appointment
             {
                 ApptStart = start,
@@ -79,6 +102,28 @@ ORDER BY APPT_START DESC";
             LoadAgentsAndCustomers(out var agents, out var customers);
             ViewBag.Agents = agents;
             ViewBag.Customers = customers;
+            // Load service items for dropdown
+            List<YourApp.Models.ST_ITEM> serviceItems = new();
+            try
+            {
+                using var scope = HttpContext.RequestServices.CreateScope();
+                var db = (YourApp.Data.FirebirdDb)scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                using var conn = db.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"SELECT CODE, DESCRIPTION FROM ST_ITEM WHERE STOCKGROUP = 'service' ORDER BY DESCRIPTION";
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    serviceItems.Add(new YourApp.Models.ST_ITEM
+                    {
+                        CODE = r.IsDBNull(0) ? "" : r.GetString(0).Trim(),
+                        DESCRIPTION = r.IsDBNull(1) ? "" : r.GetString(1).Trim(),
+                        STOCKGROUP = "service"
+                    });
+                }
+            }
+            catch { }
+            ViewBag.ServiceItems = serviceItems;
 
             if (!ModelState.IsValid)
                 return View(m);
@@ -145,6 +190,23 @@ VALUES
             LoadAgentsAndCustomers(out var agents, out var customers);
             ViewBag.Agents = agents;
             ViewBag.Customers = customers;
+            // Load service items for dropdown
+            List<string> serviceDescriptions = new();
+            try
+            {
+                using var scope = HttpContext.RequestServices.CreateScope();
+                var db = (YourApp.Data.FirebirdDb)scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                using var conn = db.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"SELECT DESCRIPTION FROM ST_ITEM WHERE STOCKGROUP = 'SERVICE' ORDER BY DESCRIPTION";
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    serviceDescriptions.Add(r.IsDBNull(0) ? "" : r.GetString(0).Trim());
+                }
+            }
+            catch { }
+            ViewBag.ServiceItems = serviceDescriptions;
 
             using (var conn = _db.Open())
             using (var cmd = conn.CreateCommand())
@@ -188,6 +250,23 @@ WHERE APPT_ID = @id";
             LoadAgentsAndCustomers(out var agents, out var customers);
             ViewBag.Agents = agents;
             ViewBag.Customers = customers;
+            // Load service items for dropdown
+            List<string> serviceDescriptions = new();
+            try
+            {
+                using var scope = HttpContext.RequestServices.CreateScope();
+                var db = (YourApp.Data.FirebirdDb)scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                using var conn = db.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"SELECT DESCRIPTION FROM ST_ITEM WHERE STOCKGROUP = 'service' ORDER BY DESCRIPTION";
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    serviceDescriptions.Add(r.IsDBNull(0) ? "" : r.GetString(0).Trim());
+                }
+            }
+            catch { }
+            ViewBag.ServiceItems = serviceDescriptions;
 
             if (!ModelState.IsValid)
                 return View(m);

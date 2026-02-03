@@ -16,7 +16,17 @@
 
     <div class="mb-3">
         <label class="form-label">Title</label>
-        <input class="form-control" asp-for="Title" />
+        <select class="form-control" asp-for="Title">
+            <option value="">-- Select Service --</option>
+            @if (ViewBag.ServiceItems != null)
+            {
+                foreach (var desc in ViewBag.ServiceItems)
+                {
+                    var selected = Model.Title == desc ? "selected" : "";
+                    <option value="@desc" selected="@selected">@desc</option>
+                }
+            }
+        </select>
         <span class="text-danger" asp-validation-for="Title"></span>
     </div>
 

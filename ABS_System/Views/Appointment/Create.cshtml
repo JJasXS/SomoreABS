@@ -107,7 +107,17 @@
 
   <div>
     <label>Title</label>
-    <input asp-for="Title" />
+    <select asp-for="Title">
+      <option value="">-- Select Service --</option>
+      @if (ViewBag.ServiceItems != null)
+      {
+        foreach (var item in ViewBag.ServiceItems)
+        {
+          var selected = Model.Title == item.CODE ? "selected" : "";
+          <option value="@item.CODE" selected="@selected">@item.CODE - @item.DESCRIPTION</option>
+        }
+      }
+    </select>
     <span asp-validation-for="Title" class="validation"></span>
   </div>
 
