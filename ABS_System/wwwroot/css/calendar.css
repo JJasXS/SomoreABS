@@ -288,7 +288,7 @@
   box-shadow: 0 1px 4px rgba(0,0,0,0.05);
   color: #222;
   font-weight: 500;
-  font-size: 0.92rem;
+  font-size: 0.80rem;
   padding: 8px 10px;
   margin-bottom: 6px;
   min-height: 28px;
@@ -305,7 +305,7 @@
 .appt-card.in-cell .appt-title,
 .appt-card.in-cell .appt-time {
   color: #222 !important;
-  font-size: 0.92rem;
+  font-size: 0.80rem;
   font-weight: 500;
   margin: 0 4px 0 0;
   padding: 0;
@@ -326,7 +326,7 @@
 
 .appt-title {
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: 0.80rem;
   line-height: 1.15;
   color: #1f1f1f;
   overflow: hidden;
