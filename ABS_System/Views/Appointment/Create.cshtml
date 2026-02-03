@@ -61,8 +61,18 @@
   @Html.AntiForgeryToken()
 
   <div>
-    <label>Customer Code</label>
-    <input asp-for="CustomerCode" />
+    <label>Customer</label>
+    <select asp-for="CustomerCode">
+      <option value="">-- Select Customer --</option>
+      @if (ViewBag.Customers != null)
+      {
+        foreach (var cust in (List<dynamic>)ViewBag.Customers)
+        {
+          var selected = Model.CustomerCode == cust.Code ? "selected" : null;
+          <option value="@cust.Code" selected="@selected">@cust.Name</option>
+        }
+      }
+    </select>
     <span asp-validation-for="CustomerCode" class="validation"></span>
   </div>
 

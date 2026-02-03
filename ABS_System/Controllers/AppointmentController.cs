@@ -49,17 +49,31 @@ ORDER BY APPT_START DESC";
             var start = apptStart ?? DateTime.Now;
             // Fetch agents for dropdown
             var agents = new List<dynamic>();
+            var customers = new List<dynamic>();
             using (var conn = _db.Open())
             using (var cmd = conn.CreateCommand())
             {
+                // Load agents
                 cmd.CommandText = "SELECT CODE, DESCRIPTION FROM AGENT ORDER BY DESCRIPTION";
-                using var r = cmd.ExecuteReader();
-                while (r.Read())
+                using (var r = cmd.ExecuteReader())
                 {
-                    agents.Add(new { Code = r.GetString(0).Trim(), Description = r.GetString(1).Trim() });
+                    while (r.Read())
+                    {
+                        agents.Add(new { Code = r.GetString(0).Trim(), Description = r.GetString(1).Trim() });
+                    }
+                }
+                // Load customers
+                cmd.CommandText = "SELECT CODE, COMPANYNAME FROM AR_CUSTOMER ORDER BY COMPANYNAME";
+                using (var r = cmd.ExecuteReader())
+                {
+                    while (r.Read())
+                    {
+                        customers.Add(new { Code = r.GetString(0).Trim(), Name = r.GetString(1).Trim() });
+                    }
                 }
             }
             ViewBag.Agents = agents;
+            ViewBag.Customers = customers;
             return View(new Appointment
             {
                 ApptStart = start
@@ -71,19 +85,33 @@ ORDER BY APPT_START DESC";
         [ValidateAntiForgeryToken]
         public IActionResult Create(Appointment m)
         {
-            // Repopulate agent list for redisplay on error
+            // Repopulate agent and customer lists for redisplay on error
             var agents = new List<dynamic>();
+            var customers = new List<dynamic>();
             using (var conn = _db.Open())
             using (var cmd = conn.CreateCommand())
             {
+                // Load agents
                 cmd.CommandText = "SELECT CODE, DESCRIPTION FROM AGENT ORDER BY DESCRIPTION";
-                using var r = cmd.ExecuteReader();
-                while (r.Read())
+                using (var r = cmd.ExecuteReader())
                 {
-                    agents.Add(new { Code = r.GetString(0).Trim(), Description = r.GetString(1).Trim() });
+                    while (r.Read())
+                    {
+                        agents.Add(new { Code = r.GetString(0).Trim(), Description = r.GetString(1).Trim() });
+                    }
+                }
+                // Load customers
+                cmd.CommandText = "SELECT CODE, COMPANYNAME FROM AR_CUSTOMER ORDER BY COMPANYNAME ASC";
+                using (var r = cmd.ExecuteReader())
+                {
+                    while (r.Read())
+                    {
+                        customers.Add(new { Code = r.GetString(0).Trim(), Name = r.GetString(1).Trim() });
+                    }
                 }
             }
             ViewBag.Agents = agents;
+            ViewBag.Customers = customers;
 
             if (!ModelState.IsValid)
                 return View(m);

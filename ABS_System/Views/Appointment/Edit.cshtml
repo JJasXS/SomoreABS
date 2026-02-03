@@ -1,0 +1,65 @@
+@model YourApp.Models.Appointment
+@{
+    ViewData["Title"] = "Edit Appointment";
+}
+<link rel="stylesheet" href="~/lib/bootstrap/bootstrap.min.css" />
+<style>
+    .edit-card {
+        max-width: 480px;
+        margin: 40px auto;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.10);
+        border-radius: 12px;
+        background: #fff;
+        padding: 32px 28px 24px 28px;
+    }
+    .edit-card h2 {
+        font-size: 1.6rem;
+        font-weight: 600;
+        margin-bottom: 24px;
+        text-align: center;
+    }
+    .form-label {
+        font-weight: 500;
+        margin-bottom: 6px;
+    }
+    .form-control {
+        border-radius: 6px;
+        margin-bottom: 18px;
+    }
+    .edit-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        margin-top: 18px;
+    }
+</style>
+<div class="edit-card">
+    <h2>Edit Appointment</h2>
+    <form asp-action="Edit" method="post">
+        <input type="hidden" asp-for="ApptId" />
+        <div class="mb-3">
+            <label asp-for="CustomerCode" class="form-label">Customer</label>
+            <input asp-for="CustomerCode" class="form-control" />
+        </div>
+        <div class="mb-3">
+            <label asp-for="AgentCode" class="form-label">Agent</label>
+            <input asp-for="AgentCode" class="form-control" />
+        </div>
+        <div class="mb-3">
+            <label asp-for="ApptStart" class="form-label">Start Time</label>
+            <input asp-for="ApptStart" class="form-control" type="datetime-local" />
+        </div>
+        <div class="mb-3">
+            <label asp-for="Title" class="form-label">Title</label>
+            <input asp-for="Title" class="form-control" />
+        </div>
+        <div class="mb-3">
+            <label asp-for="Status" class="form-label">Status</label>
+            <input asp-for="Status" class="form-control" />
+        </div>
+        <div class="edit-actions">
+            <button type="submit" class="btn btn-primary px-4">Save</button>
+            <a asp-controller="Calendar" asp-action="Index" class="btn btn-outline-secondary px-4">Cancel</a>
+        </div>
+    </form>
+</div>
