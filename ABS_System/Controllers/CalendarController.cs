@@ -27,10 +27,41 @@ namespace YourApp.Controllers
                 .ThenBy(e => e.Title)
                 .ToList();
 
+            // Query appointments for this month
+            List<YourApp.Models.Appointment> monthAppointments = new List<YourApp.Models.Appointment>();
+            try
+            {
+                using (var scope = HttpContext.RequestServices.CreateScope())
+                {
+                    var db = (YourApp.Data.FirebirdDb)scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                    using var conn = db.Open();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"SELECT APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, TITLE, NOTES, STATUS FROM APPOINTMENT WHERE APPT_START >= @START AND APPT_START <= @END";
+                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@START", firstDay, FirebirdSql.Data.FirebirdClient.FbDbType.TimeStamp));
+                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@END", lastDay, FirebirdSql.Data.FirebirdClient.FbDbType.TimeStamp));
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read())
+                    {
+                        monthAppointments.Add(new YourApp.Models.Appointment
+                        {
+                            ApptId = r.GetInt64(0),
+                            CustomerCode = r.GetString(1).Trim(),
+                            AgentCode = r.GetString(2).Trim(),
+                            ApptStart = r.GetDateTime(3),
+                            Title = r.IsDBNull(4) ? null : r.GetString(4),
+                            Notes = r.IsDBNull(5) ? null : r.GetString(5),
+                            Status = r.IsDBNull(6) ? "NEW" : r.GetString(6)
+                        });
+                    }
+                }
+            }
+            catch { }
+
             ViewBag.Year = y;
             ViewBag.Month = m;
             ViewBag.FirstDay = firstDay;
             ViewBag.LastDay = lastDay;
+            ViewBag.MonthAppointments = monthAppointments;
 
             return View(monthEvents);
         }

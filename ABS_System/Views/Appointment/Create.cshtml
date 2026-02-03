@@ -2,51 +2,108 @@
 
 <h2>Create Appointment</h2>
 
-<form asp-action="Create" method="post">
+
+<style>
+  .booking-form {
+    max-width: 420px;
+    margin: 0 auto;
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 32px 28px 24px 28px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+  }
+  .booking-form label {
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: block;
+  }
+  .booking-form input,
+  .booking-form select {
+    width: 100%;
+    padding: 7px 10px;
+    margin-bottom: 14px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 1em;
+    background: #fff;
+  }
+  .booking-form .form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 10px;
+  }
+  .booking-form button,
+  .booking-form a {
+    padding: 7px 18px;
+    border-radius: 5px;
+    border: none;
+    font-size: 1em;
+    text-decoration: none;
+    color: #fff;
+    background: #007bff;
+    transition: background 0.2s;
+  }
+  .booking-form a {
+    background: #6c757d;
+  }
+  .booking-form button:hover,
+  .booking-form a:hover {
+    background: #0056b3;
+  }
+  .booking-form .validation {
+    color: #d9534f;
+    font-size: 0.97em;
+    margin-bottom: 8px;
+  }
+</style>
+
+<form asp-action="Create" method="post" class="booking-form">
   @Html.AntiForgeryToken()
 
   <div>
     <label>Customer Code</label>
     <input asp-for="CustomerCode" />
-    <span asp-validation-for="CustomerCode"></span>
+    <span asp-validation-for="CustomerCode" class="validation"></span>
   </div>
 
   <div>
-    <label>Agent Code</label>
-    <input asp-for="AgentCode" />
-    <span asp-validation-for="AgentCode"></span>
+    <label>Agent</label>
+    <select asp-for="AgentCode">
+      <option value="">-- Select Agent --</option>
+      @if (ViewBag.Agents != null)
+      {
+        foreach (var agent in (List<dynamic>)ViewBag.Agents)
+        {
+          var selected = Model.AgentCode == agent.Code ? "selected" : null;
+          <option value="@agent.Code" selected="@selected">@agent.Description</option>
+        }
+      }
+    </select>
+    <span asp-validation-for="AgentCode" class="validation"></span>
   </div>
 
   <div>
     <label>Start</label>
-    <input asp-for="ApptStart" type="datetime-local"
-           value="@Model.ApptStart.ToString("yyyy-MM-ddTHH:mm")" />
-    <span asp-validation-for="ApptStart"></span>
-  </div>
-
-  <div>
-    <label>End</label>
-    <input asp-for="ApptEnd" type="datetime-local"
-           value="@(Model.ApptEnd.HasValue ? Model.ApptEnd.Value.ToString("yyyy-MM-ddTHH:mm") : "")" />
+    <input asp-for="ApptStart" type="datetime-local" value="@Model.ApptStart.ToString("yyyy-MM-ddTHH:mm")" />
+    <span asp-validation-for="ApptStart" class="validation"></span>
   </div>
 
   <div>
     <label>Title</label>
     <input asp-for="Title" />
-  </div>
-
-  <div>
-    <label>Notes</label>
-    <textarea asp-for="Notes"></textarea>
+    <span asp-validation-for="Title" class="validation"></span>
   </div>
 
   <div>
     <label>Status</label>
     <input asp-for="Status" />
+    <span asp-validation-for="Status" class="validation"></span>
   </div>
 
-  <button type="submit">Save</button>
-  <a asp-action="Index">Cancel</a>
+  <div class="form-actions">
+    <button type="submit">Save</button>
+    <a asp-action="Index">Cancel</a>
+  </div>
 </form>
 
 @section Scripts {

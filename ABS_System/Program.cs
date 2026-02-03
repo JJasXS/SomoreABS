@@ -20,10 +20,11 @@ builder.Services.AddSingleton<DbInitializer>();
 
 var app = builder.Build();
 
-// ✅ Create APPOINTMENT table if missing (runs once at startup)
+// ✅ Ensure AGENT.EMAIL column and create APPOINTMENT table if missing (runs once at startup)
 using (var scope = app.Services.CreateScope())
 {
     var init = scope.ServiceProvider.GetRequiredService<DbInitializer>();
+    init.EnsureAgentEmailColumn();
     init.EnsureAppointmentSchema();
 }
 

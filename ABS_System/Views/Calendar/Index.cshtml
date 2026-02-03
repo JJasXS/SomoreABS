@@ -1,4 +1,6 @@
 @model List<YourApp.Controllers.CalendarEventVm>
+@using System.Linq
+
 @{
     ViewData["Title"] = "Calendar";
 
@@ -25,12 +27,31 @@
         .Select((name, idx) => new { Text = name, Value = idx + 1 })
         .ToList();
 
-    // Year dropdown range (adjust if you want wider range)
+    // Year dropdown range
     int startYear = DateTime.Today.Year - 5;
     int endYear = DateTime.Today.Year + 5;
+
+    // Safe cast (avoid null crash)
+    var monthAppointments = ViewBag.MonthAppointments as List<YourApp.Models.Appointment> ?? new List<YourApp.Models.Appointment>();
 }
 
 <link rel="stylesheet" href="~/css/calendar.css" />
+
+<style>
+    /* Popup list */
+    .day-appt-item { font-size: 0.92em; }
+
+    /* Clickable day cell */
+    .calendar-cell-day {
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .calendar-cell-day:hover,
+    .calendar-cell-day:focus {
+        background: #e6f2ff;
+        outline: 2px solid #007bff;
+    }
+</style>
 
 <h2>Calendar - @firstDay.ToString("MMMM yyyy")</h2>
 
@@ -53,7 +74,6 @@
             }
         </select>
 
-        <!-- preserve pickDate on search if already in pick mode -->
         @if (pickDate)
         {
             <input type="hidden" name="pickDate" value="1" />
@@ -62,46 +82,38 @@
         <button type="submit" class="btn btn-primary">Search</button>
     </form>
 
-    <!-- RIGHT: Prev / Today / Next / New Event -->
+    <!-- RIGHT: Prev / Today / Next -->
     <div class="calendar-nav-actions">
-        <a class="btn btn-secondary"
-           href="@Url.Action("Index", new { year = firstDay.AddMonths(-1).Year, month = firstDay.AddMonths(-1).Month, pickDate = pickDate ? 1 : (int?)null })">
-            ◀ Prev
-        </a>
+                <a class="btn btn-secondary"
+                     href="@Url.Action("Index", new { year = firstDay.AddMonths(-1).Year, month = firstDay.AddMonths(-1).Month, pickDate = pickDate ? 1 : (int?)null })">
+                        &lt; Prev
+                </a>
+                <a class="btn btn-secondary"
+                     href="@Url.Action("Index", new { year = DateTime.Today.Year, month = DateTime.Today.Month, pickDate = pickDate ? 1 : (int?)null })">
+                        Today
+                </a>
+                <a class="btn btn-secondary"
+                     href="@Url.Action("Index", new { year = firstDay.AddMonths(1).Year, month = firstDay.AddMonths(1).Month, pickDate = pickDate ? 1 : (int?)null })">
+                        Next &gt;
+                </a>
+        </div> <!-- CLOSE .calendar-nav-actions -->
+</div> <!-- CLOSE .calendar-toolbar -->
 
-        <a class="btn btn-secondary"
-           href="@Url.Action("Index", new { year = DateTime.Today.Year, month = DateTime.Today.Month, pickDate = pickDate ? 1 : (int?)null })">
-            Today
-        </a>
-
-        <a class="btn btn-secondary"
-           href="@Url.Action("Index", new { year = firstDay.AddMonths(1).Year, month = firstDay.AddMonths(1).Month, pickDate = pickDate ? 1 : (int?)null })">
-            Next ▶
-        </a>
-
-        @if (!pickDate)
-        {
-            <!-- ✅ Enter pick-date mode -->
-            <a class="btn btn-primary"
-               href="@Url.Action("Index", new { year = year, month = month, pickDate = 1 })">
-                + New Event
-            </a>
-        }
-        else
-        {
-            <!-- ✅ Exit pick-date mode -->
-            <a class="btn btn-outline-secondary"
-               href="@Url.Action("Index", new { year = year, month = month })">
-                Cancel
-            </a>
-        }
+<!-- Modal for day appointments -->
+<div class="modal fade" id="dayAppointmentsModal" tabindex="-1" aria-labelledby="dayAppointmentsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="dayAppointmentsModalLabel">Appointments for <span id="modalDayLabel"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <a id="add-appointment-btn" class="btn btn-primary mb-3" href="#">+ New Booking</a>
+                <ul id="day-appointments-list" class="list-group" style="font-size: 0.95em;"></ul>
+            </div>
+        </div>
     </div>
 </div>
-
-@if (pickDate)
-{
-   
-}
 
 <table class="table table-bordered calendar-table">
     <thead>
@@ -126,45 +138,28 @@
                         else
                         {
                             var date = new DateTime(year, month, day);
-                            var dayEvents = Model.Where(e => e.Date.Date == date.Date).ToList();
+                            var appts = monthAppointments.Where(a => a.ApptStart.Date == date.Date).ToList();
+                            int showCount = Math.Min(2, appts.Count);
 
-                            <td class="calendar-cell calendar-cell-day">
+                            <td class="calendar-cell calendar-cell-day"
+                                data-date="@date.ToString("yyyy-MM-dd")"
+                                tabindex="0"
+                                role="button"
+                                aria-label="Show appointments for @date.ToString("yyyy-MM-dd")">
                                 <div class="calendar-cell-header">
                                     <strong>@day</strong>
-
-                                    @* ✅ Show + only in pick-date mode *@
-                                    @if (pickDate)
-                                    {
-                                        <a class="btn btn-sm btn-outline-primary"
-                                           href="@Url.Action("Create", new { date = date.ToString("yyyy-MM-dd") })">
-                                            +
-                                        </a>
-                                    }
                                 </div>
-
-                                @if (dayEvents.Count > 0)
+                                @if (appts.Count > 0)
                                 {
-                                    <ul class="calendar-event-list">
-                                        @foreach (var ev in dayEvents)
+                                    <ul class="calendar-event-list scrollable-appt-list" style="margin:0; padding-left:0; list-style:none; max-height:120px; overflow-y:auto;">
+                                        @foreach (var appt in appts)
                                         {
-                                            <li class="calendar-event-item">
-                                                <div><span>@ev.Title</span></div>
-
-                                                <div class="calendar-event-actions">
-                                                    <a class="btn btn-sm btn-outline-secondary"
-                                                       href="@Url.Action("Edit", new { id = ev.Id })">
-                                                        Edit
-                                                    </a>
-
-                                                    <form method="post"
-                                                          action="@Url.Action("Delete", new { id = ev.Id })"
-                                                          class="calendar-delete-form">
-                                                        @Html.AntiForgeryToken()
-                                                        <button class="btn btn-sm btn-outline-danger" type="submit"
-                                                                onclick="return confirm('Delete this event?');">
-                                                            Delete
-                                                        </button>
-                                                    </form>
+                                            <li class="calendar-event-item day-appt-item" style="background: #ffb6c1; border-radius: 6px; padding: 2px 6px; margin-bottom: 2px; font-size:0.7em;">
+                                                <div>
+                                                    <span>@appt.Title</span>
+                                                    <small>(@appt.ApptStart.ToString("HH:mm"))</small><br />
+                                                    <span>Cust: @appt.CustomerCode</span> |
+                                                    <span>Agent: @appt.AgentCode</span>
                                                 </div>
                                             </li>
                                         }
@@ -182,3 +177,82 @@
         }
     </tbody>
 </table>
+
+@section Scripts {
+    <script>
+        // ✅ All appointments for this month (from ViewBag) - fast filter on click
+        var allAppointments = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(monthAppointments));
+
+        function showDayModal(date) {
+            var modalEl = document.getElementById('dayAppointmentsModal');
+            var modal = new bootstrap.Modal(modalEl);
+
+            var label = document.getElementById('modalDayLabel');
+            var list = document.getElementById('day-appointments-list');
+            var addBtn = document.getElementById('add-appointment-btn');
+
+            label.textContent = date;
+            addBtn.href = '/Appointment/Create?apptStart=' + date + 'T09:00';
+
+            list.innerHTML = '';
+
+            var appts = (allAppointments || []).filter(function (a) {
+                return a.ApptStart && a.ApptStart.startsWith(date);
+            });
+
+            if (appts.length === 0) {
+                var li = document.createElement('li');
+                li.className = 'list-group-item';
+                li.textContent = 'No appointments.';
+                list.appendChild(li);
+            } else {
+                appts.forEach(function (appt) {
+                    var li = document.createElement('li');
+                    li.className = 'list-group-item day-appt-item';
+
+                    var when = '';
+                    if (appt.ApptStart) {
+                        when = appt.ApptStart.replace('T', ' ').substring(0, 16);
+                    }
+
+                    li.innerHTML =
+                        '<strong>' + (appt.Title || '') + '</strong> ' +
+                        '<span>(' + when + ')</span><br />' +
+                        '<span>Customer: ' + (appt.CustomerCode || '') + '</span> | ' +
+                        '<span>Agent: ' + (appt.AgentCode || '') + '</span>';
+
+                    list.appendChild(li);
+                });
+            }
+
+            modal.show();
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('.calendar-cell-day').forEach(function (cell) {
+                // Click opens modal
+                cell.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var date = cell.getAttribute('data-date');
+                    showDayModal(date);
+                });
+                // Keyboard opens modal (Enter / Space)
+                cell.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        var date = cell.getAttribute('data-date');
+                        showDayModal(date);
+                    }
+                });
+            });
+            // Add click handler for ... more links
+            document.querySelectorAll('.show-more-appts').forEach(function (el) {
+                el.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var date = el.getAttribute('data-date');
+                    showDayModal(date);
+                });
+            });
+        });
+    </script>
+}

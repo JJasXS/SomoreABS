@@ -1,3 +1,25 @@
+/* Thinner scrollbar for scrollable appointment list */
+.scrollable-appt-list {
+  scrollbar-width: thin; /* Firefox */
+}
+.scrollable-appt-list::-webkit-scrollbar {
+  width: 6px;
+  background: #f0f0f0;
+}
+.scrollable-appt-list::-webkit-scrollbar-thumb {
+  background: #b3b3b3;
+  border-radius: 4px;
+}
+/* Scrollable appointment list in day cell */
+.scrollable-appt-list {
+  max-height: 120px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+/* ================================
+   Calendar.css (Full)
+   ================================ */
+
 /* ===== Calendar toolbar (top row) ===== */
 .calendar-toolbar {
   display: flex;
@@ -35,19 +57,63 @@
 /* ===== Table ===== */
 .calendar-table {
   table-layout: fixed;
+  width: 100%;
 }
 
-/* cells */
-.calendar-cell {
-  height: 120px;
-}
 
-.calendar-cell-empty {
-  /* empty cell - nothing needed, height already set */
-}
 
-.calendar-cell-day {
+/* header row cells */
+.calendar-table th {
+  font-weight: 600;
+  text-align: left;
   vertical-align: top;
+  padding: 10px;
+}
+
+/* Base cells */
+.calendar-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 10px;
+}
+
+/* Your width rule (keep) */
+.calendar-table th,
+.calendar-table td {
+  width: 110px;     /* Adjust this value as needed */
+  min-width: 80px;
+  max-width: 160px;
+}
+
+/* --- IMPORTANT: Force week row height (Bootstrap table fix) --- */
+.calendar-table tbody tr {
+  height: 420px !important; /* ✅ change this value to make cells taller */
+}
+
+/* ----- Calendar cell (day box) ----- */
+.calendar-table td.calendar-cell {
+  height: 420px !important; /* ✅ must match tr height */
+  vertical-align: top !important;
+  box-sizing: border-box;
+  overflow: hidden; /* keeps cell clean */
+}
+
+/* empty cell (no date) */
+.calendar-cell-empty {
+  background: #fafafa;
+}
+
+/* clickable day cell */
+.calendar-cell-day {
+  cursor: pointer;
+  transition: background 0.2s ease, outline 0.2s ease;
+}
+
+.calendar-cell-day:hover,
+.calendar-cell-day:focus {
+  background: #e6f2ff;
+  outline: 2px solid #007bff;
+  outline-offset: -2px;
 }
 
 /* header inside a day cell */
@@ -55,19 +121,25 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 6px;
 }
 
 /* ===== Events list ===== */
 .calendar-event-list {
-  padding-left: 16px;
-  margin-top: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  /* ✅ optional: if too many events, scroll inside cell */
+  max-height: 260px;  /* adjust depending on row height */
+  overflow-y: auto;
 }
 
 .calendar-event-item {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
-/* buttons under each event */
+/* buttons under each event (if you use them later) */
 .calendar-event-actions {
   display: flex;
   gap: 6px;

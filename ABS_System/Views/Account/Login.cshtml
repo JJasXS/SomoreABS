@@ -1,0 +1,18 @@
+@model YourApp.Models.AgentLoginViewModel
+
+<h2>Agent Login</h2>
+
+<form asp-action="Login" method="post">
+    @Html.AntiForgeryToken()
+    <!-- Agent code removed, only email required -->
+    <div class="mb-3">
+        <label>Email</label>
+        <input asp-for="Email" class="form-control" />
+        <span asp-validation-for="Email" class="text-danger"></span>
+    </div>
+    <button type="submit" class="btn btn-primary">Send OTP</button>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

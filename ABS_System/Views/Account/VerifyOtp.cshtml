@@ -1,0 +1,18 @@
+@model YourApp.Models.OtpViewModel
+
+<h2>Verify OTP</h2>
+
+<form asp-action="VerifyOtp" method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="AgentCode" />
+    <div class="mb-3">
+        <label>OTP</label>
+        <input asp-for="Otp" class="form-control" />
+        <span asp-validation-for="Otp" class="text-danger"></span>
+    </div>
+    <button type="submit" class="btn btn-primary">Verify</button>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

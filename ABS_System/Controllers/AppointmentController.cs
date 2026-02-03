@@ -22,7 +22,7 @@ namespace YourApp.Controllers
             using var conn = _db.Open();
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
-SELECT APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, APPT_END, TITLE, STATUS
+SELECT APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, TITLE, STATUS
 FROM APPOINTMENT
 ORDER BY APPT_START DESC";
 
@@ -35,9 +35,8 @@ ORDER BY APPT_START DESC";
                     CustomerCode = r.GetString(1).Trim(),
                     AgentCode = r.GetString(2).Trim(),
                     ApptStart = r.GetDateTime(3),
-                    ApptEnd = r.IsDBNull(4) ? null : r.GetDateTime(4),
-                    Title = r.IsDBNull(5) ? null : r.GetString(5),
-                    Status = r.IsDBNull(6) ? "NEW" : r.GetString(6)
+                    Title = r.IsDBNull(4) ? null : r.GetString(4),
+                    Status = r.IsDBNull(5) ? "NEW" : r.GetString(5)
                 });
             }
 
@@ -45,12 +44,25 @@ ORDER BY APPT_START DESC";
         }
 
         // Create GET
-        public IActionResult Create()
+        public IActionResult Create(DateTime? apptStart)
         {
+            var start = apptStart ?? DateTime.Now;
+            // Fetch agents for dropdown
+            var agents = new List<dynamic>();
+            using (var conn = _db.Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT CODE, DESCRIPTION FROM AGENT ORDER BY DESCRIPTION";
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    agents.Add(new { Code = r.GetString(0).Trim(), Description = r.GetString(1).Trim() });
+                }
+            }
+            ViewBag.Agents = agents;
             return View(new Appointment
             {
-                ApptStart = DateTime.Now,
-                ApptEnd = DateTime.Now.AddMinutes(30)
+                ApptStart = start
             });
         }
 
@@ -59,29 +71,44 @@ ORDER BY APPT_START DESC";
         [ValidateAntiForgeryToken]
         public IActionResult Create(Appointment m)
         {
+            // Repopulate agent list for redisplay on error
+            var agents = new List<dynamic>();
+            using (var conn = _db.Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT CODE, DESCRIPTION FROM AGENT ORDER BY DESCRIPTION";
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    agents.Add(new { Code = r.GetString(0).Trim(), Description = r.GetString(1).Trim() });
+                }
+            }
+            ViewBag.Agents = agents;
+
             if (!ModelState.IsValid)
                 return View(m);
 
-            using var conn = _db.Open();
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = @"
+            using var conn2 = _db.Open();
+            using var cmd2 = conn2.CreateCommand();
+
+            cmd2.CommandText = @"
 INSERT INTO APPOINTMENT
-(CUSTOMER_CODE, AGENT_CODE, APPT_START, APPT_END, TITLE, NOTES, STATUS, CREATED_DT, CREATED_BY)
+(CUSTOMER_CODE, AGENT_CODE, APPT_START, TITLE, NOTES, STATUS, CREATED_DT, CREATED_BY)
 VALUES
-(@CUSTOMER_CODE, @AGENT_CODE, @APPT_START, @APPT_END, @TITLE, @NOTES, @STATUS, CURRENT_TIMESTAMP, @CREATED_BY)";
+(@CUSTOMER_CODE, @AGENT_CODE, @APPT_START, @TITLE, @NOTES, @STATUS, CURRENT_TIMESTAMP, @CREATED_BY)";
 
-            cmd.Parameters.Add(FirebirdDb.P("@CUSTOMER_CODE", m.CustomerCode.Trim(), FbDbType.VarChar));
-            cmd.Parameters.Add(FirebirdDb.P("@AGENT_CODE", m.AgentCode.Trim(), FbDbType.VarChar));
-            cmd.Parameters.Add(FirebirdDb.P("@APPT_START", m.ApptStart, FbDbType.TimeStamp));
-            cmd.Parameters.Add(FirebirdDb.P("@APPT_END", m.ApptEnd, FbDbType.TimeStamp));
-            cmd.Parameters.Add(FirebirdDb.P("@TITLE", m.Title, FbDbType.VarChar));
-            cmd.Parameters.Add(FirebirdDb.P("@NOTES", m.Notes, FbDbType.Text));
-            cmd.Parameters.Add(FirebirdDb.P("@STATUS", string.IsNullOrWhiteSpace(m.Status) ? "NEW" : m.Status, FbDbType.VarChar));
-            cmd.Parameters.Add(FirebirdDb.P("@CREATED_BY", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
+            cmd2.Parameters.Add(FirebirdDb.P("@CUSTOMER_CODE", m.CustomerCode.Trim(), FbDbType.VarChar));
+            cmd2.Parameters.Add(FirebirdDb.P("@AGENT_CODE", m.AgentCode.Trim(), FbDbType.VarChar));
+            cmd2.Parameters.Add(FirebirdDb.P("@APPT_START", m.ApptStart, FbDbType.TimeStamp));
+            cmd2.Parameters.Add(FirebirdDb.P("@TITLE", m.Title, FbDbType.VarChar));
+            cmd2.Parameters.Add(FirebirdDb.P("@NOTES", m.Notes, FbDbType.Text));
+            cmd2.Parameters.Add(FirebirdDb.P("@STATUS", string.IsNullOrWhiteSpace(m.Status) ? "NEW" : m.Status, FbDbType.VarChar));
+            cmd2.Parameters.Add(FirebirdDb.P("@CREATED_BY", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
 
-            cmd.ExecuteNonQuery();
+            cmd2.ExecuteNonQuery();
 
-            return RedirectToAction(nameof(Index));
+            // After creation, redirect to Calendar/Index for the month/year of the appointment
+            return RedirectToAction("Index", "Calendar", new { year = m.ApptStart.Year, month = m.ApptStart.Month });
         }
     }
 }
