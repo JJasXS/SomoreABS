@@ -1,3 +1,10 @@
+/* Appointment card actions right-aligned in modal */
+.appt-card .appt-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
 /* ================================
    calendar.css (FULL) - nicer UI + cards
    ================================ */
