@@ -223,3 +223,5 @@ C:\Users\sd01\ABS_System\ABS_System\bin\Debug\net10.0\runtimes\win-x86\native\Mi
 C:\Users\sd01\ABS_System\ABS_System\obj\Debug\net10.0\ABS_System.csproj.AssemblyReference.cache
 C:\Users\sd01\ABS_System\ABS_System\obj\Debug\net10.0\ABS_System.csproj.Up2Date
 C:\Users\sd01\ABS_System\ABS_System\obj\Debug\net10.0\compressed\ily9vkstnh-{0}-8kp878khm5-8kp878khm5.gz
+C:\Users\sd01\ABS_System\ABS_System\bin\Debug\net10.0\FirebirdSql.Data.FirebirdClient.dll
+C:\Users\sd01\ABS_System\ABS_System\obj\Debug\net10.0\ABS_System.sourcelink.json

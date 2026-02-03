@@ -1,0 +1,33 @@
+@model List<YourApp.Models.Appointment>
+
+<h2>Appointments</h2>
+
+<p>
+  <a asp-action="Create">+ New Appointment</a>
+</p>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Start</th>
+      <th>End</th>
+      <th>Customer</th>
+      <th>Agent</th>
+      <th>Title</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+  @foreach (var a in Model)
+  {
+    <tr>
+      <td>@a.ApptStart</td>
+      <td>@(a.ApptEnd?.ToString() ?? "")</td>
+      <td>@a.CustomerCode</td>
+      <td>@a.AgentCode</td>
+      <td>@a.Title</td>
+      <td>@a.Status</td>
+    </tr>
+  }
+  </tbody>
+</table>

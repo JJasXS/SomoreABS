@@ -1,0 +1,54 @@
+@model YourApp.Models.Appointment
+
+<h2>Create Appointment</h2>
+
+<form asp-action="Create" method="post">
+  @Html.AntiForgeryToken()
+
+  <div>
+    <label>Customer Code</label>
+    <input asp-for="CustomerCode" />
+    <span asp-validation-for="CustomerCode"></span>
+  </div>
+
+  <div>
+    <label>Agent Code</label>
+    <input asp-for="AgentCode" />
+    <span asp-validation-for="AgentCode"></span>
+  </div>
+
+  <div>
+    <label>Start</label>
+    <input asp-for="ApptStart" type="datetime-local"
+           value="@Model.ApptStart.ToString("yyyy-MM-ddTHH:mm")" />
+    <span asp-validation-for="ApptStart"></span>
+  </div>
+
+  <div>
+    <label>End</label>
+    <input asp-for="ApptEnd" type="datetime-local"
+           value="@(Model.ApptEnd.HasValue ? Model.ApptEnd.Value.ToString("yyyy-MM-ddTHH:mm") : "")" />
+  </div>
+
+  <div>
+    <label>Title</label>
+    <input asp-for="Title" />
+  </div>
+
+  <div>
+    <label>Notes</label>
+    <textarea asp-for="Notes"></textarea>
+  </div>
+
+  <div>
+    <label>Status</label>
+    <input asp-for="Status" />
+  </div>
+
+  <button type="submit">Save</button>
+  <a asp-action="Index">Cancel</a>
+</form>
+
+@section Scripts {
+  <partial name="_ValidationScriptsPartial" />
+}

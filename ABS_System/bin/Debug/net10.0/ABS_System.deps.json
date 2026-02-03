@@ -8,6 +8,7 @@
     ".NETCoreApp,Version=v10.0": {
       "ABS_System/1.0.0": {
         "dependencies": {
+          "FirebirdSql.Data.FirebirdClient": "10.3.4",
           "Microsoft.EntityFrameworkCore.SqlServer": "10.0.2",
           "Microsoft.EntityFrameworkCore.Tools": "10.0.2"
         },
@@ -38,6 +39,14 @@
           "lib/net8.0/Azure.Identity.dll": {
             "assemblyVersion": "1.14.2.0",
             "fileVersion": "1.1400.225.36004"
+          }
+        }
+      },
+      "FirebirdSql.Data.FirebirdClient/10.3.4": {
+        "runtime": {
+          "lib/net8.0/FirebirdSql.Data.FirebirdClient.dll": {
+            "assemblyVersion": "10.3.4.0",
+            "fileVersion": "10.3.4.0"
           }
         }
       },
@@ -772,6 +781,13 @@
       "sha512": "sha512-YhNMwOTwT+I2wIcJKSdP0ADyB2aK+JaYWZxO8LSRDm5w77LFr0ykR9xmt2ZV5T1gaI7xU6iNFIh/yW1dAlpddQ==",
       "path": "azure.identity/1.14.2",
       "hashPath": "azure.identity.1.14.2.nupkg.sha512"
+    },
+    "FirebirdSql.Data.FirebirdClient/10.3.4": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-lmaY+XQvnhPl1YRrY+lzTZPD88YDbllelN5RhFMrzinqSmjWpWZRE0A4AI1L2mPBNAI346Q8MHAvnJjDPd7VnQ==",
+      "path": "firebirdsql.data.firebirdclient/10.3.4",
+      "hashPath": "firebirdsql.data.firebirdclient.10.3.4.nupkg.sha512"
     },
     "Humanizer.Core/2.14.1": {
       "type": "package",
