@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,28 +32,93 @@ namespace YourApp.Controllers
             List<YourApp.Models.Appointment> monthAppointments = new List<YourApp.Models.Appointment>();
             try
             {
-                using (var scope = HttpContext.RequestServices.CreateScope())
+                using var scope = HttpContext.RequestServices.CreateScope();
+                var db = (YourApp.Data.FirebirdDb)scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+
+                using var conn = db.Open();
+                using var cmd = conn.CreateCommand();
+
+                cmd.CommandText = @"
+SELECT APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, TITLE, NOTES, STATUS
+FROM APPOINTMENT
+WHERE APPT_START >= @START AND APPT_START <= @END";
+
+                cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@START", firstDay, FirebirdSql.Data.FirebirdClient.FbDbType.TimeStamp));
+                cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@END", lastDay, FirebirdSql.Data.FirebirdClient.FbDbType.TimeStamp));
+
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
                 {
-                    var db = (YourApp.Data.FirebirdDb)scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
-                    using var conn = db.Open();
-                    using var cmd = conn.CreateCommand();
-                    cmd.CommandText = @"SELECT APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, TITLE, NOTES, STATUS FROM APPOINTMENT WHERE APPT_START >= @START AND APPT_START <= @END";
-                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@START", firstDay, FirebirdSql.Data.FirebirdClient.FbDbType.TimeStamp));
-                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@END", lastDay, FirebirdSql.Data.FirebirdClient.FbDbType.TimeStamp));
-                    using var r = cmd.ExecuteReader();
-                    while (r.Read())
+                    monthAppointments.Add(new YourApp.Models.Appointment
                     {
-                        monthAppointments.Add(new YourApp.Models.Appointment
-                        {
-                            ApptId = r.GetInt64(0),
-                            CustomerCode = r.GetString(1).Trim(),
-                            AgentCode = r.GetString(2).Trim(),
-                            ApptStart = r.GetDateTime(3),
-                            Title = r.IsDBNull(4) ? null : r.GetString(4),
-                            Notes = r.IsDBNull(5) ? null : r.GetString(5),
-                            Status = r.IsDBNull(6) ? "NEW" : r.GetString(6)
-                        });
+                        ApptId = r.GetInt64(0),
+                        CustomerCode = r.IsDBNull(1) ? "" : r.GetString(1).Trim(),
+                        AgentCode = r.IsDBNull(2) ? "" : r.GetString(2).Trim(),
+                        ApptStart = r.GetDateTime(3),
+                        Title = r.IsDBNull(4) ? null : r.GetString(4),
+                        Notes = r.IsDBNull(5) ? null : r.GetString(5),
+                        Status = r.IsDBNull(6) ? "NEW" : r.GetString(6)
+                    });
+                }
+            }
+            catch
+            {
+                // keep page working even if DB fails
+            }
+
+            // Fetch agent code-to-name and code-to-branchno mapping
+            var agentDict = new Dictionary<string, string>();
+            var agentBranchNos = new Dictionary<string, string>();
+            var agentColors = new Dictionary<string, string>();
+            try
+            {
+                using var scope = HttpContext.RequestServices.CreateScope();
+                var db = (YourApp.Data.FirebirdDb)scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+
+                using var conn = db.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT CODE, DESCRIPTION, BRANCHNO FROM AGENT";
+
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    var code = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                    var name = r.IsDBNull(1) ? "" : r.GetString(1).Trim();
+                    var branchNo = r.IsDBNull(2) ? "" : r.GetString(2).Trim();
+                    if (!string.IsNullOrWhiteSpace(code))
+                    {
+                        agentDict[code] = name;
+                        agentBranchNos[code] = branchNo;
+                        // Assign color based on branchNo
+                        string branchColor = null;
+                        if (branchNo == "1") branchColor = "#ffb6c1"; // Light Pink
+                        else if (branchNo == "2") branchColor = "#add8e6"; // Light Blue
+                        else if (branchNo == "3") branchColor = "#90ee90"; // Light Green
+                        else if (branchNo == "4") branchColor = "#ffd700"; // Gold
+                        agentColors[code] = branchColor;
                     }
+                }
+            }
+            catch { }
+
+            // Fetch customer code-to-name mapping
+            var customerDict = new Dictionary<string, string>();
+            try
+            {
+                using var scope = HttpContext.RequestServices.CreateScope();
+                var db = (YourApp.Data.FirebirdDb)scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+
+                using var conn = db.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT CODE, COMPANYNAME FROM AR_CUSTOMER";
+
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    var code = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                    var name = r.IsDBNull(1) ? "" : r.GetString(1).Trim();
+                    if (!string.IsNullOrWhiteSpace(code))
+                        customerDict[code] = name;
                 }
             }
             catch { }
@@ -61,7 +127,12 @@ namespace YourApp.Controllers
             ViewBag.Month = m;
             ViewBag.FirstDay = firstDay;
             ViewBag.LastDay = lastDay;
+
             ViewBag.MonthAppointments = monthAppointments;
+            ViewBag.AgentNames = agentDict;
+            ViewBag.CustomerNames = customerDict;
+            ViewBag.AgentBranchNos = agentBranchNos;
+            ViewBag.AgentColors = agentColors;
 
             return View(monthEvents);
         }
@@ -71,10 +142,7 @@ namespace YourApp.Controllers
         public IActionResult Create(DateTime? date)
         {
             var d = (date ?? DateTime.Today).Date;
-            var model = new CalendarEventVm
-            {
-                Date = d
-            };
+            var model = new CalendarEventVm { Date = d };
             return View(model);
         }
 
@@ -97,7 +165,6 @@ namespace YourApp.Controllers
             var ev = _events.FirstOrDefault(x => x.Id == id);
             if (ev == null) return NotFound();
 
-            // return a copy so edits don't mutate until POST
             return View(new CalendarEventVm
             {
                 Id = ev.Id,
@@ -132,7 +199,6 @@ namespace YourApp.Controllers
             if (ev == null) return NotFound();
 
             _events.Remove(ev);
-
             return RedirectToAction(nameof(Index));
         }
     }

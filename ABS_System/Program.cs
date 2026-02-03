@@ -25,6 +25,8 @@ using (var scope = app.Services.CreateScope())
 {
     var init = scope.ServiceProvider.GetRequiredService<DbInitializer>();
     init.EnsureAgentEmailColumn();
+    init.EnsureAgentBranchNoColumn();
+    init.EnsureBranchSchema();
     init.EnsureAppointmentSchema();
 }
 

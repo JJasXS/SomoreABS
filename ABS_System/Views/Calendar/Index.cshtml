@@ -1,3 +1,5 @@
+@await Html.PartialAsync("~/Views/Shared/LayoutPartials/_Header.cshtml")
+
 @model List<YourApp.Controllers.CalendarEventVm>
 @using System.Linq
 
@@ -37,23 +39,45 @@
 
 <link rel="stylesheet" href="~/css/calendar.css" />
 
-<style>
-    /* Popup list */
-    .day-appt-item { font-size: 0.92em; }
+<h2 class="calendar-title">
+    Calendar -
+    <span id="calendarMonthLabel"
+          class="calendar-month-click"
+          onclick="showMonthModal('@year', '@month')">
+        @firstDay.ToString("MMMM yyyy")
+    </span>
+</h2>
 
-    /* Clickable day cell */
-    .calendar-cell-day {
-        cursor: pointer;
-        transition: background 0.2s;
-    }
-    .calendar-cell-day:hover,
-    .calendar-cell-day:focus {
-        background: #e6f2ff;
-        outline: 2px solid #007bff;
-    }
-</style>
+<!-- ✅ Month Modal -->
+<div id="monthAppointmentsModal" class="custom-modal" style="display:none;">
+    <div class="custom-modal-content">
+        <div class="custom-modal-header">
+            <h5 id="monthAppointmentsModalLabel">
+                Appointments for <span id="modalMonthLabel"></span>
+            </h5>
+            <button type="button" id="closeMonthModal" class="modal-close">&times;</button>
+        </div>
+        <div class="custom-modal-body">
+            <div id="month-appointments-list" class="appt-card-list"></div>
+        </div>
+    </div>
+</div>
 
-<h2>Calendar - @firstDay.ToString("MMMM yyyy")</h2>
+<!-- ✅ Day Modal -->
+<div id="dayAppointmentsModal" class="custom-modal" style="display:none;">
+    <div class="custom-modal-content">
+        <div class="custom-modal-header">
+            <h5 id="dayAppointmentsModalLabel">
+                Appointments for <span id="modalDayLabel"></span>
+            </h5>
+            <button type="button" id="closeDayModal" class="modal-close">&times;</button>
+        </div>
+        <div class="custom-modal-body">
+            <a id="add-appointment-btn" class="custom-modal-btn" href="#">+ New Booking</a>
+            <div id="day-appointments-list" class="appt-card-list"></div>
+        </div>
+    </div>
+</div>
 
 <!-- ✅ Top row: Search (left) + Nav buttons (right) -->
 <div class="calendar-toolbar">
@@ -84,34 +108,20 @@
 
     <!-- RIGHT: Prev / Today / Next -->
     <div class="calendar-nav-actions">
-                <a class="btn btn-secondary"
-                     href="@Url.Action("Index", new { year = firstDay.AddMonths(-1).Year, month = firstDay.AddMonths(-1).Month, pickDate = pickDate ? 1 : (int?)null })">
-                        &lt; Prev
-                </a>
-                <a class="btn btn-secondary"
-                     href="@Url.Action("Index", new { year = DateTime.Today.Year, month = DateTime.Today.Month, pickDate = pickDate ? 1 : (int?)null })">
-                        Today
-                </a>
-                <a class="btn btn-secondary"
-                     href="@Url.Action("Index", new { year = firstDay.AddMonths(1).Year, month = firstDay.AddMonths(1).Month, pickDate = pickDate ? 1 : (int?)null })">
-                        Next &gt;
-                </a>
-        </div> <!-- CLOSE .calendar-nav-actions -->
-</div> <!-- CLOSE .calendar-toolbar -->
+        <a class="btn btn-secondary"
+           href="@Url.Action("Index", new { year = firstDay.AddMonths(-1).Year, month = firstDay.AddMonths(-1).Month, pickDate = pickDate ? 1 : (int?)null })">
+            &lt; Prev
+        </a>
 
-<!-- Modal for day appointments -->
-<div class="modal fade" id="dayAppointmentsModal" tabindex="-1" aria-labelledby="dayAppointmentsModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="dayAppointmentsModalLabel">Appointments for <span id="modalDayLabel"></span></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <a id="add-appointment-btn" class="btn btn-primary mb-3" href="#">+ New Booking</a>
-                <ul id="day-appointments-list" class="list-group" style="font-size: 0.95em;"></ul>
-            </div>
-        </div>
+        <a class="btn btn-secondary"
+           href="@Url.Action("Index", new { year = DateTime.Today.Year, month = DateTime.Today.Month, pickDate = pickDate ? 1 : (int?)null })">
+            Today
+        </a>
+
+        <a class="btn btn-secondary"
+           href="@Url.Action("Index", new { year = firstDay.AddMonths(1).Year, month = firstDay.AddMonths(1).Month, pickDate = pickDate ? 1 : (int?)null })">
+            Next &gt;
+        </a>
     </div>
 </div>
 
@@ -139,31 +149,32 @@
                         {
                             var date = new DateTime(year, month, day);
                             var appts = monthAppointments.Where(a => a.ApptStart.Date == date.Date).ToList();
-                            int showCount = Math.Min(2, appts.Count);
 
                             <td class="calendar-cell calendar-cell-day"
                                 data-date="@date.ToString("yyyy-MM-dd")"
                                 tabindex="0"
                                 role="button"
                                 aria-label="Show appointments for @date.ToString("yyyy-MM-dd")">
+
                                 <div class="calendar-cell-header">
-                                    <strong>@day</strong>
+                                    <strong class="day-number">@day</strong>
                                 </div>
+
                                 @if (appts.Count > 0)
                                 {
-                                    <ul class="calendar-event-list scrollable-appt-list" style="margin:0; padding-left:0; list-style:none; max-height:120px; overflow-y:auto;">
+                                    <div class="scrollable-appt-list appt-card-list in-cell">
                                         @foreach (var appt in appts)
                                         {
-                                            <li class="calendar-event-item day-appt-item" style="background: #ffb6c1; border-radius: 6px; padding: 2px 6px; margin-bottom: 2px; font-size:0.7em;">
-                                                <div>
-                                                    <span>@appt.Title</span>
-                                                    <small>(@appt.ApptStart.ToString("HH:mm"))</small><br />
-                                                    <span>Cust: @appt.CustomerCode</span> |
-                                                    <span>Agent: @appt.AgentCode</span>
-                                                </div>
-                                            </li>
+                                            string cardColor = null;
+                                            if (ViewBag.AgentColors != null && ViewBag.AgentColors.ContainsKey(appt.AgentCode))
+                                            {
+                                                cardColor = ViewBag.AgentColors[appt.AgentCode];
+                                            }
+                                            <div class="appt-card in-cell" @(cardColor != null ? $"style=\"background: {cardColor} !important;\"" : "")>
+                                                <span class="appt-title">@appt.Title</span>
+                                            </div>
                                         }
-                                    </ul>
+                                    </div>
                                 }
                             </td>
 
@@ -180,13 +191,77 @@
 
 @section Scripts {
     <script>
-        // ✅ All appointments for this month (from ViewBag) - fast filter on click
+        // ✅ Data from backend
         var allAppointments = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(monthAppointments));
+        window.agentNames = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.AgentNames ?? new Dictionary<string, string>()));
+        window.customerNames = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.CustomerNames ?? new Dictionary<string, string>()));
+        window.agentColors = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.AgentColors ?? new Dictionary<string, string>()));
 
+        // ✅ Helper: build appointment card HTML (for modal)
+        function buildApptCard(appt) {
+            var when = '';
+            var timeOnly = '';
+            if (appt.ApptStart) {
+                // "2026-02-03T09:30:00" => dateTime + time
+                when = appt.ApptStart.replace('T', ' ').substring(0, 16);
+                timeOnly = appt.ApptStart.replace('T', ' ').substring(11, 16);
+            }
+
+            var cust = (window.customerNames && window.customerNames[appt.CustomerCode]) ? window.customerNames[appt.CustomerCode] : (appt.CustomerCode || '');
+            var agent = (window.agentNames && window.agentNames[appt.AgentCode]) ? window.agentNames[appt.AgentCode] : (appt.AgentCode || '');
+            var cardColor = (window.agentColors && window.agentColors[appt.AgentCode]) ? window.agentColors[appt.AgentCode] : null;
+            var style = cardColor ? ' style="background: ' + cardColor + ' !important;"' : '';
+
+            return (
+                '<div class="appt-card modal-card"' + style + '>' +
+                    '<div class="appt-top">' +
+                        '<div class="appt-title">' + (appt.Title || '') + '</div>' +
+                        '<div class="appt-time">' + (timeOnly || '') + '</div>' +
+                    '</div>' +
+                    '<div class="appt-meta">' +
+                        '<div class="appt-meta-line"><span class="appt-meta-label">When:</span> <span class="appt-meta-value">' + when + '</span></div>' +
+                        '<div class="appt-meta-line"><span class="appt-meta-label">Cust:</span> <span class="appt-meta-value">' + cust + '</span></div>' +
+                        '<div class="appt-meta-line"><span class="appt-meta-label">Agent:</span> <span class="appt-meta-value">' + agent + '</span></div>' +
+                    '</div>' +
+                '</div>'
+            );
+        }
+
+        // ✅ Month popup
+        function showMonthModal(year, month) {
+            var modalEl = document.getElementById('monthAppointmentsModal');
+            var label = document.getElementById('modalMonthLabel');
+            var list = document.getElementById('month-appointments-list');
+
+            var monthStr = year + '-' + (month.toString().length === 1 ? '0' + month : month);
+            label.textContent = monthStr;
+            list.innerHTML = '';
+
+            var appts = (allAppointments || []).filter(function (a) {
+                return a.ApptStart && a.ApptStart.startsWith(monthStr);
+            });
+
+            if (appts.length === 0) {
+                list.innerHTML = '<div class="appt-empty">No appointments.</div>';
+            } else {
+                // Sort by time
+                appts.sort(function (a, b) {
+                    return (a.ApptStart || '').localeCompare(b.ApptStart || '');
+                });
+
+                var html = '';
+                appts.forEach(function (appt) {
+                    html += buildApptCard(appt);
+                });
+                list.innerHTML = html;
+            }
+
+            modalEl.style.display = 'block';
+        }
+
+        // ✅ Day popup
         function showDayModal(date) {
             var modalEl = document.getElementById('dayAppointmentsModal');
-            var modal = new bootstrap.Modal(modalEl);
-
             var label = document.getElementById('modalDayLabel');
             var list = document.getElementById('day-appointments-list');
             var addBtn = document.getElementById('add-appointment-btn');
@@ -201,58 +276,61 @@
             });
 
             if (appts.length === 0) {
-                var li = document.createElement('li');
-                li.className = 'list-group-item';
-                li.textContent = 'No appointments.';
-                list.appendChild(li);
+                list.innerHTML = '<div class="appt-empty">No appointments.</div>';
             } else {
-                appts.forEach(function (appt) {
-                    var li = document.createElement('li');
-                    li.className = 'list-group-item day-appt-item';
-
-                    var when = '';
-                    if (appt.ApptStart) {
-                        when = appt.ApptStart.replace('T', ' ').substring(0, 16);
-                    }
-
-                    li.innerHTML =
-                        '<strong>' + (appt.Title || '') + '</strong> ' +
-                        '<span>(' + when + ')</span><br />' +
-                        '<span>Customer: ' + (appt.CustomerCode || '') + '</span> | ' +
-                        '<span>Agent: ' + (appt.AgentCode || '') + '</span>';
-
-                    list.appendChild(li);
+                // Sort by time
+                appts.sort(function (a, b) {
+                    return (a.ApptStart || '').localeCompare(b.ApptStart || '');
                 });
+
+                var html = '';
+                appts.forEach(function (appt) {
+                    html += buildApptCard(appt);
+                });
+                list.innerHTML = html;
             }
 
-            modal.show();
+            modalEl.style.display = 'block';
         }
 
         document.addEventListener('DOMContentLoaded', function () {
+            // ✅ Click day cell to open modal
             document.querySelectorAll('.calendar-cell-day').forEach(function (cell) {
-                // Click opens modal
                 cell.addEventListener('click', function (e) {
                     e.stopPropagation();
-                    var date = cell.getAttribute('data-date');
-                    showDayModal(date);
+                    showDayModal(cell.getAttribute('data-date'));
                 });
-                // Keyboard opens modal (Enter / Space)
+
                 cell.addEventListener('keydown', function (e) {
                     if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        var date = cell.getAttribute('data-date');
-                        showDayModal(date);
+                        showDayModal(cell.getAttribute('data-date'));
                     }
                 });
             });
-            // Add click handler for ... more links
-            document.querySelectorAll('.show-more-appts').forEach(function (el) {
-                el.addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    var date = el.getAttribute('data-date');
-                    showDayModal(date);
-                });
+
+            // ✅ Close buttons
+            document.getElementById('closeDayModal').addEventListener('click', function () {
+                document.getElementById('dayAppointmentsModal').style.display = 'none';
+            });
+            document.getElementById('closeMonthModal').addEventListener('click', function () {
+                document.getElementById('monthAppointmentsModal').style.display = 'none';
+            });
+
+            // ✅ Click outside close
+            window.addEventListener('mousedown', function (e) {
+                var dayModal = document.getElementById('dayAppointmentsModal');
+                var monthModal = document.getElementById('monthAppointmentsModal');
+
+                if (dayModal.style.display === 'block' && !dayModal.querySelector('.custom-modal-content').contains(e.target)) {
+                    dayModal.style.display = 'none';
+                }
+                if (monthModal.style.display === 'block' && !monthModal.querySelector('.custom-modal-content').contains(e.target)) {
+                    monthModal.style.display = 'none';
+                }
             });
         });
     </script>
 }
+
+@await Html.PartialAsync("~/Views/Shared/LayoutPartials/_Footer.cshtml")

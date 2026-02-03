@@ -1,26 +1,143 @@
-/* Thinner scrollbar for scrollable appointment list */
-.scrollable-appt-list {
-  scrollbar-width: thin; /* Firefox */
-}
-.scrollable-appt-list::-webkit-scrollbar {
-  width: 6px;
-  background: #f0f0f0;
-}
-.scrollable-appt-list::-webkit-scrollbar-thumb {
-  background: #b3b3b3;
-  border-radius: 4px;
-}
-/* Scrollable appointment list in day cell */
-.scrollable-appt-list {
-  max-height: 120px;
-  overflow-y: auto;
-  padding-right: 2px;
-}
 /* ================================
-   Calendar.css (Full)
+   calendar.css (FULL) - nicer UI + cards
    ================================ */
 
-/* ===== Calendar toolbar (top row) ===== */
+/* ===== Title ===== */
+.calendar-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+
+.calendar-month-click {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid #e8e8e8;
+  background: #fafafa;
+  transition: background 0.2s ease, border 0.2s ease;
+}
+
+.calendar-month-click:hover {
+  background: #f1f1f1;
+  border-color: #dedede;
+}
+
+/* ================================
+   Custom modal styles
+   ================================ */
+
+.custom-modal {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.22);
+  width: min(520px, 95vw);
+  border: 1px solid #ececec;
+}
+
+.custom-modal-content {
+  padding: 16px 16px 14px 16px;
+}
+
+.custom-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 10px;
+}
+
+.custom-modal-header h5 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #222;
+  font-weight: 700;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.6rem;
+  cursor: pointer;
+  color: #8a8a8a;
+  line-height: 1;
+  padding: 0 6px;
+  border-radius: 8px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.modal-close:hover {
+  color: #222;
+  background: #f3f3f3;
+}
+
+.custom-modal-body {
+  margin-top: 12px;
+}
+
+/* Modal content list can scroll if too many cards */
+.appt-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* In modal only: limit height */
+#day-appointments-list,
+#month-appointments-list {
+  max-height: 55vh;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+/* Empty text */
+.appt-empty {
+  padding: 10px 10px;
+  border: 1px dashed #e3e3e3;
+  border-radius: 12px;
+  color: #666;
+  background: #fafafa;
+}
+
+/* CTA button */
+.custom-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #1976d2;
+  color: #fff;
+  border-radius: 10px;
+  padding: 8px 14px;
+  text-decoration: none;
+  margin-bottom: 12px;
+  font-size: 0.98rem;
+  box-shadow: 0 1px 6px rgba(25, 118, 210, 0.14);
+  border: none;
+  transition: transform 0.08s ease, background 0.2s ease;
+}
+
+.custom-modal-btn:hover {
+  background: #1565c0;
+}
+
+.custom-modal-btn:active {
+  transform: translateY(1px);
+}
+
+/* ================================
+   Calendar toolbar (top row)
+   ================================ */
+
 .calendar-toolbar {
   display: flex;
   justify-content: space-between;
@@ -30,7 +147,6 @@
   flex-wrap: wrap;
 }
 
-/* LEFT search */
 .calendar-search-form {
   display: flex;
   gap: 8px;
@@ -38,15 +154,9 @@
   margin: 0;
 }
 
-.calendar-month-select {
-  width: 160px;
-}
+.calendar-month-select { width: 160px; }
+.calendar-year-select { width: 120px; }
 
-.calendar-year-select {
-  width: 120px;
-}
-
-/* RIGHT buttons */
 .calendar-nav-actions {
   display: flex;
   gap: 10px;
@@ -54,92 +164,244 @@
   margin-left: auto;
 }
 
-/* ===== Table ===== */
+/* ================================
+   Calendar table base
+   ================================ */
+
 .calendar-table {
   table-layout: fixed;
   width: 100%;
 }
 
-
-
-/* header row cells */
 .calendar-table th {
-  font-weight: 600;
+  font-weight: 700;
   text-align: left;
   vertical-align: top;
   padding: 10px;
+  background: #fafafa;
+  color: #222;
 }
 
-/* Base cells */
 .calendar-table td {
   text-align: left;
   vertical-align: top;
-  padding: 10px;
+  padding: 8px;
+  background: #fff;
+  color: #222;
+  border-color: #efefef;
 }
 
-/* Your width rule (keep) */
+/* Keep your width rule */
 .calendar-table th,
 .calendar-table td {
-  width: 110px;     /* Adjust this value as needed */
+  width: 110px;
   min-width: 80px;
   max-width: 160px;
 }
 
-/* --- IMPORTANT: Force week row height (Bootstrap table fix) --- */
-.calendar-table tbody tr {
-  height: 420px !important; /* ✅ change this value to make cells taller */
-}
-
-/* ----- Calendar cell (day box) ----- */
+/* Base day cell */
 .calendar-table td.calendar-cell {
-  height: 420px !important; /* ✅ must match tr height */
   vertical-align: top !important;
   box-sizing: border-box;
-  overflow: hidden; /* keeps cell clean */
+  overflow: hidden;
+  border-color: #efefef;
 }
 
-/* empty cell (no date) */
 .calendar-cell-empty {
-  background: #fafafa;
+  background: #fbfbfb;
 }
 
-/* clickable day cell */
+/* Clickable day cell */
 .calendar-cell-day {
   cursor: pointer;
-  transition: background 0.2s ease, outline 0.2s ease;
+  transition: background 0.15s ease, outline 0.15s ease;
+  background: #fff !important;
+  color: #222;
 }
 
 .calendar-cell-day:hover,
 .calendar-cell-day:focus {
-  background: #e6f2ff;
-  outline: 2px solid #007bff;
-  outline-offset: -2px;
+  background: #f6f6f6 !important;
+  outline: none !important;
 }
 
-/* header inside a day cell */
+/* Fixed height */
+.calendar-table td.calendar-cell-day {
+  height: 150px;
+  max-height: 150px;
+  padding: 8px;
+  overflow: hidden;
+}
+
+/* Day header */
 .calendar-cell-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   margin-bottom: 6px;
 }
 
-/* ===== Events list ===== */
-.calendar-event-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-
-  /* ✅ optional: if too many events, scroll inside cell */
-  max-height: 260px;  /* adjust depending on row height */
-  overflow-y: auto;
+.day-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #f2f2f2;
+  border: 1px solid #e6e6e6;
+  font-size: 0.95rem;
 }
 
-.calendar-event-item {
+/* The scroll area in the cell */
+.scrollable-appt-list.in-cell {
+  max-height: 108px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+/* ================================
+   Appointment card (the "div" UI)
+   ================================ */
+
+.appt-card {
+  border-radius: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+.appt-card.modal-card {
+  padding: 10px 12px;
+}
+
+.appt-card.in-cell {
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  color: #222;
+  font-weight: 500;
+  font-size: 0.92rem;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  min-height: 28px;
+  display: block;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow: visible;
+  white-space: normal;
+  text-overflow: initial;
+  background-clip: border-box;
+  opacity: 1;
+}
+
+.appt-card.in-cell .appt-title,
+.appt-card.in-cell .appt-time {
+  color: #222 !important;
+  font-size: 0.92rem;
+  font-weight: 500;
+  margin: 0 4px 0 0;
+  padding: 0;
+  display: inline;
+}
+
+.appt-card.in-cell .appt-meta {
+  display: block;
+}
+
+.appt-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
   margin-bottom: 6px;
 }
 
-/* buttons under each event (if you use them later) */
+.appt-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  line-height: 1.15;
+  color: #1f1f1f;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.appt-time {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.10);
+  background: rgba(255,255,255,0.55);
+  color: #222;
+}
+
+.appt-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.appt-meta-line {
+  display: flex;
+  gap: 6px;
+  font-size: 0.82rem;
+  line-height: 1.15;
+}
+
+.appt-meta-label {
+  color: #666;
+  min-width: 46px;
+}
+
+.appt-meta-value {
+  color: #222;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ================================
+   Minimal scrollbar (your style, kept)
+   ================================ */
+
+.scrollable-appt-list,
+.appt-card-list {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.scrollable-appt-list::-webkit-scrollbar,
+.appt-card-list::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+
+.scrollable-appt-list::-webkit-scrollbar-track,
+.appt-card-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollable-appt-list::-webkit-scrollbar-thumb,
+.appt-card-list::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 2px;
+}
+
+.scrollable-appt-list:hover::-webkit-scrollbar-thumb,
+.appt-card-list:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.scrollable-appt-list:hover::-webkit-scrollbar-thumb:hover,
+.appt-card-list:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* Optional: utility */
 .calendar-event-actions {
   display: flex;
   gap: 6px;

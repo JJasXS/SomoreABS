@@ -41,6 +41,71 @@ WHERE rdb$relation_name = 'AGENT'
         }
 
         // =========================================================
+        // 1b) Ensure AGENT.BRANCHNO column exists
+        // =========================================================
+        public void EnsureAgentBranchNoColumn()
+        {
+            using var conn = _db.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+SELECT COUNT(*)
+FROM rdb$relation_fields
+WHERE rdb$relation_name = 'AGENT'
+  AND rdb$field_name    = 'BRANCHNO'";
+
+            var exists = Convert.ToInt32(cmd.ExecuteScalar()) > 0;
+
+            if (!exists)
+            {
+                // Add BRANCHNO column
+                ExecNonQuery(conn, "ALTER TABLE AGENT ADD BRANCHNO VARCHAR(10) CHARACTER SET UTF8");
+                // Optional: Set empty string for existing rows if null
+                ExecNonQuery(conn, "UPDATE AGENT SET BRANCHNO = '' WHERE BRANCHNO IS NULL");
+            }
+        }
+
+        // =========================================================
+        // 1c) Ensure BRANCH table exists and AGENT.BRANCHNO is FK
+        // =========================================================
+        public void EnsureBranchSchema()
+        {
+            using var conn = _db.Open();
+            // Create BRANCH table if not exists
+            if (!TableExists(conn, "BRANCH"))
+            {
+                ExecNonQuery(conn, @"CREATE TABLE BRANCH (
+                    BRANCHNO VARCHAR(10) CHARACTER SET UTF8 PRIMARY KEY,
+                    BranchName VARCHAR(120) CHARACTER SET UTF8
+                )");
+                Console.WriteLine("BRANCH table created successfully.");
+            }
+            else
+            {
+                Console.WriteLine("BRANCH table already exists.");
+            }
+            // Ensure AGENT.BRANCHNO column exists
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+SELECT COUNT(*)
+FROM rdb$relation_fields
+WHERE rdb$relation_name = 'AGENT'
+  AND rdb$field_name    = 'BRANCHNO'";
+            var exists = Convert.ToInt32(cmd.ExecuteScalar()) > 0;
+            if (!exists)
+            {
+                ExecNonQuery(conn, "ALTER TABLE AGENT ADD BRANCHNO VARCHAR(10) CHARACTER SET UTF8");
+                ExecNonQuery(conn, "UPDATE AGENT SET BRANCHNO = '' WHERE BRANCHNO IS NULL");
+            }
+            // Add FK constraint if not exists
+            // Firebird does not have easy FK existence check, so try/catch
+            try
+            {
+                ExecNonQuery(conn, "ALTER TABLE AGENT ADD CONSTRAINT FK_AGENT_BRANCH FOREIGN KEY (BRANCHNO) REFERENCES BRANCH(BRANCHNO)");
+            }
+            catch { /* ignore if already exists */ }
+        }
+
+        // =========================================================
         // 2) Ensure APPOINTMENT schema exists
         // =========================================================
         public void EnsureAppointmentSchema()

@@ -224,4 +224,4 @@ C:\Users\sd01\ABS_System\ABS_System\obj\Debug\net10.0\ABS_System.csproj.Assembly
 C:\Users\sd01\ABS_System\ABS_System\obj\Debug\net10.0\ABS_System.csproj.Up2Date
 C:\Users\sd01\ABS_System\ABS_System\bin\Debug\net10.0\FirebirdSql.Data.FirebirdClient.dll
 C:\Users\sd01\ABS_System\ABS_System\obj\Debug\net10.0\ABS_System.sourcelink.json
-C:\Users\sd01\ABS_System\ABS_System\obj\Debug\net10.0\compressed\ily9vkstnh-{0}-n2tf9qezhf-n2tf9qezhf.gz
+C:\Users\sd01\ABS_System\ABS_System\obj\Debug\net10.0\compressed\ily9vkstnh-{0}-ko9690ctpo-ko9690ctpo.gz
