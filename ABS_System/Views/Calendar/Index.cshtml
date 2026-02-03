@@ -59,6 +59,9 @@
     </span>
 </h2>
 
+<!-- Modal Overlay -->
+<div id="modalOverlay" class="modal-overlay" style="display:none;"></div>
+
 <!-- ✅ Month Modal -->
 <div id="monthAppointmentsModal" class="custom-modal" style="display:none;">
     <div class="custom-modal-content">
@@ -89,6 +92,21 @@
         </div>
     </div>
 </div>
+<style>
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0,0,0,0.5);
+        z-index: 1000;
+        display: none;
+    }
+    .custom-modal {
+        z-index: 1001;
+    }
+</style>
 
 <!-- ✅ Top row: Search (left) + Nav buttons (right) -->
 <div class="calendar-toolbar">
@@ -245,6 +263,7 @@
             var modalEl = document.getElementById('monthAppointmentsModal');
             var label = document.getElementById('modalMonthLabel');
             var list = document.getElementById('month-appointments-list');
+            var overlay = document.getElementById('modalOverlay');
 
             var monthStr = year + '-' + (month.toString().length === 1 ? '0' + month : month);
             label.textContent = monthStr;
@@ -268,6 +287,7 @@
                 list.innerHTML = html;
             }
 
+            overlay.style.display = 'block';
             modalEl.style.display = 'block';
         }
 
@@ -276,6 +296,7 @@
             var label = document.getElementById('modalDayLabel');
             var list = document.getElementById('day-appointments-list');
             var addBtn = document.getElementById('add-appointment-btn');
+            var overlay = document.getElementById('modalOverlay');
 
             label.textContent = date;
             addBtn.href = '/Appointment/Create?apptStart=' + date + 'T09:00';
@@ -300,6 +321,7 @@
                 list.innerHTML = html;
             }
 
+            overlay.style.display = 'block';
             modalEl.style.display = 'block';
         }
 
@@ -318,23 +340,25 @@
                 });
             });
 
-            document.getElementById('closeDayModal').addEventListener('click', function () {
+            function closeModals() {
                 document.getElementById('dayAppointmentsModal').style.display = 'none';
-            });
-            document.getElementById('closeMonthModal').addEventListener('click', function () {
                 document.getElementById('monthAppointmentsModal').style.display = 'none';
-            });
+                document.getElementById('modalOverlay').style.display = 'none';
+            }
 
-            window.addEventListener('mousedown', function (e) {
-                var dayModal = document.getElementById('dayAppointmentsModal');
-                var monthModal = document.getElementById('monthAppointmentsModal');
+            document.getElementById('closeDayModal').addEventListener('click', closeModals);
+            document.getElementById('closeMonthModal').addEventListener('click', closeModals);
 
-                if (dayModal.style.display === 'block' && !dayModal.querySelector('.custom-modal-content').contains(e.target)) {
-                    dayModal.style.display = 'none';
-                }
-                if (monthModal.style.display === 'block' && !monthModal.querySelector('.custom-modal-content').contains(e.target)) {
-                    monthModal.style.display = 'none';
-                }
+            document.getElementById('modalOverlay').addEventListener('click', closeModals);
+            document.getElementById('modalOverlay').addEventListener('touchstart', closeModals);
+            // Prevent modal click from closing
+            document.querySelectorAll('.custom-modal-content').forEach(function (modalContent) {
+                modalContent.addEventListener('mousedown', function (e) {
+                    e.stopPropagation();
+                });
+                modalContent.addEventListener('touchstart', function (e) {
+                    e.stopPropagation();
+                });
             });
         });
     </script>

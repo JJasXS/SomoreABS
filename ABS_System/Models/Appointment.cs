@@ -15,6 +15,9 @@ namespace YourApp.Models
         [Required]
         public DateTime ApptStart { get; set; }
 
+        [Required]
+        public DateTime ApptEnd { get; set; }
+
 
         public string? Title { get; set; }
         public string? Notes { get; set; }

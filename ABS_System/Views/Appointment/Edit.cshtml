@@ -39,15 +39,39 @@
         <input type="hidden" asp-for="ApptId" />
         <div class="mb-3">
             <label asp-for="CustomerCode" class="form-label">Customer</label>
-            <input asp-for="CustomerCode" class="form-control" />
+            <select asp-for="CustomerCode" class="form-control">
+                <option value="">-- Select Customer --</option>
+                @if (ViewBag.Customers != null)
+                {
+                    foreach (var cust in (List<dynamic>)ViewBag.Customers)
+                    {
+                        var selected = Model.CustomerCode == cust.Code ? "selected" : null;
+                        <option value="@cust.Code" selected="@selected">@cust.Name</option>
+                    }
+                }
+            </select>
         </div>
         <div class="mb-3">
             <label asp-for="AgentCode" class="form-label">Agent</label>
-            <input asp-for="AgentCode" class="form-control" />
+            <select asp-for="AgentCode" class="form-control">
+                <option value="">-- Select Agent --</option>
+                @if (ViewBag.Agents != null)
+                {
+                    foreach (var agent in (List<dynamic>)ViewBag.Agents)
+                    {
+                        var selected = Model.AgentCode == agent.Code ? "selected" : null;
+                        <option value="@agent.Code" selected="@selected">@agent.Description</option>
+                    }
+                }
+            </select>
         </div>
         <div class="mb-3">
             <label asp-for="ApptStart" class="form-label">Start Time</label>
             <input asp-for="ApptStart" class="form-control" type="datetime-local" />
+        </div>
+        <div class="mb-3">
+            <label asp-for="ApptEnd" class="form-label">End Time</label>
+            <input asp-for="ApptEnd" class="form-control" type="datetime-local" />
         </div>
         <div class="mb-3">
             <label asp-for="Title" class="form-label">Title</label>

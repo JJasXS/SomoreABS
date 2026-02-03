@@ -92,10 +92,17 @@
     <span asp-validation-for="AgentCode" class="validation"></span>
   </div>
 
-  <div>
-    <label>Start</label>
-    <input asp-for="ApptStart" type="datetime-local" value="@Model.ApptStart.ToString("yyyy-MM-ddTHH:mm")" />
-    <span asp-validation-for="ApptStart" class="validation"></span>
+  <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+    <div style="flex: 1; min-width: 90px;">
+      <label style="font-size: 0.95em;">Start</label>
+      <input asp-for="ApptStart" type="datetime-local" style="padding: 2px 6px; font-size: 0.95em;" value="@Model.ApptStart.ToString("yyyy-MM-ddTHH:mm")" />
+      <span asp-validation-for="ApptStart" class="validation"></span>
+    </div>
+    <div style="flex: 1; min-width: 90px;">
+      <label style="font-size: 0.95em;">End</label>
+      <input asp-for="ApptEnd" type="datetime-local" style="padding: 2px 6px; font-size: 0.95em;" value="@Model.ApptEnd.ToString("yyyy-MM-ddTHH:mm")" />
+      <span asp-validation-for="ApptEnd" class="validation"></span>
+    </div>
   </div>
 
   <div>
@@ -104,15 +111,10 @@
     <span asp-validation-for="Title" class="validation"></span>
   </div>
 
-  <div>
-    <label>Status</label>
-    <input asp-for="Status" />
-    <span asp-validation-for="Status" class="validation"></span>
-  </div>
 
   <div class="form-actions">
     <button type="submit">Save</button>
-    <a asp-action="Index">Cancel</a>
+    <a asp-controller="Calendar" asp-action="Index">Cancel</a>
   </div>
 </form>
 
