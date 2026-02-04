@@ -423,3 +423,56 @@
 .calendar-delete-form {
   display: inline;
 }
+
+
+/* =========================================
+   MODAL CARD TOP ROW (checkbox LEFT)
+   ========================================= */
+
+/* Override appt-top for modal cards only */
+.appt-card.modal-card .appt-top {
+  display: flex;
+  align-items: center;          /* center vertically */
+  justify-content: flex-start;  /* ✅ NOT space-between */
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+/* LEFT: checkbox area */
+.appt-card.modal-card .appt-top-left {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+/* MID: title should take remaining space */
+.appt-card.modal-card .appt-top-mid {
+  flex: 1 1 auto;
+  min-width: 0; /* important for ellipsis/clamp */
+}
+
+/* RIGHT: time pinned to right */
+.appt-card.modal-card .appt-top-right {
+  flex: 0 0 auto;
+  margin-left: auto;  /* ✅ pushes time to far right */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+/* checkbox label styling */
+.appt-card.modal-card .appt-done-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  opacity: 0.95;
+  user-select: none;
+}
+
+.appt-card.modal-card .appt-done-wrap input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}

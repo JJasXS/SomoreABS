@@ -11,9 +11,6 @@ namespace YourApp.Controllers
     public class AppointmentController : Controller
     {
         private readonly FirebirdDb _db;
-
-        // ✅ You removed End Time, so we assume each appointment lasts 60 minutes.
-        // Change this any time: 30 / 45 / 90 etc.
         private const int DEFAULT_DURATION_MINUTES = 60;
 
         public AppointmentController(FirebirdDb db)
@@ -22,7 +19,51 @@ namespace YourApp.Controllers
         }
 
         // =========================================================
-        // LIST (optional standalone list page)
+        // QUICK STATUS UPDATE (AJAX)
+        // POST: /Appointment/SetStatus
+        // =========================================================
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult SetStatus(long id, string status)
+        {
+            status = (status ?? "").Trim().ToUpperInvariant();
+
+            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "BOOKED",
+                "FULFILLED"
+            };
+
+            if (!allowed.Contains(status))
+                return Json(new { ok = false, message = "Invalid status." });
+
+            try
+            {
+                using var conn = _db.Open();
+                using var cmd = conn.CreateCommand();
+
+                cmd.CommandText = @"
+UPDATE APPOINTMENT
+SET STATUS = @STATUS
+WHERE APPT_ID = @ID";
+
+                cmd.Parameters.Add(FirebirdDb.P("@STATUS", status, FbDbType.VarChar));
+                cmd.Parameters.Add(FirebirdDb.P("@ID", id, FbDbType.BigInt));
+
+                var rows = cmd.ExecuteNonQuery();
+                if (rows <= 0)
+                    return Json(new { ok = false, message = "Appointment not found." });
+
+                return Json(new { ok = true, status = status });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { ok = false, message = "Failed to update status.", detail = ex.Message });
+            }
+        }
+
+        // =========================================================
+        // LIST
         // =========================================================
         public IActionResult Index()
         {
@@ -46,7 +87,7 @@ ORDER BY APPT_START DESC";
                     AgentCode = r.IsDBNull(2) ? "" : r.GetString(2).Trim(),
                     ApptStart = r.GetDateTime(3),
                     Title = r.IsDBNull(4) ? null : r.GetString(4).Trim(),
-                    Status = r.IsDBNull(5) ? "NEW" : r.GetString(5).Trim()
+                    Status = r.IsDBNull(5) ? "BOOKED" : r.GetString(5).Trim()
                 });
             }
 
@@ -69,7 +110,7 @@ ORDER BY APPT_START DESC";
             return View(new Appointment
             {
                 ApptStart = start,
-                Status = "NEW"
+                Status = "BOOKED"
             });
         }
 
@@ -85,44 +126,39 @@ ORDER BY APPT_START DESC";
             ViewBag.Customers = customers;
             ViewBag.ServiceItems = LoadServiceItems();
 
-            // ✅ Normalize inputs
             m.CustomerCode = (m.CustomerCode ?? "").Trim();
             m.AgentCode = (m.AgentCode ?? "").Trim();
             m.Title = (m.Title ?? "").Trim();
-            m.Status = string.IsNullOrWhiteSpace(m.Status) ? "NEW" : m.Status.Trim();
 
-            // ✅ Services from hidden input
+            // ✅ force default on create
+            m.Status = "BOOKED";
+
             var selectedServiceCodes = ParseCsv(Request.Form["ServiceCodes"].ToString());
 
             if (!ModelState.IsValid)
                 return View(m);
 
-            // ✅ OPTIONAL business rule: require at least 1 service
             if (selectedServiceCodes.Count == 0)
             {
                 ModelState.AddModelError("", "Please select at least one service.");
                 return View(m);
             }
 
-            // ✅ With no End Time, assume end = start + DEFAULT_DURATION_MINUTES
             var start = m.ApptStart;
             var end = m.ApptStart.AddMinutes(DEFAULT_DURATION_MINUTES);
 
-            // ✅ Business Rule #1: same agent cannot overlap
             if (HasAgentOverlap(m.AgentCode, start, end, excludeApptId: null))
             {
                 ModelState.AddModelError("", "Not allowed: this agent already has a booking that overlaps this time.");
                 return View(m);
             }
 
-            // ✅ Business Rule #2: same customer cannot overlap
             if (HasCustomerOverlap(m.CustomerCode, start, end, excludeApptId: null))
             {
                 ModelState.AddModelError("", "Not allowed: this customer already has a booking that overlaps this time (even with a different agent).");
                 return View(m);
             }
 
-            // ✅ Insert master row (NO APPT_END)
             long newApptId;
             using (var conn = _db.Open())
             using (var cmd = conn.CreateCommand())
@@ -145,10 +181,8 @@ RETURNING APPT_ID";
                 newApptId = Convert.ToInt64(cmd.ExecuteScalar());
             }
 
-            // ✅ Insert services into APPT_DTL
-            if (selectedServiceCodes.Count > 0)
+            using (var conn = _db.Open())
             {
-                using var conn = _db.Open();
                 foreach (var code in selectedServiceCodes)
                 {
                     using var cmd = conn.CreateCommand();
@@ -195,7 +229,7 @@ WHERE APPT_ID = @id";
                         AgentCode = r.IsDBNull(2) ? "" : r.GetString(2).Trim(),
                         ApptStart = r.GetDateTime(3),
                         Title = r.IsDBNull(4) ? "" : r.GetString(4).Trim(),
-                        Status = r.IsDBNull(5) ? "NEW" : r.GetString(5).Trim(),
+                        Status = r.IsDBNull(5) ? "BOOKED" : r.GetString(5).Trim(),
                         Notes = r.IsDBNull(6) ? null : r.GetString(6)
                     };
                 }
@@ -220,17 +254,19 @@ WHERE APPT_ID = @id";
             ViewBag.Customers = customers;
             ViewBag.ServiceItems = LoadServiceItems();
 
-            ViewBag.SelectedServiceCodes = ParseCsv(Request.Form["ServiceCodes"].ToString());
+            var selectedServiceCodes = ParseCsv(Request.Form["ServiceCodes"].ToString());
+            ViewBag.SelectedServiceCodes = selectedServiceCodes;
 
             m.CustomerCode = (m.CustomerCode ?? "").Trim();
             m.AgentCode = (m.AgentCode ?? "").Trim();
             m.Title = (m.Title ?? "").Trim();
-            m.Status = string.IsNullOrWhiteSpace(m.Status) ? "NEW" : m.Status.Trim();
+
+            // ✅ allow changing status via edit page (or keep booked)
+            m.Status = string.IsNullOrWhiteSpace(m.Status) ? "BOOKED" : m.Status.Trim();
 
             if (!ModelState.IsValid)
                 return View(m);
 
-            var selectedServiceCodes = ParseCsv(Request.Form["ServiceCodes"].ToString());
             if (selectedServiceCodes.Count == 0)
             {
                 ModelState.AddModelError("", "Please select at least one service.");
@@ -277,7 +313,6 @@ WHERE APPT_ID   = @APPT_ID";
                 cmd.ExecuteNonQuery();
             }
 
-            // ✅ update services: delete old, insert new
             using (var conn = _db.Open())
             {
                 using (var cmdDel = conn.CreateCommand())
@@ -328,7 +363,7 @@ WHERE APPT_ID = @id";
                         AgentCode = r.IsDBNull(2) ? "" : r.GetString(2).Trim(),
                         ApptStart = r.GetDateTime(3),
                         Title = r.IsDBNull(4) ? null : r.GetString(4).Trim(),
-                        Status = r.IsDBNull(5) ? "NEW" : r.GetString(5).Trim()
+                        Status = r.IsDBNull(5) ? "BOOKED" : r.GetString(5).Trim()
                     };
                 }
             }
@@ -427,7 +462,7 @@ WHERE APPT_ID = @id";
             }
             catch
             {
-                // keep silent
+                // silent
             }
 
             return serviceItems;
@@ -458,23 +493,6 @@ WHERE APPT_ID = @id";
             if (string.IsNullOrEmpty(agent))
                 return false;
 
-            using var conn = _db.Open();
-            using var cmd = conn.CreateCommand();
-
-            cmd.CommandText = @"
-SELECT COUNT(*)
-FROM APPOINTMENT
-WHERE AGENT_CODE = @AGENT_CODE
-  AND ((@APPT_START < DATEADD(MINUTE, @DUR_MIN, APPT_START)) AND (@APPT_END > APPT_START))
-  AND (@EXCLUDE_ID IS NULL OR APPT_ID <> @EXCLUDE_ID)";
-
-            // Firebird does NOT have DATEADD like SQL Server.
-            // So we implement overlap using APPT_END if you have it.
-            // ✅ Since you removed end-time from UI/controller, we do overlap using fixed duration:
-            // We'll compute end in C# and compare using APPT_START only if DB has no APPT_END.
-            // Therefore: use the generic method below (no DATEADD).
-
-            cmd.Dispose();
             return HasOverlap_Generic("AGENT_CODE", agent, start, end, excludeApptId);
         }
 
@@ -487,20 +505,15 @@ WHERE AGENT_CODE = @AGENT_CODE
             return HasOverlap_Generic("CUSTOMER_CODE", cust, start, end, excludeApptId);
         }
 
-        // ✅ Generic overlap checker (APPT_START + fixed duration window)
+        // ✅ Overlap checker (tries APPT_END if exists; else fixed duration by APPT_START)
         private bool HasOverlap_Generic(string columnName, string codeValue, DateTime start, DateTime end, long? excludeApptId)
         {
             using var conn = _db.Open();
-            using var cmd = conn.CreateCommand();
 
-            // Assumption: APPOINTMENT table still has APPT_END column OR not.
-            // We support both:
-            // - If APPT_END exists: use it.
-            // - If APPT_END doesn't exist: treat each row as APPT_START + DEFAULT_DURATION_MINUTES.
-
-            // Try query using APPT_END first. If it fails (unknown column), fallback.
+            // 1) Try using APPT_END (if exists)
             try
             {
+                using var cmd = conn.CreateCommand();
                 cmd.CommandText = $@"
 SELECT COUNT(*)
 FROM APPOINTMENT
@@ -518,35 +531,33 @@ WHERE {columnName} = @CODE
             }
             catch
             {
-                // fallback: no APPT_END column -> approximate each row as start+duration
+                // ignore -> fallback below
             }
 
-            using var cmd2 = conn.CreateCommand();
-            cmd2.CommandText = $@"
+            // 2) fallback: fixed duration window
+            using (var cmd2 = conn.CreateCommand())
+            {
+                cmd2.CommandText = $@"
 SELECT APPT_START
 FROM APPOINTMENT
 WHERE {columnName} = @CODE
   AND (@EX IS NULL OR APPT_ID <> @EX)";
 
-            cmd2.Parameters.Add(FirebirdDb.P("@CODE", codeValue, FbDbType.VarChar));
-            cmd2.Parameters.Add(FirebirdDb.P("@EX", excludeApptId, FbDbType.BigInt));
+                cmd2.Parameters.Add(FirebirdDb.P("@CODE", codeValue, FbDbType.VarChar));
+                cmd2.Parameters.Add(FirebirdDb.P("@EX", excludeApptId, FbDbType.BigInt));
 
-            var overlaps = 0;
-            using var r = cmd2.ExecuteReader();
-            while (r.Read())
-            {
-                var existingStart = r.GetDateTime(0);
-                var existingEnd = existingStart.AddMinutes(DEFAULT_DURATION_MINUTES);
-
-                // overlap: start < existingEnd && end > existingStart
-                if (start < existingEnd && end > existingStart)
+                using var r = cmd2.ExecuteReader();
+                while (r.Read())
                 {
-                    overlaps++;
-                    break;
+                    var existingStart = r.GetDateTime(0);
+                    var existingEnd = existingStart.AddMinutes(DEFAULT_DURATION_MINUTES);
+
+                    if (start < existingEnd && end > existingStart)
+                        return true;
                 }
             }
 
-            return overlaps > 0;
+            return false;
         }
 
         private List<string> ParseCsv(string csv)
