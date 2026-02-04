@@ -199,9 +199,13 @@
                                                 cardColor = c;
                                             }
 
-                                            <div class="appt-card in-cell"
-                                                 style="@(cardColor != null ? $"background-color:{cardColor} !important;" : "")">
-                                                <span class="appt-title">@appt.Title</span>
+                                                <div class="appt-card in-cell"
+                                                    style="@(cardColor != null ? $"background-color:{cardColor} !important; display:flex !important; align-items:center !important; min-height:22px !important; padding:2px 8px !important;" : "display:flex !important; align-items:center !important; min-height:22px !important; padding:2px 8px !important;")">
+                                                <span class="appt-title">@(
+                                                    string.IsNullOrWhiteSpace(appt.Title)
+                                                        ? ""
+                                                        : System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(appt.Title.ToLower())
+                                                )</span>
                                             </div>
                                         }
                                     </div>
