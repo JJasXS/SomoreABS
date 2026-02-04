@@ -1,18 +1,76 @@
 @model YourApp.Models.OtpViewModel
 
-<h2>Verify OTP</h2>
+<div class="d-flex justify-content-center align-items-center min-vh-100">
+    <div class="card shadow-sm" style="max-width: 420px; width: 100%;">
+        <div class="card-body p-4">
+            <h2 class="h4 mb-3 text-center">Verify OTP</h2>
+            <p class="text-muted text-center mb-4">
+                Enter the 6-digit code we sent you.
+            </p>
 
-<form asp-action="VerifyOtp" method="post">
-    @Html.AntiForgeryToken()
-    <input type="hidden" asp-for="AgentCode" />
-    <div class="mb-3">
-        <label>OTP</label>
-        <input asp-for="Otp" class="form-control" />
-        <span asp-validation-for="Otp" class="text-danger"></span>
+            <form asp-action="VerifyOtp" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="AgentCode" />
+                <input type="hidden" asp-for="Otp" id="Otp" />
+
+                <div class="mb-3">
+                    <label class="form-label d-block text-center">OTP</label>
+                    <div class="d-flex justify-content-between gap-2 otp-input-group">
+                        @for (var i = 0; i < 6; i++)
+                        {
+                            <input type="text"
+                                   class="form-control text-center otp-box"
+                                   maxlength="1"
+                                   inputmode="numeric"
+                                   pattern="[0-9]*"
+                                   autocomplete="one-time-code" />
+                        }
+                    </div>
+                    <span asp-validation-for="Otp" class="text-danger small"></span>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100">Verify</button>
+            </form>
+        </div>
     </div>
-    <button type="submit" class="btn btn-primary">Verify</button>
-</form>
+</div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        (function () {
+            var boxes = Array.prototype.slice.call(document.querySelectorAll('.otp-box'));
+            var hidden = document.getElementById('Otp');
+            if (!boxes.length || !hidden) return;
+
+            function updateHidden() {
+                var val = boxes.map(function (b) { return (b.value || '').trim(); }).join('');
+                hidden.value = val;
+            }
+
+            boxes.forEach(function (box, idx) {
+                box.addEventListener('input', function (e) {
+                    var v = box.value.replace(/\D/g, '');
+                    box.value = v.substr(0, 1);
+                    if (v && idx < boxes.length - 1) {
+                        boxes[idx + 1].focus();
+                        boxes[idx + 1].select();
+                    }
+                    updateHidden();
+                });
+
+                box.addEventListener('keydown', function (e) {
+                    if (e.key === 'Backspace' && !box.value && idx > 0) {
+                        boxes[idx - 1].focus();
+                        boxes[idx - 1].select();
+                        e.preventDefault();
+                    }
+                });
+            });
+
+            // Auto-focus first box on load
+            boxes[0].focus();
+        })();
+    </script>
 }

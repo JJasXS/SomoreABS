@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using System;
@@ -6,11 +7,25 @@ using System.Linq;
 
 namespace YourApp.Controllers
 {
+    [Authorize]
     public class CalendarController : Controller
     {
         // ✅ In-memory store (resets when app restarts)
         private static readonly List<CalendarEventVm> _events = new();
         private static int _nextId = 1;
+
+        // =========================
+        // Helpers: read login claims
+        // =========================
+        private string GetBranchNo()
+        {
+            return User?.Claims?.FirstOrDefault(c => c.Type == "BranchNo")?.Value?.Trim() ?? "";
+        }
+
+        private bool IsOffice()
+        {
+            return (User?.Claims?.FirstOrDefault(c => c.Type == "IsOffice")?.Value?.Trim() == "1");
+        }
 
         // /Calendar?year=2026&month=2
         public IActionResult Index(int? year, int? month)
@@ -22,6 +37,13 @@ namespace YourApp.Controllers
             var firstDay = new DateTime(y, m, 1);
             var lastDay = firstDay.AddMonths(1).AddDays(-1);
 
+            // ✅ Logged-in user's scope
+            string userBranchNo = GetBranchNo();
+            bool isOffice = IsOffice();
+
+            ViewBag.UserBranchNo = userBranchNo;
+            ViewBag.IsOffice = isOffice;
+
             // ===== In-memory calendar events (your VM) =====
             var monthEvents = _events
                 .Where(e => e.Date.Date >= firstDay.Date && e.Date.Date <= lastDay.Date)
@@ -29,7 +51,7 @@ namespace YourApp.Controllers
                 .ThenBy(e => e.Title)
                 .ToList();
 
-            // ===== Firebird APPOINTMENT list =====
+            // ===== Firebird APPOINTMENT list (filtered by branch if not office) =====
             var monthAppointments = new List<YourApp.Models.Appointment>();
             try
             {
@@ -38,14 +60,28 @@ namespace YourApp.Controllers
                 using var conn = db.Open();
                 using var cmd = conn.CreateCommand();
 
-                cmd.CommandText = @"
-SELECT APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, TITLE, NOTES, STATUS
-FROM APPOINTMENT
-WHERE APPT_START >= @START AND APPT_START <= @END
-ORDER BY APPT_START";
+                cmd.CommandText = isOffice
+                ? @"
+SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS
+FROM APPOINTMENT ap
+WHERE ap.APPT_START >= @START AND ap.APPT_START <= @END
+ORDER BY ap.APPT_START"
+                : @"
+SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS
+FROM APPOINTMENT ap
+JOIN AGENT a ON a.CODE = ap.AGENT_CODE
+WHERE ap.APPT_START >= @START
+  AND ap.APPT_START <= @END
+  AND a.BRANCHNO = @BRANCHNO
+ORDER BY ap.APPT_START";
 
                 cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@START", firstDay, FirebirdSql.Data.FirebirdClient.FbDbType.TimeStamp));
                 cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@END", lastDay, FirebirdSql.Data.FirebirdClient.FbDbType.TimeStamp));
+
+                if (!isOffice)
+                {
+                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@BRANCHNO", userBranchNo, FirebirdSql.Data.FirebirdClient.FbDbType.VarChar));
+                }
 
                 using var r = cmd.ExecuteReader();
                 while (r.Read())
@@ -73,6 +109,8 @@ ORDER BY APPT_START";
             var agentColors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             // Load agents (CODE -> DESCRIPTION, BRANCHNO -> Color)
+            // ✅ Office: all agents
+            // ✅ Non-office: only agents in their branch
             try
             {
                 using var scope = HttpContext.RequestServices.CreateScope();
@@ -80,7 +118,14 @@ ORDER BY APPT_START";
                 using var conn = db.Open();
                 using var cmd = conn.CreateCommand();
 
-                cmd.CommandText = "SELECT CODE, DESCRIPTION, BRANCHNO FROM AGENT";
+                cmd.CommandText = isOffice
+                    ? "SELECT CODE, DESCRIPTION, BRANCHNO FROM AGENT"
+                    : "SELECT CODE, DESCRIPTION, BRANCHNO FROM AGENT WHERE BRANCHNO = @BRANCHNO";
+
+                if (!isOffice)
+                {
+                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@BRANCHNO", userBranchNo, FirebirdSql.Data.FirebirdClient.FbDbType.VarChar));
+                }
 
                 using var r = cmd.ExecuteReader();
                 while (r.Read())
@@ -97,7 +142,7 @@ ORDER BY APPT_START";
                     // ✅ NEVER NULL color (default grey)
                     string branchColor = "#E8E8E8";
 
-                    if (branchNo == "1") branchColor = "#ffb6c1";      // Light Pink
+                    if (branchNo == "1") branchColor = "#ffb6c1";      // Light Pink (Office)
                     else if (branchNo == "2") branchColor = "#add8e6"; // Light Blue
                     else if (branchNo == "3") branchColor = "#90ee90"; // Light Green
                     else if (branchNo == "4") branchColor = "#ffd700"; // Gold

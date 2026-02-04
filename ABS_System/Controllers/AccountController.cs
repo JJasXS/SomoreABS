@@ -5,6 +5,10 @@ using System.Collections.Concurrent;
 using System.Net.Mail;
 using System.Net;
 using YourApp.Data;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using System.Security.Claims;
+
 
 namespace YourApp.Controllers
 {
@@ -75,20 +79,82 @@ namespace YourApp.Controllers
         }
 
         [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult VerifyOtp(OtpViewModel model)
+[ValidateAntiForgeryToken]
+public IActionResult VerifyOtp(OtpViewModel model)
+{
+    if (!ModelState.IsValid) return View(model);
+
+    // ✅ 1) OTP check
+    if (!OtpStore.TryGetValue(model.AgentCode, out var otp) || otp != model.Otp)
+    {
+        ModelState.AddModelError("Otp", "Invalid OTP.");
+        return View(model);
+    }
+
+    // ✅ 2) OTP success → remove OTP
+    OtpStore.TryRemove(model.AgentCode, out _);
+
+    // ✅ 3) Load Email + BranchNo from AGENT for claims
+    string email = "";
+    string branchNo = "";
+
+    try
+    {
+        using (var conn = _db.Open())
+        using (var cmd = conn.CreateCommand())
         {
-            if (!ModelState.IsValid) return View(model);
-            if (OtpStore.TryGetValue(model.AgentCode, out var otp) && otp == model.Otp)
+            cmd.CommandText = "SELECT EMAIL, BRANCHNO FROM AGENT WHERE CODE = @CODE";
+            cmd.Parameters.Add(FirebirdDb.P("@CODE", model.AgentCode.Trim(),
+                FirebirdSql.Data.FirebirdClient.FbDbType.VarChar));
+
+            using var r = cmd.ExecuteReader();
+            if (r.Read())
             {
-                // Success: log in user (set session/cookie as needed)
-                OtpStore.TryRemove(model.AgentCode, out _);
-                // TODO: Set authentication cookie/session
-                return RedirectToAction("Index", "Calendar");
+                email = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                branchNo = r.IsDBNull(1) ? "" : r.GetString(1).Trim();
             }
-            ModelState.AddModelError("Otp", "Invalid OTP.");
-            return View(model);
         }
+    }
+    catch
+    {
+        // keep going; will fallback below
+    }
+
+    // fallback: if email empty, try TempData email (from Login step)
+    if (string.IsNullOrWhiteSpace(email))
+    {
+        email = (TempData["Email"] as string ?? "").Trim();
+    }
+
+    bool isOffice = branchNo == "1";
+
+    // ✅ 4) Build claims (this is what CalendarController will read)
+    var claims = new List<Claim>
+    {
+        new Claim(ClaimTypes.Name, email),   // simple default
+        new Claim(ClaimTypes.Email, email),
+        new Claim("AgentCode", model.AgentCode.Trim()),
+        new Claim("BranchNo", branchNo),
+        new Claim("IsOffice", isOffice ? "1" : "0")
+    };
+
+    var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+    var principal = new ClaimsPrincipal(identity);
+
+    // ✅ 5) Sign in (cookie)
+    HttpContext.SignInAsync(
+        CookieAuthenticationDefaults.AuthenticationScheme,
+        principal,
+        new AuthenticationProperties
+        {
+            IsPersistent = true,
+            ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
+        }
+    ).GetAwaiter().GetResult();
+
+    return RedirectToAction("Index", "Calendar");
+}
+
 
         private void SendOtpEmail(string email, string otp)
         {

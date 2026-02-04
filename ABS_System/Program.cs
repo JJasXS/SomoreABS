@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using YourApp.Data;        // AppDbContext + FirebirdDb + DbInitializer
 using FirebirdWeb.Helpers; // DbHelper (your existing helper)
+using Microsoft.AspNetCore.Authentication.Cookies;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,6 +9,18 @@ var builder = WebApplication.CreateBuilder(args);
 // Services
 // =========================
 builder.Services.AddControllersWithViews();
+
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Account/Login";
+        options.AccessDeniedPath = "/Account/Login";
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.SlidingExpiration = true;
+    });
+
+builder.Services.AddAuthorization();
+
 
 // ✅ SQL Server (EF Core)
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -75,7 +88,10 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting();
+
+app.UseAuthentication();
 app.UseAuthorization();
+
 
 // ✅ Default route
 app.MapControllerRoute(
