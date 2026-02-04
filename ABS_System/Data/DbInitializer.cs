@@ -18,17 +18,98 @@ namespace YourApp.Data
         }
 
         // =========================================================
+        // Logging helper
+        // =========================================================
+        private static void Log(string msg) => Console.WriteLine($"[DBINIT] {msg}");
+
+        // =========================================================
+        // A) TENANT table for header/footer branding
+        // =========================================================
+        public void EnsureTenantSchema()
+        {
+            using var conn = _db.Open();
+
+            Log("Checking table TENANT ...");
+            if (TableExists(conn, "TENANT"))
+            {
+                Log("Table TENANT already exists, skip.");
+                return;
+            }
+
+            Log("Creating table TENANT + seq + trigger + unique index ...");
+
+            var statements = new List<string>
+            {
+                @"
+CREATE TABLE TENANT (
+    TENANT_ID        BIGINT NOT NULL,
+    TENANT_CODE      VARCHAR(50) CHARACTER SET UTF8 NOT NULL,   -- unique key (e.g. DEFAULT / ABC)
+    TENANT_NAME      VARCHAR(200) CHARACTER SET UTF8 NOT NULL,  -- company display name
+
+    -- Header branding
+    HEADER_LOGO_URL  VARCHAR(500) CHARACTER SET UTF8,
+    HEADER_TEXT1     VARCHAR(200) CHARACTER SET UTF8,
+    HEADER_TEXT2     VARCHAR(200) CHARACTER SET UTF8,
+
+    -- Footer branding
+    FOOTER_TEXT1     VARCHAR(200) CHARACTER SET UTF8,
+    FOOTER_TEXT2     VARCHAR(200) CHARACTER SET UTF8,
+    FOOTER_TEXT3     VARCHAR(200) CHARACTER SET UTF8,
+    FOOTER_IMAGE_URL VARCHAR(500) CHARACTER SET UTF8,
+
+    -- Status + audit
+    IS_ACTIVE        SMALLINT DEFAULT 1,
+    CREATED_DT       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT PK_TENANT PRIMARY KEY (TENANT_ID)
+)",
+
+                @"CREATE SEQUENCE SEQ_TENANT",
+
+                @"
+CREATE TRIGGER BI_TENANT FOR TENANT
+ACTIVE BEFORE INSERT POSITION 0
+AS
+BEGIN
+    IF (NEW.TENANT_ID IS NULL) THEN
+        NEW.TENANT_ID = NEXT VALUE FOR SEQ_TENANT;
+END",
+
+                @"CREATE UNIQUE INDEX UX_TENANT_CODE ON TENANT (TENANT_CODE)"
+            };
+
+            foreach (var sql in statements)
+                ExecNonQuery(conn, sql);
+
+            Log("TENANT created OK.");
+
+            // Optional: insert one default tenant so your layout can load it immediately
+            Log("Inserting default TENANT row (TENANT_CODE='DEFAULT') ...");
+            ExecNonQuery(conn, @"
+INSERT INTO TENANT (TENANT_CODE, TENANT_NAME, HEADER_TEXT1, FOOTER_TEXT1, IS_ACTIVE)
+VALUES ('DEFAULT', 'Default Company', 'Welcome', 'Thank you', 1)
+");
+            Log("Default TENANT row inserted OK.");
+        }
+
+        // =========================================================
         // 1) Ensure AGENT.EMAIL column exists
         // =========================================================
         public void EnsureAgentEmailColumn()
         {
             using var conn = _db.Open();
+            Log("Checking AGENT.EMAIL ...");
 
             if (ColumnExists(conn, "AGENT", "EMAIL"))
+            {
+                Log("AGENT.EMAIL already exists, skip.");
                 return;
+            }
 
+            Log("Adding column AGENT.EMAIL ...");
             ExecNonQuery(conn, "ALTER TABLE AGENT ADD EMAIL VARCHAR(120) CHARACTER SET UTF8");
             ExecNonQuery(conn, "UPDATE AGENT SET EMAIL = '' WHERE EMAIL IS NULL");
+            Log("AGENT.EMAIL added OK.");
         }
 
         // =========================================================
@@ -37,12 +118,18 @@ namespace YourApp.Data
         public void EnsureAgentBranchNoColumn()
         {
             using var conn = _db.Open();
+            Log("Checking AGENT.BRANCHNO ...");
 
             if (ColumnExists(conn, "AGENT", "BRANCHNO"))
+            {
+                Log("AGENT.BRANCHNO already exists, skip.");
                 return;
+            }
 
+            Log("Adding column AGENT.BRANCHNO ...");
             ExecNonQuery(conn, "ALTER TABLE AGENT ADD BRANCHNO VARCHAR(10) CHARACTER SET UTF8");
             ExecNonQuery(conn, "UPDATE AGENT SET BRANCHNO = '' WHERE BRANCHNO IS NULL");
+            Log("AGENT.BRANCHNO added OK.");
         }
 
         // =========================================================
@@ -52,25 +139,37 @@ namespace YourApp.Data
         {
             using var conn = _db.Open();
 
-            // Create BRANCH table if not exists
+            Log("Checking table BRANCH ...");
             if (!TableExists(conn, "BRANCH"))
             {
+                Log("Creating table BRANCH ...");
                 ExecNonQuery(conn, @"
 CREATE TABLE BRANCH (
     BRANCHNO    VARCHAR(10) CHARACTER SET UTF8 NOT NULL,
     BRANCHNAME  VARCHAR(120) CHARACTER SET UTF8,
     CONSTRAINT PK_BRANCH PRIMARY KEY (BRANCHNO)
 )");
+                Log("Table BRANCH created OK.");
+            }
+            else
+            {
+                Log("Table BRANCH already exists, skip.");
             }
 
-            // Ensure BRANCHNO column exists in AGENT
+            Log("Checking column AGENT.BRANCHNO ...");
             if (!ColumnExists(conn, "AGENT", "BRANCHNO"))
             {
+                Log("Adding column AGENT.BRANCHNO ...");
                 ExecNonQuery(conn, "ALTER TABLE AGENT ADD BRANCHNO VARCHAR(10) CHARACTER SET UTF8");
                 ExecNonQuery(conn, "UPDATE AGENT SET BRANCHNO = '' WHERE BRANCHNO IS NULL");
+                Log("AGENT.BRANCHNO added OK.");
+            }
+            else
+            {
+                Log("AGENT.BRANCHNO already exists, skip.");
             }
 
-            // Add FK constraint if not exists
+            Log("Checking FK FK_AGENT_BRANCH ...");
             EnsureForeignKey(
                 conn,
                 fkName: "FK_AGENT_BRANCH",
@@ -85,16 +184,18 @@ CREATE TABLE BRANCH (
         {
             using var conn = _db.Open();
 
-            // If table already exists, still ensure APPT_DTL exists (safe upgrade)
+            Log("Checking table APPOINTMENT ...");
             if (TableExists(conn, "APPOINTMENT"))
             {
+                Log("Table APPOINTMENT already exists, will ensure APPT_DTL ...");
                 EnsureApptDtlSchema(conn);
                 return;
             }
 
+            Log("Creating table APPOINTMENT + seq + trigger + indexes + constraints ...");
+
             var statements = new List<string>
             {
-                // 1) Create table
                 @"
 CREATE TABLE APPOINTMENT (
     APPT_ID        BIGINT NOT NULL,
@@ -118,10 +219,8 @@ CREATE TABLE APPOINTMENT (
     CONSTRAINT PK_APPOINTMENT PRIMARY KEY (APPT_ID)
 )",
 
-                // 2) Sequence
                 @"CREATE SEQUENCE SEQ_APPOINTMENT",
 
-                // 3) Trigger (auto ID)
                 @"
 CREATE TRIGGER BI_APPOINTMENT FOR APPOINTMENT
 ACTIVE BEFORE INSERT POSITION 0
@@ -131,15 +230,12 @@ BEGIN
         NEW.APPT_ID = NEXT VALUE FOR SEQ_APPOINTMENT;
 END",
 
-                // 4) Indexes
                 @"CREATE INDEX IX_APPT_START        ON APPOINTMENT (APPT_START)",
                 @"CREATE INDEX IX_APPT_AGENT_START  ON APPOINTMENT (AGENT_CODE, APPT_START)",
                 @"CREATE INDEX IX_APPT_CUST_START   ON APPOINTMENT (CUSTOMER_CODE, APPT_START)",
 
-                // 5) Check constraint
                 @"ALTER TABLE APPOINTMENT ADD CONSTRAINT CK_APPT_TIME CHECK (APPT_END IS NULL OR APPT_END >= APPT_START)",
 
-                // 6) Foreign keys (requires AR_CUSTOMER.CODE and AGENT.CODE to be PK/UNIQUE)
                 @"ALTER TABLE APPOINTMENT ADD CONSTRAINT FK_APPT_CUST  FOREIGN KEY (CUSTOMER_CODE) REFERENCES AR_CUSTOMER (CODE)",
                 @"ALTER TABLE APPOINTMENT ADD CONSTRAINT FK_APPT_AGENT FOREIGN KEY (AGENT_CODE)    REFERENCES AGENT (CODE)"
             };
@@ -147,7 +243,7 @@ END",
             foreach (var sql in statements)
                 ExecNonQuery(conn, sql);
 
-            // Create detail table after appointment
+            Log("APPOINTMENT created OK. Now ensuring APPT_DTL ...");
             EnsureApptDtlSchema(conn);
         }
 
@@ -160,11 +256,16 @@ END",
             EnsureApptDtlSchema(conn);
         }
 
-        // internal version so EnsureAppointmentSchema can reuse same connection
         private void EnsureApptDtlSchema(FbConnection conn)
         {
+            Log("Checking table APPT_DTL ...");
             if (TableExists(conn, "APPT_DTL"))
+            {
+                Log("Table APPT_DTL already exists, skip.");
                 return;
+            }
+
+            Log("Creating table APPT_DTL + seq + trigger ...");
 
             var statements = new List<string>
             {
@@ -194,6 +295,8 @@ END"
 
             foreach (var sql in statements)
                 ExecNonQuery(conn, sql);
+
+            Log("APPT_DTL created OK.");
         }
 
         // =========================================================
@@ -228,7 +331,6 @@ WHERE rdb$relation_name = @TNAME
 
         private static void EnsureForeignKey(FbConnection conn, string fkName, string alterSql)
         {
-            // Firebird stores constraints in RDB$RELATION_CONSTRAINTS
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
 SELECT COUNT(*)
@@ -238,9 +340,15 @@ WHERE rdb$constraint_type = 'FOREIGN KEY'
             cmd.Parameters.Add(new FbParameter("@FK", fkName.ToUpperInvariant()));
 
             var exists = Convert.ToInt32(cmd.ExecuteScalar()) > 0;
-            if (exists) return;
+            if (exists)
+            {
+                Console.WriteLine($"[DBINIT] FK {fkName} already exists, skip.");
+                return;
+            }
 
+            Console.WriteLine($"[DBINIT] Adding FK {fkName} ...");
             ExecNonQuery(conn, alterSql);
+            Console.WriteLine($"[DBINIT] FK {fkName} added OK.");
         }
 
         private static void ExecNonQuery(FbConnection conn, string sql)

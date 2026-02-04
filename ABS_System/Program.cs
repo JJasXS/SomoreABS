@@ -29,26 +29,35 @@ using (var scope = app.Services.CreateScope())
 {
     var init = scope.ServiceProvider.GetRequiredService<DbInitializer>();
 
+    Console.WriteLine("====================================================");
+    Console.WriteLine("[DBINIT] Firebird schema init starting...");
+    Console.WriteLine("====================================================");
+
     try
     {
-        // Columns / master tables first
+        // ✅ Branding / company header-footer first
+        init.EnsureTenantSchema();
+
+        // Columns / master tables
         init.EnsureAgentEmailColumn();
         init.EnsureAgentBranchNoColumn();
 
-        // Branch depends on BRANCH table + FK
+        // BRANCH table + FK
         init.EnsureBranchSchema();
 
-        // Appointment depends on AGENT + AR_CUSTOMER + creates APPT_DTL
+        // Appointment + detail table
         init.EnsureAppointmentSchema();
 
-        Console.WriteLine("✅ Firebird schema ensured successfully.");
+        Console.WriteLine("====================================================");
+        Console.WriteLine("[DBINIT] ✅ Firebird schema ensured successfully.");
+        Console.WriteLine("====================================================");
     }
     catch (Exception ex)
     {
-        // This will show your "Schema init failed on: <SQL>" message from ExecNonQuery
-        Console.WriteLine("❌ Firebird schema init failed:\n" + ex);
-
-        // Stop startup if schema is broken (better than running with half schema)
+        Console.WriteLine("====================================================");
+        Console.WriteLine("[DBINIT] ❌ Firebird schema init FAILED:");
+        Console.WriteLine(ex.ToString());
+        Console.WriteLine("====================================================");
         throw;
     }
 }
@@ -64,6 +73,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+
 app.UseRouting();
 app.UseAuthorization();
 
