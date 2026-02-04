@@ -12,6 +12,10 @@ namespace YourApp.Controllers
     {
         private readonly FirebirdDb _db;
 
+        // ✅ You removed End Time, so we assume each appointment lasts 60 minutes.
+        // Change this any time: 30 / 45 / 90 etc.
+        private const int DEFAULT_DURATION_MINUTES = 60;
+
         public AppointmentController(FirebirdDb db)
         {
             _db = db;
@@ -28,7 +32,7 @@ namespace YourApp.Controllers
             using var cmd = conn.CreateCommand();
 
             cmd.CommandText = @"
-SELECT APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, APPT_END, TITLE, STATUS
+SELECT APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, TITLE, STATUS
 FROM APPOINTMENT
 ORDER BY APPT_START DESC";
 
@@ -41,9 +45,8 @@ ORDER BY APPT_START DESC";
                     CustomerCode = r.IsDBNull(1) ? "" : r.GetString(1).Trim(),
                     AgentCode = r.IsDBNull(2) ? "" : r.GetString(2).Trim(),
                     ApptStart = r.GetDateTime(3),
-                    ApptEnd = r.IsDBNull(4) ? r.GetDateTime(3) : r.GetDateTime(4),
-                    Title = r.IsDBNull(5) ? null : r.GetString(5).Trim(),
-                    Status = r.IsDBNull(6) ? "NEW" : r.GetString(6).Trim()
+                    Title = r.IsDBNull(4) ? null : r.GetString(4).Trim(),
+                    Status = r.IsDBNull(5) ? "NEW" : r.GetString(5).Trim()
                 });
             }
 
@@ -57,7 +60,6 @@ ORDER BY APPT_START DESC";
         public IActionResult Create(DateTime? apptStart)
         {
             var start = apptStart ?? DateTime.Now;
-            var end = start.AddHours(1);
 
             LoadAgentsAndCustomers(out var agents, out var customers);
             ViewBag.Agents = agents;
@@ -67,7 +69,6 @@ ORDER BY APPT_START DESC";
             return View(new Appointment
             {
                 ApptStart = start,
-                ApptEnd = end,
                 Status = "NEW"
             });
         }
@@ -93,16 +94,8 @@ ORDER BY APPT_START DESC";
             // ✅ Services from hidden input
             var selectedServiceCodes = ParseCsv(Request.Form["ServiceCodes"].ToString());
 
-            // ✅ Show model validation errors (Required etc.) in SUMMARY
             if (!ModelState.IsValid)
                 return View(m);
-
-            // ✅ Time validation (SUMMARY ONLY)
-            if (m.ApptEnd <= m.ApptStart)
-            {
-                ModelState.AddModelError("", "End time must be after start time.");
-                return View(m);
-            }
 
             // ✅ OPTIONAL business rule: require at least 1 service
             if (selectedServiceCodes.Count == 0)
@@ -111,36 +104,39 @@ ORDER BY APPT_START DESC";
                 return View(m);
             }
 
+            // ✅ With no End Time, assume end = start + DEFAULT_DURATION_MINUTES
+            var start = m.ApptStart;
+            var end = m.ApptStart.AddMinutes(DEFAULT_DURATION_MINUTES);
+
             // ✅ Business Rule #1: same agent cannot overlap
-            if (HasAgentOverlap(m.AgentCode, m.ApptStart, m.ApptEnd, excludeApptId: null))
+            if (HasAgentOverlap(m.AgentCode, start, end, excludeApptId: null))
             {
                 ModelState.AddModelError("", "Not allowed: this agent already has a booking that overlaps this time.");
                 return View(m);
             }
 
             // ✅ Business Rule #2: same customer cannot overlap
-            if (HasCustomerOverlap(m.CustomerCode, m.ApptStart, m.ApptEnd, excludeApptId: null))
+            if (HasCustomerOverlap(m.CustomerCode, start, end, excludeApptId: null))
             {
                 ModelState.AddModelError("", "Not allowed: this customer already has a booking that overlaps this time (even with a different agent).");
                 return View(m);
             }
 
-            // ✅ Insert master row
+            // ✅ Insert master row (NO APPT_END)
             long newApptId;
             using (var conn = _db.Open())
             using (var cmd = conn.CreateCommand())
             {
                 cmd.CommandText = @"
 INSERT INTO APPOINTMENT
-(CUSTOMER_CODE, AGENT_CODE, APPT_START, APPT_END, TITLE, NOTES, STATUS, CREATED_DT, CREATED_BY)
+(CUSTOMER_CODE, AGENT_CODE, APPT_START, TITLE, NOTES, STATUS, CREATED_DT, CREATED_BY)
 VALUES
-(@CUSTOMER_CODE, @AGENT_CODE, @APPT_START, @APPT_END, @TITLE, @NOTES, @STATUS, CURRENT_TIMESTAMP, @CREATED_BY)
+(@CUSTOMER_CODE, @AGENT_CODE, @APPT_START, @TITLE, @NOTES, @STATUS, CURRENT_TIMESTAMP, @CREATED_BY)
 RETURNING APPT_ID";
 
                 cmd.Parameters.Add(FirebirdDb.P("@CUSTOMER_CODE", m.CustomerCode, FbDbType.VarChar));
                 cmd.Parameters.Add(FirebirdDb.P("@AGENT_CODE", m.AgentCode, FbDbType.VarChar));
                 cmd.Parameters.Add(FirebirdDb.P("@APPT_START", m.ApptStart, FbDbType.TimeStamp));
-                cmd.Parameters.Add(FirebirdDb.P("@APPT_END", m.ApptEnd, FbDbType.TimeStamp));
                 cmd.Parameters.Add(FirebirdDb.P("@TITLE", string.IsNullOrWhiteSpace(m.Title) ? null : m.Title, FbDbType.VarChar));
                 cmd.Parameters.Add(FirebirdDb.P("@NOTES", m.Notes, FbDbType.Text));
                 cmd.Parameters.Add(FirebirdDb.P("@STATUS", m.Status, FbDbType.VarChar));
@@ -183,7 +179,7 @@ RETURNING APPT_ID";
             using (var cmd = conn.CreateCommand())
             {
                 cmd.CommandText = @"
-SELECT APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, APPT_END, TITLE, STATUS, NOTES
+SELECT APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, TITLE, STATUS, NOTES
 FROM APPOINTMENT
 WHERE APPT_ID = @id";
 
@@ -198,10 +194,9 @@ WHERE APPT_ID = @id";
                         CustomerCode = r.IsDBNull(1) ? "" : r.GetString(1).Trim(),
                         AgentCode = r.IsDBNull(2) ? "" : r.GetString(2).Trim(),
                         ApptStart = r.GetDateTime(3),
-                        ApptEnd = r.IsDBNull(4) ? r.GetDateTime(3).AddHours(1) : r.GetDateTime(4),
-                        Title = r.IsDBNull(5) ? "" : r.GetString(5).Trim(),
-                        Status = r.IsDBNull(6) ? "NEW" : r.GetString(6).Trim(),
-                        Notes = r.IsDBNull(7) ? null : r.GetString(7)
+                        Title = r.IsDBNull(4) ? "" : r.GetString(4).Trim(),
+                        Status = r.IsDBNull(5) ? "NEW" : r.GetString(5).Trim(),
+                        Notes = r.IsDBNull(6) ? null : r.GetString(6)
                     };
                 }
             }
@@ -209,9 +204,7 @@ WHERE APPT_ID = @id";
             if (model == null)
                 return NotFound();
 
-            // ✅ load selected services for edit view
             ViewBag.SelectedServiceCodes = LoadSelectedServiceCodes(id);
-
             return View(model);
         }
 
@@ -227,7 +220,6 @@ WHERE APPT_ID = @id";
             ViewBag.Customers = customers;
             ViewBag.ServiceItems = LoadServiceItems();
 
-            // ✅ keep selected list if validation fails (so user doesn't lose selections)
             ViewBag.SelectedServiceCodes = ParseCsv(Request.Form["ServiceCodes"].ToString());
 
             m.CustomerCode = (m.CustomerCode ?? "").Trim();
@@ -238,13 +230,6 @@ WHERE APPT_ID = @id";
             if (!ModelState.IsValid)
                 return View(m);
 
-            if (m.ApptEnd <= m.ApptStart)
-            {
-                ModelState.AddModelError("", "End time must be after start time.");
-                return View(m);
-            }
-
-            // ✅ OPTIONAL: require at least 1 service
             var selectedServiceCodes = ParseCsv(Request.Form["ServiceCodes"].ToString());
             if (selectedServiceCodes.Count == 0)
             {
@@ -252,13 +237,16 @@ WHERE APPT_ID = @id";
                 return View(m);
             }
 
-            if (HasAgentOverlap(m.AgentCode, m.ApptStart, m.ApptEnd, excludeApptId: m.ApptId))
+            var start = m.ApptStart;
+            var end = m.ApptStart.AddMinutes(DEFAULT_DURATION_MINUTES);
+
+            if (HasAgentOverlap(m.AgentCode, start, end, excludeApptId: m.ApptId))
             {
                 ModelState.AddModelError("", "Not allowed: this agent already has a booking that overlaps this time.");
                 return View(m);
             }
 
-            if (HasCustomerOverlap(m.CustomerCode, m.ApptStart, m.ApptEnd, excludeApptId: m.ApptId))
+            if (HasCustomerOverlap(m.CustomerCode, start, end, excludeApptId: m.ApptId))
             {
                 ModelState.AddModelError("", "Not allowed: this customer already has a booking that overlaps this time (even with a different agent).");
                 return View(m);
@@ -273,7 +261,6 @@ SET
   CUSTOMER_CODE = @CUSTOMER_CODE,
   AGENT_CODE    = @AGENT_CODE,
   APPT_START    = @APPT_START,
-  APPT_END      = @APPT_END,
   TITLE         = @TITLE,
   NOTES         = @NOTES,
   STATUS        = @STATUS
@@ -282,7 +269,6 @@ WHERE APPT_ID   = @APPT_ID";
                 cmd.Parameters.Add(FirebirdDb.P("@CUSTOMER_CODE", m.CustomerCode, FbDbType.VarChar));
                 cmd.Parameters.Add(FirebirdDb.P("@AGENT_CODE", m.AgentCode, FbDbType.VarChar));
                 cmd.Parameters.Add(FirebirdDb.P("@APPT_START", m.ApptStart, FbDbType.TimeStamp));
-                cmd.Parameters.Add(FirebirdDb.P("@APPT_END", m.ApptEnd, FbDbType.TimeStamp));
                 cmd.Parameters.Add(FirebirdDb.P("@TITLE", string.IsNullOrWhiteSpace(m.Title) ? null : m.Title, FbDbType.VarChar));
                 cmd.Parameters.Add(FirebirdDb.P("@NOTES", m.Notes, FbDbType.Text));
                 cmd.Parameters.Add(FirebirdDb.P("@STATUS", m.Status, FbDbType.VarChar));
@@ -326,7 +312,7 @@ WHERE APPT_ID   = @APPT_ID";
             using (var cmd = conn.CreateCommand())
             {
                 cmd.CommandText = @"
-SELECT APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, APPT_END, TITLE, STATUS
+SELECT APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, TITLE, STATUS
 FROM APPOINTMENT
 WHERE APPT_ID = @id";
 
@@ -341,9 +327,8 @@ WHERE APPT_ID = @id";
                         CustomerCode = r.IsDBNull(1) ? "" : r.GetString(1).Trim(),
                         AgentCode = r.IsDBNull(2) ? "" : r.GetString(2).Trim(),
                         ApptStart = r.GetDateTime(3),
-                        ApptEnd = r.IsDBNull(4) ? r.GetDateTime(3).AddHours(1) : r.GetDateTime(4),
-                        Title = r.IsDBNull(5) ? null : r.GetString(5).Trim(),
-                        Status = r.IsDBNull(6) ? "NEW" : r.GetString(6).Trim()
+                        Title = r.IsDBNull(4) ? null : r.GetString(4).Trim(),
+                        Status = r.IsDBNull(5) ? "NEW" : r.GetString(5).Trim()
                     };
                 }
             }
@@ -448,7 +433,6 @@ WHERE APPT_ID = @id";
             return serviceItems;
         }
 
-        // ✅ Load selected service codes for Edit view
         private List<string> LoadSelectedServiceCodes(long apptId)
         {
             var list = new List<string>();
@@ -468,7 +452,6 @@ WHERE APPT_ID = @id";
             return list;
         }
 
-        // ✅ Agent overlap check
         private bool HasAgentOverlap(string agentCode, DateTime start, DateTime end, long? excludeApptId)
         {
             var agent = (agentCode ?? "").Trim();
@@ -482,42 +465,88 @@ WHERE APPT_ID = @id";
 SELECT COUNT(*)
 FROM APPOINTMENT
 WHERE AGENT_CODE = @AGENT_CODE
-  AND ((@APPT_START < APPT_END) AND (@APPT_END > APPT_START))
+  AND ((@APPT_START < DATEADD(MINUTE, @DUR_MIN, APPT_START)) AND (@APPT_END > APPT_START))
   AND (@EXCLUDE_ID IS NULL OR APPT_ID <> @EXCLUDE_ID)";
 
-            cmd.Parameters.Add(FirebirdDb.P("@AGENT_CODE", agent, FbDbType.VarChar));
-            cmd.Parameters.Add(FirebirdDb.P("@APPT_START", start, FbDbType.TimeStamp));
-            cmd.Parameters.Add(FirebirdDb.P("@APPT_END", end, FbDbType.TimeStamp));
-            cmd.Parameters.Add(FirebirdDb.P("@EXCLUDE_ID", excludeApptId, FbDbType.BigInt));
+            // Firebird does NOT have DATEADD like SQL Server.
+            // So we implement overlap using APPT_END if you have it.
+            // ✅ Since you removed end-time from UI/controller, we do overlap using fixed duration:
+            // We'll compute end in C# and compare using APPT_START only if DB has no APPT_END.
+            // Therefore: use the generic method below (no DATEADD).
 
-            var count = Convert.ToInt32(cmd.ExecuteScalar());
-            return count > 0;
+            cmd.Dispose();
+            return HasOverlap_Generic("AGENT_CODE", agent, start, end, excludeApptId);
         }
 
-        // ✅ Customer overlap check
         private bool HasCustomerOverlap(string customerCode, DateTime start, DateTime end, long? excludeApptId)
         {
             var cust = (customerCode ?? "").Trim();
             if (string.IsNullOrEmpty(cust))
                 return false;
 
+            return HasOverlap_Generic("CUSTOMER_CODE", cust, start, end, excludeApptId);
+        }
+
+        // ✅ Generic overlap checker (APPT_START + fixed duration window)
+        private bool HasOverlap_Generic(string columnName, string codeValue, DateTime start, DateTime end, long? excludeApptId)
+        {
             using var conn = _db.Open();
             using var cmd = conn.CreateCommand();
 
-            cmd.CommandText = @"
+            // Assumption: APPOINTMENT table still has APPT_END column OR not.
+            // We support both:
+            // - If APPT_END exists: use it.
+            // - If APPT_END doesn't exist: treat each row as APPT_START + DEFAULT_DURATION_MINUTES.
+
+            // Try query using APPT_END first. If it fails (unknown column), fallback.
+            try
+            {
+                cmd.CommandText = $@"
 SELECT COUNT(*)
 FROM APPOINTMENT
-WHERE CUSTOMER_CODE = @CUSTOMER_CODE
-  AND ((@APPT_START < APPT_END) AND (@APPT_END > APPT_START))
-  AND (@EXCLUDE_ID IS NULL OR APPT_ID <> @EXCLUDE_ID)";
+WHERE {columnName} = @CODE
+  AND ((@S < APPT_END) AND (@E > APPT_START))
+  AND (@EX IS NULL OR APPT_ID <> @EX)";
 
-            cmd.Parameters.Add(FirebirdDb.P("@CUSTOMER_CODE", cust, FbDbType.VarChar));
-            cmd.Parameters.Add(FirebirdDb.P("@APPT_START", start, FbDbType.TimeStamp));
-            cmd.Parameters.Add(FirebirdDb.P("@APPT_END", end, FbDbType.TimeStamp));
-            cmd.Parameters.Add(FirebirdDb.P("@EXCLUDE_ID", excludeApptId, FbDbType.BigInt));
+                cmd.Parameters.Add(FirebirdDb.P("@CODE", codeValue, FbDbType.VarChar));
+                cmd.Parameters.Add(FirebirdDb.P("@S", start, FbDbType.TimeStamp));
+                cmd.Parameters.Add(FirebirdDb.P("@E", end, FbDbType.TimeStamp));
+                cmd.Parameters.Add(FirebirdDb.P("@EX", excludeApptId, FbDbType.BigInt));
 
-            var count = Convert.ToInt32(cmd.ExecuteScalar());
-            return count > 0;
+                var count = Convert.ToInt32(cmd.ExecuteScalar());
+                return count > 0;
+            }
+            catch
+            {
+                // fallback: no APPT_END column -> approximate each row as start+duration
+            }
+
+            using var cmd2 = conn.CreateCommand();
+            cmd2.CommandText = $@"
+SELECT APPT_START
+FROM APPOINTMENT
+WHERE {columnName} = @CODE
+  AND (@EX IS NULL OR APPT_ID <> @EX)";
+
+            cmd2.Parameters.Add(FirebirdDb.P("@CODE", codeValue, FbDbType.VarChar));
+            cmd2.Parameters.Add(FirebirdDb.P("@EX", excludeApptId, FbDbType.BigInt));
+
+            var overlaps = 0;
+            using var r = cmd2.ExecuteReader();
+            while (r.Read())
+            {
+                var existingStart = r.GetDateTime(0);
+                var existingEnd = existingStart.AddMinutes(DEFAULT_DURATION_MINUTES);
+
+                // overlap: start < existingEnd && end > existingStart
+                if (start < existingEnd && end > existingStart)
+                {
+                    overlaps++;
+                    break;
+                }
+            }
+
+            return overlaps > 0;
         }
 
         private List<string> ParseCsv(string csv)

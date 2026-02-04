@@ -3,13 +3,10 @@
 @using System.Linq
 
 @{
-    ViewData["Title"] = "Edit Appointment";
-
     var serviceItemsList = ViewBag.ServiceItems as List<YourApp.Models.ST_ITEM>
                            ?? new List<YourApp.Models.ST_ITEM>();
 
-    var selectedCodes = ViewBag.SelectedServiceCodes as List<string>
-                        ?? new List<string>();
+    var selectedCodes = ViewBag.SelectedServiceCodes as List<string> ?? new List<string>();
 }
 
 <h2>Edit Appointment</h2>
@@ -23,110 +20,38 @@
     padding: 32px 28px 24px 28px;
     box-shadow: 0 2px 12px rgba(0,0,0,0.07);
   }
-
-  .booking-form label {
-    font-weight: 600;
-    margin-bottom: 4px;
-    display: block;
+  .booking-form label { font-weight: 600; margin-bottom: 4px; display:block; }
+  .booking-form input, .booking-form select {
+    width:100%; padding:7px 10px; margin-bottom:14px;
+    border:1px solid #ccc; border-radius:5px; font-size:1em; background:#fff;
   }
-
-  .booking-form input,
-  .booking-form select {
-    width: 100%;
-    padding: 7px 10px;
-    margin-bottom: 14px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    font-size: 1em;
-    background: #fff;
+  .booking-form .form-actions { display:flex; gap:12px; margin-top:10px; }
+  .booking-form button, .booking-form a {
+    padding:7px 18px; border-radius:5px; border:none; font-size:1em;
+    text-decoration:none; color:#fff; background:#007bff; cursor:pointer;
   }
+  .booking-form a { background:#6c757d; }
+  .booking-form button:hover, .booking-form a:hover { background:#0056b3; }
 
-  .booking-form .form-actions {
-    display: flex;
-    gap: 12px;
-    margin-top: 10px;
-  }
-
-  .booking-form button,
-  .booking-form a {
-    padding: 7px 18px;
-    border-radius: 5px;
-    border: none;
-    font-size: 1em;
-    text-decoration: none;
-    color: #fff;
-    background: #007bff;
-    transition: background 0.2s;
-    cursor: pointer;
-  }
-
-  .booking-form a { background: #6c757d; }
-
-  .booking-form button:hover,
-  .booking-form a:hover { background: #0056b3; }
-
-  /* ✅ summary box */
   .validation-summary {
-    background: #fff3f3;
-    border: 1px solid #f5c2c7;
-    color: #842029;
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin-bottom: 14px;
-    font-size: 0.95em;
+    background:#fff3f3; border:1px solid #f5c2c7; color:#842029;
+    border-radius:8px; padding:10px 12px; margin-bottom:14px; font-size:.95em;
   }
-  .validation-summary ul { margin: 0; padding-left: 18px; }
+  .validation-summary ul { margin:0; padding-left:18px; }
 
-  .svc-header {
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    margin-top: 6px;
-  }
-
-  .svc-add-btn {
-    padding: 6px 10px;
-    border-radius: 6px;
-    border: none;
-    background: #198754;
-    color: #fff;
-  }
-
-  .svc-row {
-    display:flex;
-    gap:8px;
-    align-items:center;
-    margin-bottom: 10px;
-  }
-
-  .svc-row select { margin-bottom: 0; }
-
-  .svc-remove-btn {
-    padding: 6px 10px;
-    border-radius: 6px;
-    border: none;
-    background: #dc3545;
-    color: #fff;
-    height: 38px;
-  }
-
-  .svc-hint {
-    display:block;
-    margin-top: 4px;
-    font-size: 0.92em;
-    color: #6c757d;
-  }
+  .svc-header { display:flex; align-items:center; justify-content:space-between; margin-top:6px; }
+  .svc-add-btn { padding:6px 10px; border-radius:6px; border:none; background:#198754; color:#fff; }
+  .svc-row { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
+  .svc-row select { margin-bottom:0; }
+  .svc-remove-btn { padding:6px 10px; border-radius:6px; border:none; background:#dc3545; color:#fff; height:38px; }
+  .svc-hint { display:block; margin-top:4px; font-size:.92em; color:#6c757d; }
 </style>
 
 <form asp-action="Edit" method="post" class="booking-form">
   @Html.AntiForgeryToken()
-
-  <input type="hidden" asp-for="ApptId" />
-
-  <!-- ✅ SUMMARY ONLY -->
   <div asp-validation-summary="All" class="validation-summary"></div>
 
-  <!-- ✅ Hidden Title (auto-filled from ServiceCodes) -->
+  <input type="hidden" asp-for="ApptId" />
   <input type="hidden" asp-for="Title" id="TitleHidden" />
 
   <div>
@@ -142,8 +67,6 @@
         }
       }
     </select>
-    @* summary only *@
-    @* <span asp-validation-for="CustomerCode" class="validation"></span> *@
   </div>
 
   <div>
@@ -159,31 +82,14 @@
         }
       }
     </select>
-    @* summary only *@
-    @* <span asp-validation-for="AgentCode" class="validation"></span> *@
   </div>
 
-  <div style="display:flex; gap: 6px; margin-bottom: 10px;">
-    <div style="flex: 1; min-width: 90px;">
-      <label style="font-size: 0.95em;">Start</label>
-      <input asp-for="ApptStart" type="datetime-local"
-             style="padding: 2px 6px; font-size: 0.95em;"
-             value="@Model.ApptStart.ToString("yyyy-MM-ddTHH:mm")" />
-      @* summary only *@
-      @* <span asp-validation-for="ApptStart" class="validation"></span> *@
-    </div>
-
-    <div style="flex: 1; min-width: 90px;">
-      <label style="font-size: 0.95em;">End</label>
-      <input asp-for="ApptEnd" type="datetime-local"
-             style="padding: 2px 6px; font-size: 0.95em;"
-             value="@Model.ApptEnd.ToString("yyyy-MM-ddTHH:mm")" />
-      @* summary only *@
-      @* <span asp-validation-for="ApptEnd" class="validation"></span> *@
-    </div>
+  <div>
+    <label>Appointment Time</label>
+    <input asp-for="ApptStart" type="datetime-local"
+           value="@Model.ApptStart.ToString("yyyy-MM-ddTHH:mm")" />
   </div>
 
-  <!-- ✅ Services (dynamic rows) -->
   <div>
     <div class="svc-header">
       <label style="margin:0;">Services</label>
@@ -193,7 +99,7 @@
     <input type="hidden" name="ServiceCodes" id="ServiceCodesHidden" value="" />
     <div id="serviceRows"></div>
 
-    <span class="svc-hint">First selected service becomes Title. If more than one, Title becomes FIRST...</span>
+    <small class="svc-hint">Tip: Pick 1 or more services. Title will auto-fill from first service.</small>
   </div>
 
   <div class="form-actions">
@@ -210,7 +116,7 @@
       serviceItemsList.Select(x => new { code = x.CODE, desc = x.DESCRIPTION }).ToList()
     ));
 
-    const selectedCodes = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(selectedCodes));
+    const preselected = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(selectedCodes));
 
     function escHtml(s) {
       return (s || '')
@@ -282,8 +188,8 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-      if (selectedCodes && selectedCodes.length > 0) {
-        for (const c of selectedCodes) addRow(c);
+      if (Array.isArray(preselected) && preselected.length > 0) {
+        for (const c of preselected) addRow(c);
       } else {
         addRow('');
       }
@@ -298,8 +204,6 @@
           syncHidden();
         });
       }
-
-      syncHidden();
     });
   </script>
 }

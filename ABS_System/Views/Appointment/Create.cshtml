@@ -60,7 +60,6 @@
   .booking-form button:hover,
   .booking-form a:hover { background: #0056b3; }
 
-  /* ✅ summary box */
   .validation-summary {
     background: #fff3f3;
     border: 1px solid #f5c2c7;
@@ -120,7 +119,6 @@
 <form asp-action="Create" method="post" class="booking-form">
   @Html.AntiForgeryToken()
 
-  <!-- ✅ SUMMARY ONLY (shows ALL errors, including field errors) -->
   <div asp-validation-summary="All" class="validation-summary"></div>
 
   <!-- ✅ Hidden Title (auto-filled from ServiceCodes) -->
@@ -139,8 +137,6 @@
         }
       }
     </select>
-    @* summary only *@
-    @* <span asp-validation-for="CustomerCode" class="validation"></span> *@
   </div>
 
   <div>
@@ -156,28 +152,13 @@
         }
       }
     </select>
-    @* summary only *@
-    @* <span asp-validation-for="AgentCode" class="validation"></span> *@
   </div>
 
-  <div style="display:flex; gap: 6px; margin-bottom: 10px;">
-    <div style="flex: 1; min-width: 90px;">
-      <label style="font-size: 0.95em;">Start</label>
-      <input asp-for="ApptStart" type="datetime-local"
-             style="padding: 2px 6px; font-size: 0.95em;"
-             value="@Model.ApptStart.ToString("yyyy-MM-ddTHH:mm")" />
-      @* summary only *@
-      @* <span asp-validation-for="ApptStart" class="validation"></span> *@
-    </div>
-
-    <div style="flex: 1; min-width: 90px;">
-      <label style="font-size: 0.95em;">End</label>
-      <input asp-for="ApptEnd" type="datetime-local"
-             style="padding: 2px 6px; font-size: 0.95em;"
-             value="@Model.ApptEnd.ToString("yyyy-MM-ddTHH:mm")" />
-      @* summary only *@
-      @* <span asp-validation-for="ApptEnd" class="validation"></span> *@
-    </div>
+  <!-- ✅ Only Appointment Time (ApptStart) -->
+  <div>
+    <label>Appointment Time</label>
+    <input asp-for="ApptStart" type="datetime-local"
+           value="@Model.ApptStart.ToString("yyyy-MM-ddTHH:mm")" />
   </div>
 
   <!-- ✅ Services (dynamic rows) -->
