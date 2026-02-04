@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using YourApp.Data;        // AppDbContext + FirebirdDb + DbInitializer
-using FirebirdWeb.Helpers; // DbHelper (your existing helper)
+using FirebirdWeb.Helpers; // DbHelper
 using Microsoft.AspNetCore.Authentication.Cookies;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,12 +21,11 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 
 builder.Services.AddAuthorization();
 
-
 // ✅ SQL Server (EF Core)
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// ✅ Existing helper (keep if used elsewhere)
+// ✅ Existing helper
 builder.Services.AddSingleton<DbHelper>();
 
 // ✅ Firebird helper + schema initializer
@@ -48,7 +47,7 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
-        // ✅ Branding / company header-footer first
+        // Branding / company header-footer
         init.EnsureTenantSchema();
 
         // Columns / master tables
@@ -60,6 +59,9 @@ using (var scope = app.Services.CreateScope())
 
         // Appointment + detail table
         init.EnsureAppointmentSchema();
+
+        // ✅ Customer signature proof table
+        init.EnsureApptSignatureSchema();
 
         Console.WriteLine("====================================================");
         Console.WriteLine("[DBINIT] ✅ Firebird schema ensured successfully.");
@@ -92,8 +94,7 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
-
-// ✅ Default route
+// Default route
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");

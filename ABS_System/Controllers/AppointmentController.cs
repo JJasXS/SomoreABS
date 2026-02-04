@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using FirebirdSql.Data.FirebirdClient;
 using YourApp.Data;
@@ -44,10 +45,13 @@ namespace YourApp.Controllers
 
                 cmd.CommandText = @"
 UPDATE APPOINTMENT
-SET STATUS = @STATUS
+SET STATUS = @STATUS,
+    LAST_UPD_DT = CURRENT_TIMESTAMP,
+    LAST_UPD_BY = @BY
 WHERE APPT_ID = @ID";
 
                 cmd.Parameters.Add(FirebirdDb.P("@STATUS", status, FbDbType.VarChar));
+                cmd.Parameters.Add(FirebirdDb.P("@BY", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
                 cmd.Parameters.Add(FirebirdDb.P("@ID", id, FbDbType.BigInt));
 
                 var rows = cmd.ExecuteNonQuery();
@@ -59,6 +63,201 @@ WHERE APPT_ID = @ID";
             catch (Exception ex)
             {
                 return Json(new { ok = false, message = "Failed to update status.", detail = ex.Message });
+            }
+        }
+
+        // =========================================================
+        // SIGNATURE (GET) - show signature pad
+        // GET: /Appointment/Sign/5
+        // =========================================================
+        [HttpGet]
+        public IActionResult Sign(long id)
+        {
+            // (Optional) you can load appt info to show on the page
+            ViewBag.ApptId = id;
+            ViewBag.HasSignature = HasSignature(id);
+            return View();
+        }
+
+        // =========================================================
+        // SIGNATURE SAVE (POST) - Option B: UPSERT
+        // POST: /Appointment/SignSave
+        // =========================================================
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult SignSave(long apptId, string? signedBy, string? remarks, string signatureDataUrl)
+        {
+            if (apptId <= 0)
+            {
+                TempData["Err"] = "Invalid appointment.";
+                return RedirectToAction("Sign", new { id = apptId });
+            }
+
+            signedBy = (signedBy ?? "").Trim();
+            remarks = (remarks ?? "").Trim();
+
+            if (string.IsNullOrWhiteSpace(signatureDataUrl))
+            {
+                TempData["Err"] = "Signature is required.";
+                return RedirectToAction("Sign", new { id = apptId });
+            }
+
+            // Expect: data:image/png;base64,XXXX
+            var m = Regex.Match(signatureDataUrl, @"^data:image\/png;base64,(.+)$");
+            if (!m.Success)
+            {
+                TempData["Err"] = "Signature format invalid. Must be PNG.";
+                return RedirectToAction("Sign", new { id = apptId });
+            }
+
+            byte[] pngBytes;
+            try
+            {
+                pngBytes = Convert.FromBase64String(m.Groups[1].Value);
+            }
+            catch
+            {
+                TempData["Err"] = "Invalid signature data.";
+                return RedirectToAction("Sign", new { id = apptId });
+            }
+
+            try
+            {
+                using var conn = _db.Open();
+
+                // 1) Check if signature row exists (1-1 enforced by UX_APPT_SIGNATURE_APPT)
+                bool exists;
+                using (var cmdChk = conn.CreateCommand())
+                {
+                    cmdChk.CommandText = "SELECT COUNT(*) FROM APPT_SIGNATURE WHERE APPT_ID = @ID";
+                    cmdChk.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
+                    exists = Convert.ToInt32(cmdChk.ExecuteScalar()) > 0;
+                }
+
+                // 2) UPSERT: UPDATE if exists else INSERT
+                if (exists)
+                {
+                    using var cmdUp = conn.CreateCommand();
+                    cmdUp.CommandText = @"
+UPDATE APPT_SIGNATURE
+SET SIGNED_DT = CURRENT_TIMESTAMP,
+    SIGNED_BY = @BY,
+    REMARKS = @REM,
+    SIGNATURE_PNG = @PNG
+WHERE APPT_ID = @ID";
+
+                    cmdUp.Parameters.Add(FirebirdDb.P("@BY", string.IsNullOrWhiteSpace(signedBy) ? null : signedBy, FbDbType.VarChar));
+                    cmdUp.Parameters.Add(FirebirdDb.P("@REM", string.IsNullOrWhiteSpace(remarks) ? null : remarks, FbDbType.VarChar));
+
+                    var pPng = new FbParameter("@PNG", FbDbType.Binary) { Value = pngBytes };
+                    cmdUp.Parameters.Add(pPng);
+
+                    cmdUp.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
+
+                    cmdUp.ExecuteNonQuery();
+                }
+                else
+                {
+                    using var cmdIns = conn.CreateCommand();
+                    cmdIns.CommandText = @"
+INSERT INTO APPT_SIGNATURE (APPT_ID, SIGNED_DT, SIGNED_BY, REMARKS, SIGNATURE_PNG)
+VALUES (@ID, CURRENT_TIMESTAMP, @BY, @REM, @PNG)";
+
+                    cmdIns.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
+                    cmdIns.Parameters.Add(FirebirdDb.P("@BY", string.IsNullOrWhiteSpace(signedBy) ? null : signedBy, FbDbType.VarChar));
+                    cmdIns.Parameters.Add(FirebirdDb.P("@REM", string.IsNullOrWhiteSpace(remarks) ? null : remarks, FbDbType.VarChar));
+
+                    var pPng = new FbParameter("@PNG", FbDbType.Binary) { Value = pngBytes };
+                    cmdIns.Parameters.Add(pPng);
+
+                    cmdIns.ExecuteNonQuery();
+                }
+
+                // 3) Mark appointment as fulfilled (proof done)
+                using (var cmdAppt = conn.CreateCommand())
+                {
+                    cmdAppt.CommandText = @"
+UPDATE APPOINTMENT
+SET STATUS = 'FULFILLED',
+    LAST_UPD_DT = CURRENT_TIMESTAMP,
+    LAST_UPD_BY = @BY
+WHERE APPT_ID = @ID";
+
+                    cmdAppt.Parameters.Add(FirebirdDb.P("@BY", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
+                    cmdAppt.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
+                    cmdAppt.ExecuteNonQuery();
+                }
+
+                TempData["Ok"] = "Signature saved. Appointment marked as FULFILLED.";
+                return RedirectToAction("Edit", new { id = apptId });
+            }
+            catch (Exception ex)
+            {
+                TempData["Err"] = "Failed to save signature: " + ex.Message;
+                return RedirectToAction("Sign", new { id = apptId });
+            }
+        }
+
+        // =========================================================
+        // SIGNATURE IMAGE (GET) - show png in <img src="">
+        // GET: /Appointment/SignatureImage/5
+        // =========================================================
+        [HttpGet]
+        public IActionResult SignatureImage(long id)
+        {
+            try
+            {
+                using var conn = _db.Open();
+                using var cmd = conn.CreateCommand();
+
+                cmd.CommandText = @"
+SELECT SIGNATURE_PNG
+FROM APPT_SIGNATURE
+WHERE APPT_ID = @ID";
+
+                cmd.Parameters.Add(FirebirdDb.P("@ID", id, FbDbType.BigInt));
+
+                using var r = cmd.ExecuteReader();
+                if (!r.Read() || r.IsDBNull(0))
+                    return NotFound();
+
+                // Read BLOB safely (works even if provider doesn't return byte[])
+                byte[] bytes;
+                using (var ms = new System.IO.MemoryStream())
+                {
+                    long read = 0;
+                    long offset = 0;
+                    var buffer = new byte[8192];
+
+                    while ((read = r.GetBytes(0, offset, buffer, 0, buffer.Length)) > 0)
+                    {
+                        ms.Write(buffer, 0, (int)read);
+                        offset += read;
+                    }
+                    bytes = ms.ToArray();
+                }
+
+                return File(bytes, "image/png");
+            }
+            catch
+            {
+                return NotFound();
+            }
+        }
+
+        private bool HasSignature(long apptId)
+        {
+            try
+            {
+                using var conn = _db.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT COUNT(*) FROM APPT_SIGNATURE WHERE APPT_ID = @ID";
+                cmd.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
+                return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -130,7 +329,7 @@ ORDER BY APPT_START DESC";
             m.AgentCode = (m.AgentCode ?? "").Trim();
             m.Title = (m.Title ?? "").Trim();
 
-            // ✅ force default on create
+            // force default on create
             m.Status = "BOOKED";
 
             var selectedServiceCodes = ParseCsv(Request.Form["ServiceCodes"].ToString());
@@ -239,6 +438,11 @@ WHERE APPT_ID = @id";
                 return NotFound();
 
             ViewBag.SelectedServiceCodes = LoadSelectedServiceCodes(id);
+
+            // show signature section in edit page
+            ViewBag.HasSignature = HasSignature(id);
+            ViewBag.SignatureUrl = Url.Action("SignatureImage", "Appointment", new { id });
+
             return View(model);
         }
 
@@ -261,7 +465,7 @@ WHERE APPT_ID = @id";
             m.AgentCode = (m.AgentCode ?? "").Trim();
             m.Title = (m.Title ?? "").Trim();
 
-            // ✅ allow changing status via edit page (or keep booked)
+            // allow changing status via edit page (or keep booked)
             m.Status = string.IsNullOrWhiteSpace(m.Status) ? "BOOKED" : m.Status.Trim();
 
             if (!ModelState.IsValid)
@@ -299,7 +503,9 @@ SET
   APPT_START    = @APPT_START,
   TITLE         = @TITLE,
   NOTES         = @NOTES,
-  STATUS        = @STATUS
+  STATUS        = @STATUS,
+  LAST_UPD_DT   = CURRENT_TIMESTAMP,
+  LAST_UPD_BY   = @BY
 WHERE APPT_ID   = @APPT_ID";
 
                 cmd.Parameters.Add(FirebirdDb.P("@CUSTOMER_CODE", m.CustomerCode, FbDbType.VarChar));
@@ -308,6 +514,7 @@ WHERE APPT_ID   = @APPT_ID";
                 cmd.Parameters.Add(FirebirdDb.P("@TITLE", string.IsNullOrWhiteSpace(m.Title) ? null : m.Title, FbDbType.VarChar));
                 cmd.Parameters.Add(FirebirdDb.P("@NOTES", m.Notes, FbDbType.Text));
                 cmd.Parameters.Add(FirebirdDb.P("@STATUS", m.Status, FbDbType.VarChar));
+                cmd.Parameters.Add(FirebirdDb.P("@BY", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
                 cmd.Parameters.Add(FirebirdDb.P("@APPT_ID", m.ApptId, FbDbType.BigInt));
 
                 cmd.ExecuteNonQuery();
@@ -383,6 +590,14 @@ WHERE APPT_ID = @id";
         {
             using (var conn = _db.Open())
             {
+                // delete signature first (child table)
+                using (var cmdSig = conn.CreateCommand())
+                {
+                    cmdSig.CommandText = "DELETE FROM APPT_SIGNATURE WHERE APPT_ID = @id";
+                    cmdSig.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
+                    cmdSig.ExecuteNonQuery();
+                }
+
                 using (var cmdDtl = conn.CreateCommand())
                 {
                     cmdDtl.CommandText = "DELETE FROM APPT_DTL WHERE APPT_ID = @id";
@@ -505,7 +720,7 @@ WHERE APPT_ID = @id";
             return HasOverlap_Generic("CUSTOMER_CODE", cust, start, end, excludeApptId);
         }
 
-        // ✅ Overlap checker (tries APPT_END if exists; else fixed duration by APPT_START)
+        // Overlap checker (tries APPT_END if exists; else fixed duration by APPT_START)
         private bool HasOverlap_Generic(string columnName, string codeValue, DateTime start, DateTime end, long? excludeApptId)
         {
             using var conn = _db.Open();

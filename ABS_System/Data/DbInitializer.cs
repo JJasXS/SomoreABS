@@ -43,8 +43,8 @@ namespace YourApp.Data
                 @"
 CREATE TABLE TENANT (
     TENANT_ID        BIGINT NOT NULL,
-    TENANT_CODE      VARCHAR(50) CHARACTER SET UTF8 NOT NULL,   -- unique key (e.g. DEFAULT / ABC)
-    TENANT_NAME      VARCHAR(200) CHARACTER SET UTF8 NOT NULL,  -- company display name
+    TENANT_CODE      VARCHAR(50) CHARACTER SET UTF8 NOT NULL,
+    TENANT_NAME      VARCHAR(200) CHARACTER SET UTF8 NOT NULL,
 
     -- Header branding
     HEADER_LOGO_URL  VARCHAR(500) CHARACTER SET UTF8,
@@ -83,7 +83,6 @@ END",
 
             Log("TENANT created OK.");
 
-            // Optional: insert one default tenant so your layout can load it immediately
             Log("Inserting default TENANT row (TENANT_CODE='DEFAULT') ...");
             ExecNonQuery(conn, @"
 INSERT INTO TENANT (TENANT_CODE, TENANT_NAME, HEADER_TEXT1, FOOTER_TEXT1, IS_ACTIVE)
@@ -300,6 +299,66 @@ END"
         }
 
         // =========================================================
+        // 4) Ensure APPT_SIGNATURE schema exists (Option B: 1 row per APPT, overwrite via UPDATE)
+        // =========================================================
+        public void EnsureApptSignatureSchema()
+        {
+            using var conn = _db.Open();
+
+            Log("Checking table APPT_SIGNATURE ...");
+            if (TableExists(conn, "APPT_SIGNATURE"))
+            {
+                Log("Table APPT_SIGNATURE already exists, skip.");
+                return;
+            }
+
+            Log("Creating table APPT_SIGNATURE + seq + trigger + FK + unique index ...");
+
+            var statements = new List<string>
+            {
+                @"
+CREATE TABLE APPT_SIGNATURE (
+    SIGN_ID        BIGINT NOT NULL,
+    APPT_ID        BIGINT NOT NULL,
+
+    -- datetime default now
+    SIGNED_DT      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    SIGNED_BY      VARCHAR(120) CHARACTER SET UTF8,
+    REMARKS        VARCHAR(300) CHARACTER SET UTF8,
+
+    -- store PNG bytes
+    SIGNATURE_PNG  BLOB SUB_TYPE 0,
+
+    CONSTRAINT PK_APPT_SIGNATURE PRIMARY KEY (SIGN_ID),
+    CONSTRAINT FK_APPT_SIGNATURE_APPT FOREIGN KEY (APPT_ID) REFERENCES APPOINTMENT (APPT_ID)
+)",
+
+                @"CREATE SEQUENCE SEQ_APPT_SIGNATURE",
+
+                @"
+CREATE TRIGGER BI_APPT_SIGNATURE FOR APPT_SIGNATURE
+ACTIVE BEFORE INSERT POSITION 0
+AS
+BEGIN
+    IF (NEW.SIGN_ID IS NULL) THEN
+        NEW.SIGN_ID = NEXT VALUE FOR SEQ_APPT_SIGNATURE;
+END",
+
+                // Option B: 1 signature per appointment enforced by DB
+                @"CREATE UNIQUE INDEX UX_APPT_SIGNATURE_APPT ON APPT_SIGNATURE (APPT_ID)",
+
+                // Helpful read performance (latest read / join)
+                @"CREATE INDEX IX_APPT_SIGNATURE_APPT_DT ON APPT_SIGNATURE (APPT_ID, SIGNED_DT)"
+            };
+
+            foreach (var sql in statements)
+                ExecNonQuery(conn, sql);
+
+            Log("APPT_SIGNATURE created OK.");
+        }
+
+        // =========================================================
         // Helpers
         // =========================================================
         private static bool TableExists(FbConnection conn, string tableName)
@@ -311,7 +370,6 @@ FROM rdb$relations
 WHERE rdb$system_flag = 0
   AND rdb$relation_name = @TNAME";
             cmd.Parameters.Add(new FbParameter("@TNAME", tableName.ToUpperInvariant()));
-
             return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
         }
 
@@ -325,7 +383,6 @@ WHERE rdb$relation_name = @TNAME
   AND rdb$field_name    = @CNAME";
             cmd.Parameters.Add(new FbParameter("@TNAME", tableName.ToUpperInvariant()));
             cmd.Parameters.Add(new FbParameter("@CNAME", columnName.ToUpperInvariant()));
-
             return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
         }
 
