@@ -1,11 +1,25 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
+@model YourApp.Models.TenantBrandingVm
+
+@{
+    ViewData["Title"] = "Home";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>
+@await Html.PartialAsync("_TenantHeader", Model)
+
+<div class="text-center mt-4">
+    <h1 class="display-5 mb-3">
+        @(string.IsNullOrWhiteSpace(Model.HeaderText1) ? "Welcome" : Model.HeaderText1)
+    </h1>
+
+    <p class="lead mb-4">
+        @(string.IsNullOrWhiteSpace(Model.HeaderText2)
+            ? "This is your appointment booking system."
+            : Model.HeaderText2)
+    </p>
+
+    <p class="mb-4">
         <a class="btn btn-primary" href="@Url.Action("Login", "Account")">Login with OTP</a>
     </p>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
 </div>
+
+@await Html.PartialAsync("_TenantFooter", Model)

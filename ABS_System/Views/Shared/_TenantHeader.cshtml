@@ -1,0 +1,36 @@
+@model YourApp.Models.TenantBrandingVm
+
+<header class="custom-header bg-light border-bottom mb-3">
+    <div class="container d-flex flex-column flex-md-row align-items-center py-3">
+        <div class="me-md-auto mb-2 mb-md-0 d-flex align-items-center gap-2">
+            @if (!string.IsNullOrWhiteSpace(Model.HeaderLogoUrl))
+            {
+                <img src="@Model.HeaderLogoUrl"
+                     alt="@Model.TenantName"
+                     style="max-height:48px; max-width:160px; object-fit:contain;" />
+            }
+            <div class="d-flex flex-column">
+                <span class="h5 fw-bold text-primary">
+                    @(string.IsNullOrWhiteSpace(Model.TenantName) ? "My Company" : Model.TenantName)
+                </span>
+                @if (!string.IsNullOrWhiteSpace(Model.HeaderText1) || !string.IsNullOrWhiteSpace(Model.HeaderText2))
+                {
+                    <small class="text-muted">
+                        @Model.HeaderText1
+                        @if (!string.IsNullOrWhiteSpace(Model.HeaderText2))
+                        {
+                            <span> · @Model.HeaderText2</span>
+                        }
+                    </small>
+                }
+            </div>
+        </div>
+        <nav>
+            <a class="nav-link d-inline-block px-2 text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
+            <a class="nav-link d-inline-block px-2 text-dark" asp-area="" asp-controller="Calendar" asp-action="Index">Calendar</a>
+            <a class="nav-link d-inline-block px-2 text-dark" asp-area="" asp-controller="Appointment" asp-action="Index">Appointments</a>
+            <a class="nav-link d-inline-block px-2 text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+        </nav>
+    </div>
+</header>
+
