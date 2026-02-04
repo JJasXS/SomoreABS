@@ -1,15 +1,3 @@
-/* Remove border radius and padding for appointment cards in calendar days */
-.zero-radius-padding {
-  border-radius: 0 !important;
-
-}
-/* Appointment card actions right-aligned in modal */
-.appt-card .appt-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
 /* ================================
    calendar.css (FULL) - nicer UI + cards
    ================================ */
@@ -203,7 +191,6 @@
   border-color: #efefef;
 }
 
-/* Keep your width rule */
 .calendar-table th,
 .calendar-table td {
   width: 110px;
@@ -273,7 +260,7 @@
 }
 
 /* ================================
-   Appointment card (the "div" UI)
+   Appointment card
    ================================ */
 
 .appt-card {
@@ -305,6 +292,11 @@
   text-overflow: initial;
   background-clip: border-box;
   opacity: 1;
+}
+
+/* ✅ fulfilled appointments in calendar cells (fade like modal) */
+.appt-card.in-cell.is-fulfilled {
+  opacity: 0.45 !important;
 }
 
 .appt-card.in-cell .appt-title,
@@ -376,8 +368,16 @@
   white-space: nowrap;
 }
 
+/* Appointment card actions right-aligned in modal */
+.appt-card .appt-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
 /* ================================
-   Minimal scrollbar (your style, kept)
+   Minimal scrollbar
    ================================ */
 
 .scrollable-appt-list,
@@ -424,44 +424,43 @@
   display: inline;
 }
 
+/* Remove border radius and padding utility (optional) */
+.zero-radius-padding {
+  border-radius: 0 !important;
+}
 
 /* =========================================
    MODAL CARD TOP ROW (checkbox LEFT)
    ========================================= */
 
-/* Override appt-top for modal cards only */
 .appt-card.modal-card .appt-top {
   display: flex;
-  align-items: center;          /* center vertically */
-  justify-content: flex-start;  /* ✅ NOT space-between */
+  align-items: center;
+  justify-content: flex-start;
   gap: 10px;
   margin-bottom: 6px;
 }
 
-/* LEFT: checkbox area */
 .appt-card.modal-card .appt-top-left {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
 }
 
-/* MID: title should take remaining space */
 .appt-card.modal-card .appt-top-mid {
   flex: 1 1 auto;
-  min-width: 0; /* important for ellipsis/clamp */
+  min-width: 0;
 }
 
-/* RIGHT: time pinned to right */
 .appt-card.modal-card .appt-top-right {
   flex: 0 0 auto;
-  margin-left: auto;  /* ✅ pushes time to far right */
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 10px;
   white-space: nowrap;
 }
 
-/* checkbox label styling */
 .appt-card.modal-card .appt-done-wrap {
   display: inline-flex;
   align-items: center;

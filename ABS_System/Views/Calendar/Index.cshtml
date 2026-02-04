@@ -233,7 +233,13 @@
                                             if (!string.IsNullOrEmpty(cardColor))
                                                 style = $"background-color:{cardColor} !important; " + style;
 
-                                            <div class="appt-card in-cell" style="@style">
+                                            var isDone = ((appt.Status ?? "").Trim().ToUpperInvariant() == "FULFILLED");
+                                            var doneClass = isDone ? " is-fulfilled" : "";
+
+                                            <!-- ✅ IMPORTANT: add data-appt-id so JS can sync opacity -->
+                                            <div class="appt-card in-cell@doneClass"
+                                                 data-appt-id="@appt.ApptId"
+                                                 style="@style">
                                                 <span class="appt-title">@((appt.Title ?? "").Trim())</span>
                                             </div>
                                         }
@@ -275,6 +281,15 @@
 
         function isFulfilled(appt) {
             return ((appt.Status || '').toString().trim().toUpperCase() === 'FULFILLED');
+        }
+
+        // ✅ NEW: sync calendar in-cell card opacity based on appointment id
+        function syncCalendarCellOpacity(apptId, wantDone) {
+            if (!apptId) return;
+            var nodes = document.querySelectorAll('.appt-card.in-cell[data-appt-id="' + apptId + '"]');
+            nodes.forEach(function (n) {
+                n.classList.toggle('is-fulfilled', !!wantDone);
+            });
         }
 
         function buildApptCard(appt) {
@@ -360,7 +375,6 @@
 
             containerEl.querySelectorAll('.appt-done-cb').forEach(function (cb) {
                 cb.addEventListener('click', function (e) {
-                    // prevent modal click bubbling (nice UX)
                     e.stopPropagation();
                 });
 
@@ -374,21 +388,26 @@
                     var wantDone = cb.checked;
                     var newStatus = wantDone ? 'FULFILLED' : 'BOOKED';
 
-                    // UI first (instant like todo list)
+                    // ✅ Optimistic UI: fade modal + fade calendar in-cell card immediately
                     card.classList.toggle('is-fulfilled', wantDone);
+                    syncCalendarCellOpacity(apptId, wantDone);
+
                     card.classList.add('appt-saving');
 
                     try {
                         await setAppointmentStatus(apptId, newStatus);
 
-                        // update local cached object too
                         var found = (allAppointments || []).find(function (a) { return String(a.ApptId) === String(apptId); });
                         if (found) found.Status = newStatus;
 
                     } catch (err) {
-                        // revert UI on error
+                        // rollback modal
                         cb.checked = !wantDone;
                         card.classList.toggle('is-fulfilled', !wantDone);
+
+                        // rollback calendar cell
+                        syncCalendarCellOpacity(apptId, !wantDone);
+
                         alert('Failed to update status: ' + (err && err.message ? err.message : err));
                     } finally {
                         card.classList.remove('appt-saving');
@@ -424,7 +443,6 @@
                 });
                 list.innerHTML = html;
 
-                // ✅ wire checkboxes after render
                 wireTodoCheckboxes(list);
             }
 
@@ -473,7 +491,6 @@
                 });
                 list.innerHTML = html;
 
-                // ✅ wire checkboxes after render
                 wireTodoCheckboxes(list);
             }
 
