@@ -298,7 +298,20 @@
             var addBtn = document.getElementById('add-appointment-btn');
             var overlay = document.getElementById('modalOverlay');
 
-            label.textContent = date;
+            // Format date as '1 January 2026'
+            try {
+                var d = new Date(date);
+                if (!isNaN(d.getTime())) {
+                    var day = d.getDate();
+                    var month = d.toLocaleString('default', { month: 'long' });
+                    var year = d.getFullYear();
+                    label.textContent = day + ' ' + month + ' ' + year;
+                } else {
+                    label.textContent = date;
+                }
+            } catch (e) {
+                label.textContent = date;
+            }
             addBtn.href = '/Appointment/Create?apptStart=' + date + 'T09:00';
 
             list.innerHTML = '';
