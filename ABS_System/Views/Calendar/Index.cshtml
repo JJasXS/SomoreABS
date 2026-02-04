@@ -107,6 +107,16 @@
         transition: opacity 0.15s ease;
     }
 
+    /* ✅ Calendar in-cell cards: smaller font */
+    .appt-card.in-cell {
+        font-size: 0.74rem !important;
+    }
+
+    .appt-card.in-cell .appt-title,
+    .appt-card.in-cell .appt-time {
+        font-size: 0.82rem !important;
+    }
+
     .appt-top {
         display: flex;
         align-items: center;
@@ -236,6 +246,10 @@
                                             var statusUp = (appt.Status ?? "").Trim().ToUpperInvariant();
                                             var isDone = (statusUp == "FULFILLED" || statusUp == "DONE" || statusUp == "COMPLETED");
                                             var doneClass = isDone ? " is-fulfilled" : "";
+                                            var rawTitle = (appt.Title ?? "").Trim();
+                                            var titleCased = string.IsNullOrWhiteSpace(rawTitle)
+                                                ? rawTitle
+                                                : System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(rawTitle.ToLower());
 
                                             <!-- ✅ IMPORTANT: add data-appt-id so JS can sync opacity -->
                                             <div class="appt-card in-cell@doneClass"
@@ -244,7 +258,7 @@
                                                  style="@style">
                                                 <span class="appt-title"
                                                       style="@(isDone ? "opacity:0.45; font-weight:500;" : "")">
-                                                    @((appt.Title ?? "").Trim())
+                                                    @titleCased
                                                 </span>
                                             </div>
                                         }
@@ -284,18 +298,24 @@
                 .replace(/'/g, '&#039;');
         }
 
+        function toTitleCase(s) {
+            s = (s || '').toString().trim().toLowerCase();
+            if (!s) return s;
+            return s.replace(/(^|[\s-])([a-z])/g, function (_, p1, p2) { return p1 + p2.toUpperCase(); });
+        }
+
         function isFulfilled(appt) {
             var status = (appt.Status || '').toString().trim().toUpperCase();
             return status === 'FULFILLED' || status === 'DONE' || status === 'COMPLETED';
         }
 
-        // ✅ NEW: sync calendar in-cell card opacity based on appointment id
+        // ✅ NEW: minimal CSS.escape fallback
         function cssEscape(v) {
-            // Minimal CSS.escape fallback (good enough for numeric ids)
             if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(String(v));
             return String(v).replace(/"/g, '\\"');
         }
 
+        // ✅ NEW: sync calendar in-cell card opacity based on appointment id
         function syncCalendarCellOpacity(apptId, wantDone) {
             if (!apptId) return;
             var safeId = cssEscape(apptId);
@@ -303,6 +323,58 @@
             nodes.forEach(function (n) {
                 n.classList.toggle('is-fulfilled', !!wantDone);
             });
+        }
+
+        // ✅ NEW: remember which modal is open, then reload
+        function rememberOpenModalAndReload() {
+            var dayModal = document.getElementById('dayAppointmentsModal');
+            var monthModal = document.getElementById('monthAppointmentsModal');
+
+            var payload = null;
+
+            // Day modal open?
+            if (dayModal && dayModal.style.display === 'block') {
+                // Best source: add button has /Appointment/Create?apptStart=YYYY-MM-DDT09:00
+                var addBtn = document.getElementById('add-appointment-btn');
+                var href = addBtn ? (addBtn.getAttribute('href') || '') : '';
+                var m = href.match(/apptStart=([0-9]{4}-[0-9]{2}-[0-9]{2})T/);
+                var date = m ? m[1] : null;
+
+                payload = { mode: 'day', date: date };
+            }
+            // Month modal open?
+            else if (monthModal && monthModal.style.display === 'block') {
+                payload = { mode: 'month', year: @year, month: @month };
+            }
+
+            if (payload) {
+                sessionStorage.setItem('reopen_calendar_modal', JSON.stringify(payload));
+            }
+
+            location.reload();
+        }
+
+        // ✅ NEW: after reload, auto reopen the last modal
+        function reopenModalAfterReload() {
+            var raw = sessionStorage.getItem('reopen_calendar_modal');
+            if (!raw) return;
+
+            sessionStorage.removeItem('reopen_calendar_modal');
+
+            try {
+                var data = JSON.parse(raw);
+
+                if (data.mode === 'day' && data.date) {
+                    // open same day modal
+                    showDayModal(data.date);
+                }
+                else if (data.mode === 'month' && data.year && data.month) {
+                    // open same month modal
+                    showMonthModal(data.year, data.month);
+                }
+            } catch (e) {
+                console.warn('Failed to reopen modal', e);
+            }
         }
 
         function buildApptCard(appt) {
@@ -332,7 +404,7 @@
             return (
                 '<div class="appt-card modal-card' + doneClass + '" data-appt-id="' + appt.ApptId + '"' + style + '>' +
                     '<div class="appt-top">' +
-                        '<div class="appt-title">' + escHtml(appt.Title || '') + '</div>' +
+                        '<div class="appt-title">' + escHtml(toTitleCase(appt.Title || '')) + '</div>' +
 
                         '<div class="appt-top-right">' +
                             '<div class="appt-time">' + escHtml(timeOnly || '') + '</div>' +
@@ -401,12 +473,9 @@
                     var wantDone = cb.checked;
                     var newStatus = wantDone ? 'FULFILLED' : 'BOOKED';
 
-                    console.debug('[appt-checkbox-change]', { apptId: apptId, wantDone: wantDone, newStatus: newStatus });
-
-                    // ✅ Optimistic UI: fade modal + fade calendar in-cell card immediately
+                    // ✅ Optimistic UI first (optional)
                     card.classList.toggle('is-fulfilled', wantDone);
                     syncCalendarCellOpacity(apptId, wantDone);
-
                     card.classList.add('appt-saving');
 
                     try {
@@ -414,6 +483,9 @@
 
                         var found = (allAppointments || []).find(function (a) { return String(a.ApptId) === String(apptId); });
                         if (found) found.Status = newStatus;
+
+                        // ✅ NOW do refresh BUT reopen modal after reload
+                        rememberOpenModalAndReload();
 
                     } catch (err) {
                         // rollback modal
@@ -543,8 +615,12 @@
                 modalContent.addEventListener('mousedown', function (e) { e.stopPropagation(); });
                 modalContent.addEventListener('touchstart', function (e) { e.stopPropagation(); });
             });
+
+            // ✅ IMPORTANT: after a reload, reopen the last modal
+            reopenModalAfterReload();
         });
     </script>
 }
+
 
 @await Html.PartialAsync("~/Views/Shared/LayoutPartials/_Footer.cshtml")
