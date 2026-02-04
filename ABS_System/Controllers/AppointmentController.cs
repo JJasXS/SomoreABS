@@ -18,7 +18,7 @@ namespace YourApp.Controllers
         }
 
         // =========================================================
-        // LIST (optional standalone list page)
+        // LIST
         // =========================================================
         public IActionResult Index()
         {
@@ -64,6 +64,7 @@ ORDER BY APPT_START DESC";
             ViewBag.Customers = customers;
 
             ViewBag.ServiceItems = LoadServiceItems();
+            ViewBag.SelectedServiceCodes = new List<string>();
 
             return View(new Appointment
             {
@@ -85,11 +86,11 @@ ORDER BY APPT_START DESC";
             ViewBag.Customers = customers;
             ViewBag.ServiceItems = LoadServiceItems();
 
-            // ✅ read selected services first (from hidden csv)
             var selectedServiceCodes = ParseCsv(Request.Form["ServiceCodes"].ToString());
+            ViewBag.SelectedServiceCodes = selectedServiceCodes;
 
-            // ✅ Set TITLE = first service, add "..." if more than one
-            m.Title = BuildTitleFromServices(selectedServiceCodes);
+            // ✅ Title rule: FIRST or FIRST...
+            m.Title = BuildTitleFromServiceCodes(selectedServiceCodes);
 
             if (!ModelState.IsValid)
                 return View(m);
@@ -122,7 +123,7 @@ RETURNING APPT_ID";
                 cmd.Parameters.Add(FirebirdDb.P("@AGENT_CODE", (m.AgentCode ?? "").Trim(), FbDbType.VarChar));
                 cmd.Parameters.Add(FirebirdDb.P("@APPT_START", m.ApptStart, FbDbType.TimeStamp));
                 cmd.Parameters.Add(FirebirdDb.P("@APPT_END", m.ApptEnd, FbDbType.TimeStamp));
-                cmd.Parameters.Add(FirebirdDb.P("@TITLE", (m.Title ?? "").Trim(), FbDbType.VarChar));
+                cmd.Parameters.Add(FirebirdDb.P("@TITLE", m.Title, FbDbType.VarChar));
                 cmd.Parameters.Add(FirebirdDb.P("@NOTES", m.Notes, FbDbType.Text));
                 cmd.Parameters.Add(FirebirdDb.P("@STATUS", string.IsNullOrWhiteSpace(m.Status) ? "NEW" : m.Status.Trim(), FbDbType.VarChar));
                 cmd.Parameters.Add(FirebirdDb.P("@CREATED_BY", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
@@ -130,7 +131,7 @@ RETURNING APPT_ID";
                 newApptId = Convert.ToInt64(cmd.ExecuteScalar());
             }
 
-            // ✅ Insert services into APPT_DTL
+            // Insert services into APPT_DTL
             if (selectedServiceCodes.Count > 0)
             {
                 using var conn = _db.Open();
@@ -156,6 +157,7 @@ RETURNING APPT_ID";
             LoadAgentsAndCustomers(out var agents, out var customers);
             ViewBag.Agents = agents;
             ViewBag.Customers = customers;
+
             ViewBag.ServiceItems = LoadServiceItems();
 
             Appointment model = null;
@@ -190,6 +192,10 @@ WHERE APPT_ID = @id";
             if (model == null)
                 return NotFound();
 
+            // ✅ Load selected service codes for UI
+            var selectedCodes = LoadSelectedServiceCodes(id);
+            ViewBag.SelectedServiceCodes = selectedCodes;
+
             return View(model);
         }
 
@@ -205,12 +211,11 @@ WHERE APPT_ID = @id";
             ViewBag.Customers = customers;
             ViewBag.ServiceItems = LoadServiceItems();
 
-            // ✅ If you also want Edit to follow the same logic:
-            // If your Edit page also posts ServiceCodes, this will work.
             var selectedServiceCodes = ParseCsv(Request.Form["ServiceCodes"].ToString());
-            var titleFromServices = BuildTitleFromServices(selectedServiceCodes);
-            if (!string.IsNullOrWhiteSpace(titleFromServices))
-                m.Title = titleFromServices;
+            ViewBag.SelectedServiceCodes = selectedServiceCodes;
+
+            // ✅ Title rule: FIRST or FIRST...
+            m.Title = BuildTitleFromServiceCodes(selectedServiceCodes);
 
             if (!ModelState.IsValid)
                 return View(m);
@@ -228,9 +233,11 @@ WHERE APPT_ID = @id";
             }
 
             using (var conn = _db.Open())
-            using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = @"
+                // 1) Update APPOINTMENT (includes TITLE)
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = @"
 UPDATE APPOINTMENT
 SET
   CUSTOMER_CODE = @CUSTOMER_CODE,
@@ -242,16 +249,37 @@ SET
   STATUS        = @STATUS
 WHERE APPT_ID   = @APPT_ID";
 
-                cmd.Parameters.Add(FirebirdDb.P("@CUSTOMER_CODE", (m.CustomerCode ?? "").Trim(), FbDbType.VarChar));
-                cmd.Parameters.Add(FirebirdDb.P("@AGENT_CODE", (m.AgentCode ?? "").Trim(), FbDbType.VarChar));
-                cmd.Parameters.Add(FirebirdDb.P("@APPT_START", m.ApptStart, FbDbType.TimeStamp));
-                cmd.Parameters.Add(FirebirdDb.P("@APPT_END", m.ApptEnd, FbDbType.TimeStamp));
-                cmd.Parameters.Add(FirebirdDb.P("@TITLE", (m.Title ?? "").Trim(), FbDbType.VarChar));
-                cmd.Parameters.Add(FirebirdDb.P("@NOTES", m.Notes, FbDbType.Text));
-                cmd.Parameters.Add(FirebirdDb.P("@STATUS", string.IsNullOrWhiteSpace(m.Status) ? "NEW" : m.Status.Trim(), FbDbType.VarChar));
-                cmd.Parameters.Add(FirebirdDb.P("@APPT_ID", m.ApptId, FbDbType.BigInt));
+                    cmd.Parameters.Add(FirebirdDb.P("@CUSTOMER_CODE", (m.CustomerCode ?? "").Trim(), FbDbType.VarChar));
+                    cmd.Parameters.Add(FirebirdDb.P("@AGENT_CODE", (m.AgentCode ?? "").Trim(), FbDbType.VarChar));
+                    cmd.Parameters.Add(FirebirdDb.P("@APPT_START", m.ApptStart, FbDbType.TimeStamp));
+                    cmd.Parameters.Add(FirebirdDb.P("@APPT_END", m.ApptEnd, FbDbType.TimeStamp));
+                    cmd.Parameters.Add(FirebirdDb.P("@TITLE", m.Title, FbDbType.VarChar));
+                    cmd.Parameters.Add(FirebirdDb.P("@NOTES", m.Notes, FbDbType.Text));
+                    cmd.Parameters.Add(FirebirdDb.P("@STATUS", string.IsNullOrWhiteSpace(m.Status) ? "NEW" : m.Status.Trim(), FbDbType.VarChar));
+                    cmd.Parameters.Add(FirebirdDb.P("@APPT_ID", m.ApptId, FbDbType.BigInt));
 
-                cmd.ExecuteNonQuery();
+                    cmd.ExecuteNonQuery();
+                }
+
+                // 2) Replace APPT_DTL rows
+                using (var cmdDel = conn.CreateCommand())
+                {
+                    cmdDel.CommandText = "DELETE FROM APPT_DTL WHERE APPT_ID = @id";
+                    cmdDel.Parameters.Add(FirebirdDb.P("@id", m.ApptId, FbDbType.BigInt));
+                    cmdDel.ExecuteNonQuery();
+                }
+
+                if (selectedServiceCodes.Count > 0)
+                {
+                    foreach (var code in selectedServiceCodes)
+                    {
+                        using var cmdIns = conn.CreateCommand();
+                        cmdIns.CommandText = @"INSERT INTO APPT_DTL (APPT_ID, SERVICE_CODE) VALUES (@APPT_ID, @SERVICE_CODE)";
+                        cmdIns.Parameters.Add(FirebirdDb.P("@APPT_ID", m.ApptId, FbDbType.BigInt));
+                        cmdIns.Parameters.Add(FirebirdDb.P("@SERVICE_CODE", code.Trim(), FbDbType.VarChar));
+                        cmdIns.ExecuteNonQuery();
+                    }
+                }
             }
 
             return RedirectToAction("Index", "Calendar", new { year = m.ApptStart.Year, month = m.ApptStart.Month });
@@ -327,6 +355,48 @@ WHERE APPT_ID = @id";
         // =========================================================
         // HELPERS
         // =========================================================
+        private string BuildTitleFromServiceCodes(List<string> codes)
+        {
+            if (codes == null || codes.Count == 0) return null;
+
+            var first = (codes[0] ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(first)) return null;
+
+            return (codes.Count > 1) ? (first + "...") : first;
+        }
+
+        private List<string> LoadSelectedServiceCodes(long apptId)
+        {
+            var list = new List<string>();
+
+            try
+            {
+                using var conn = _db.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT SERVICE_CODE FROM APPT_DTL WHERE APPT_ID = @id ORDER BY APPT_DTL_ID";
+                cmd.Parameters.Add(FirebirdDb.P("@id", apptId, FbDbType.BigInt));
+
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    var code = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                    if (!string.IsNullOrWhiteSpace(code))
+                        list.Add(code);
+                }
+            }
+            catch { }
+
+            // de-dup but keep order
+            var uniq = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var c in list)
+            {
+                if (seen.Add(c)) uniq.Add(c);
+            }
+
+            return uniq;
+        }
+
         private void LoadAgentsAndCustomers(out List<dynamic> agents, out List<dynamic> customers)
         {
             agents = new List<dynamic>();
@@ -421,19 +491,6 @@ WHERE AGENT_CODE = @AGENT_CODE
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
-        }
-
-        // ✅ TITLE builder: first service + "..." if more than one
-        private string BuildTitleFromServices(List<string> serviceCodes)
-        {
-            if (serviceCodes == null || serviceCodes.Count == 0)
-                return ""; // no services picked
-
-            var first = (serviceCodes[0] ?? "").Trim();
-            if (string.IsNullOrEmpty(first))
-                return "";
-
-            return serviceCodes.Count > 1 ? (first + "...") : first;
         }
     }
 }

@@ -3,7 +3,6 @@
 @using System.Linq
 
 @{
-    // ✅ Fix CS1977: cast ViewBag.ServiceItems (dynamic) into a real typed list
     var serviceItemsList = ViewBag.ServiceItems as List<YourApp.Models.ST_ITEM>
                            ?? new List<YourApp.Models.ST_ITEM>();
 }
@@ -67,7 +66,6 @@
     margin-bottom: 8px;
   }
 
-  /* Services rows */
   .svc-header {
     display:flex;
     align-items:center;
@@ -90,9 +88,7 @@
     margin-bottom: 10px;
   }
 
-  .svc-row select {
-    margin-bottom: 0;
-  }
+  .svc-row select { margin-bottom: 0; }
 
   .svc-remove-btn {
     padding: 6px 10px;
@@ -113,6 +109,9 @@
 
 <form asp-action="Create" method="post" class="booking-form">
   @Html.AntiForgeryToken()
+
+  <!-- ✅ Hidden Title (auto-filled from ServiceCodes) -->
+  <input type="hidden" asp-for="Title" id="TitleHidden" />
 
   <div>
     <label>Customer</label>
@@ -171,12 +170,10 @@
       <button type="button" id="btnAddService" class="svc-add-btn">+ Add</button>
     </div>
 
-    <!-- Controller reads this (CSV) -->
     <input type="hidden" name="ServiceCodes" id="ServiceCodesHidden" value="" />
-
     <div id="serviceRows"></div>
 
-    <span class="svc-hint">Add multiple services using + Add.</span>
+    <span class="svc-hint">First selected service becomes Title. If more than one, Title becomes FIRST...</span>
   </div>
 
   <div class="form-actions">
@@ -205,16 +202,20 @@
     function buildSelectHtml(selectedValue) {
       let html = `<select class="svc-dd">`;
       html += `<option value="">-- Select Service --</option>`;
-
       for (const it of serviceItems) {
         const code = (it.code || '').trim();
         const text = `${code} - ${(it.desc || '').trim()}`;
         const sel = (selectedValue && selectedValue === code) ? 'selected' : '';
         html += `<option value="${escHtml(code)}" ${sel}>${escHtml(text)}</option>`;
       }
-
       html += `</select>`;
       return html;
+    }
+
+    function computeTitleFromCodes(codes) {
+      if (!codes || codes.length === 0) return '';
+      const first = codes[0];
+      return (codes.length > 1) ? (first + '...') : first;
     }
 
     function syncHidden() {
@@ -222,7 +223,7 @@
         .map(x => (x.value || '').trim())
         .filter(x => x.length > 0);
 
-      // de-duplicate (optional)
+      // de-duplicate but keep order
       const uniq = [];
       const seen = {};
       for (const c of codes) {
@@ -234,6 +235,7 @@
       }
 
       document.getElementById('ServiceCodesHidden').value = uniq.join(',');
+      document.getElementById('TitleHidden').value = computeTitleFromCodes(uniq);
     }
 
     function addRow(selectedValue) {
