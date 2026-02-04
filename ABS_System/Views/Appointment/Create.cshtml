@@ -60,10 +60,20 @@
   .booking-form button:hover,
   .booking-form a:hover { background: #0056b3; }
 
-  .booking-form .validation {
-    color: #d9534f;
-    font-size: 0.97em;
-    margin-bottom: 8px;
+  /* ✅ summary box */
+  .validation-summary {
+    background: #fff3f3;
+    border: 1px solid #f5c2c7;
+    color: #842029;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    font-size: 0.95em;
+  }
+
+  .validation-summary ul {
+    margin: 0;
+    padding-left: 18px;
   }
 
   .svc-header {
@@ -110,6 +120,9 @@
 <form asp-action="Create" method="post" class="booking-form">
   @Html.AntiForgeryToken()
 
+  <!-- ✅ SUMMARY ONLY (shows ALL errors, including field errors) -->
+  <div asp-validation-summary="All" class="validation-summary"></div>
+
   <!-- ✅ Hidden Title (auto-filled from ServiceCodes) -->
   <input type="hidden" asp-for="Title" id="TitleHidden" />
 
@@ -126,7 +139,8 @@
         }
       }
     </select>
-    <span asp-validation-for="CustomerCode" class="validation"></span>
+    @* summary only *@
+    @* <span asp-validation-for="CustomerCode" class="validation"></span> *@
   </div>
 
   <div>
@@ -142,7 +156,8 @@
         }
       }
     </select>
-    <span asp-validation-for="AgentCode" class="validation"></span>
+    @* summary only *@
+    @* <span asp-validation-for="AgentCode" class="validation"></span> *@
   </div>
 
   <div style="display:flex; gap: 6px; margin-bottom: 10px;">
@@ -151,7 +166,8 @@
       <input asp-for="ApptStart" type="datetime-local"
              style="padding: 2px 6px; font-size: 0.95em;"
              value="@Model.ApptStart.ToString("yyyy-MM-ddTHH:mm")" />
-      <span asp-validation-for="ApptStart" class="validation"></span>
+      @* summary only *@
+      @* <span asp-validation-for="ApptStart" class="validation"></span> *@
     </div>
 
     <div style="flex: 1; min-width: 90px;">
@@ -159,7 +175,8 @@
       <input asp-for="ApptEnd" type="datetime-local"
              style="padding: 2px 6px; font-size: 0.95em;"
              value="@Model.ApptEnd.ToString("yyyy-MM-ddTHH:mm")" />
-      <span asp-validation-for="ApptEnd" class="validation"></span>
+      @* summary only *@
+      @* <span asp-validation-for="ApptEnd" class="validation"></span> *@
     </div>
   </div>
 
@@ -173,7 +190,7 @@
     <input type="hidden" name="ServiceCodes" id="ServiceCodesHidden" value="" />
     <div id="serviceRows"></div>
 
-    <span class="svc-hint">First selected service becomes Title. If more than one, Title becomes FIRST...</span>
+    <small class="svc-hint">Tip: Pick 1 or more services. Title will auto-fill from first service.</small>
   </div>
 
   <div class="form-actions">
@@ -223,7 +240,6 @@
         .map(x => (x.value || '').trim())
         .filter(x => x.length > 0);
 
-      // de-duplicate but keep order
       const uniq = [];
       const seen = {};
       for (const c of codes) {

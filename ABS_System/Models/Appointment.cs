@@ -8,16 +8,16 @@ namespace YourApp.Models
     {
         public long ApptId { get; set; }
 
-        [Required]
+        [Required(ErrorMessage = "Please select a customer.")]
         public string CustomerCode { get; set; } = "";
 
-        [Required]
+        [Required(ErrorMessage = "Please select an agent.")]
         public string AgentCode { get; set; } = "";
 
-        [Required]
+        [Required(ErrorMessage = "Please choose a start date & time.")]
         public DateTime ApptStart { get; set; }
 
-        [Required]
+        [Required(ErrorMessage = "Please choose an end date & time.")]
         public DateTime ApptEnd { get; set; }
 
         public string? Title { get; set; }
