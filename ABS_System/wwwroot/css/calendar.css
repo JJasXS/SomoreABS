@@ -299,6 +299,13 @@
   opacity: 0.45 !important;
 }
 
+/* ✅ Strike-through completed appointments (in-calendar cards only) */
+.appt-card.in-cell.is-fulfilled .appt-title {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: rgba(0,0,0,0.45);
+}
+
 .appt-card.in-cell .appt-title,
 .appt-card.in-cell .appt-time {
   color: #222 !important;

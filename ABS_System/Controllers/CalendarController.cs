@@ -58,7 +58,7 @@ ORDER BY APPT_START";
                         ApptStart = r.GetDateTime(3),
                         Title = r.IsDBNull(4) ? "" : r.GetString(4).Trim(),
                         Notes = r.IsDBNull(5) ? "" : r.GetString(5),
-                        Status = r.IsDBNull(6) ? "NEW" : r.GetString(6).Trim()
+                        Status = r.IsDBNull(6) ? "BOOKED" : r.GetString(6).Trim()
                     });
                 }
             }

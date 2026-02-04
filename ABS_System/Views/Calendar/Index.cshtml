@@ -229,18 +229,23 @@
                                             if (!string.IsNullOrEmpty(agentCode) && agentColors.TryGetValue(agentCode, out var c))
                                                 cardColor = c;
 
-                                            var style = "display:flex !important; align-items:center !important; min-height:22px !important; padding:2px 8px !important;";
+                                            var style = "display:flex !important; align-items:center !important; min-height:20px !important; padding:2px 8px !important;";
                                             if (!string.IsNullOrEmpty(cardColor))
                                                 style = $"background-color:{cardColor} !important; " + style;
 
-                                            var isDone = ((appt.Status ?? "").Trim().ToUpperInvariant() == "FULFILLED");
+                                            var statusUp = (appt.Status ?? "").Trim().ToUpperInvariant();
+                                            var isDone = (statusUp == "FULFILLED" || statusUp == "DONE" || statusUp == "COMPLETED");
                                             var doneClass = isDone ? " is-fulfilled" : "";
 
                                             <!-- ✅ IMPORTANT: add data-appt-id so JS can sync opacity -->
                                             <div class="appt-card in-cell@doneClass"
                                                  data-appt-id="@appt.ApptId"
+                                                 data-status="@statusUp"
                                                  style="@style">
-                                                <span class="appt-title">@((appt.Title ?? "").Trim())</span>
+                                                <span class="appt-title"
+                                                      style="@(isDone ? "opacity:0.45; font-weight:500;" : "")">
+                                                    @((appt.Title ?? "").Trim())
+                                                </span>
                                             </div>
                                         }
                                     </div>
@@ -280,13 +285,21 @@
         }
 
         function isFulfilled(appt) {
-            return ((appt.Status || '').toString().trim().toUpperCase() === 'FULFILLED');
+            var status = (appt.Status || '').toString().trim().toUpperCase();
+            return status === 'FULFILLED' || status === 'DONE' || status === 'COMPLETED';
         }
 
         // ✅ NEW: sync calendar in-cell card opacity based on appointment id
+        function cssEscape(v) {
+            // Minimal CSS.escape fallback (good enough for numeric ids)
+            if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(String(v));
+            return String(v).replace(/"/g, '\\"');
+        }
+
         function syncCalendarCellOpacity(apptId, wantDone) {
             if (!apptId) return;
-            var nodes = document.querySelectorAll('.appt-card.in-cell[data-appt-id="' + apptId + '"]');
+            var safeId = cssEscape(apptId);
+            var nodes = document.querySelectorAll('.appt-card.in-cell[data-appt-id="' + safeId + '"]');
             nodes.forEach(function (n) {
                 n.classList.toggle('is-fulfilled', !!wantDone);
             });
@@ -326,7 +339,7 @@
 
                             '<label class="appt-done-wrap" title="Mark as fulfilled">' +
                                 '<span></span>' +
-                                '<input type="checkbox" class="appt-done-cb" ' + (done ? 'checked' : '') + ' />' +
+                                '<input type="checkbox" class="appt-done-cb" data-appt-id="' + appt.ApptId + '" ' + (done ? 'checked' : '') + ' />' +
                             '</label>' +
                         '</div>' +
                     '</div>' +
@@ -384,9 +397,11 @@
                     var card = cb.closest('.appt-card');
                     if (!card) return;
 
-                    var apptId = card.getAttribute('data-appt-id');
+                    var apptId = cb.getAttribute('data-appt-id') || card.getAttribute('data-appt-id');
                     var wantDone = cb.checked;
                     var newStatus = wantDone ? 'FULFILLED' : 'BOOKED';
+
+                    console.debug('[appt-checkbox-change]', { apptId: apptId, wantDone: wantDone, newStatus: newStatus });
 
                     // ✅ Optimistic UI: fade modal + fade calendar in-cell card immediately
                     card.classList.toggle('is-fulfilled', wantDone);
