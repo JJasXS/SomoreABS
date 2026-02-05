@@ -44,6 +44,10 @@
 
 <link rel="stylesheet" href="~/css/calendar.css" />
 <div class="calendar-shell">
+<!-- ✅ Hamburger (top-right) -->
+<button type="button" id="hamburgerBtn" class="hamburger-btn" aria-label="Open menu">
+  ☰
+</button>
 
 <h2 class="calendar-title">
     Calendar -
@@ -111,7 +115,171 @@
     </div>
 </div>
 
+<!-- ✅ Side Menu -->
+<div id="sideMenuOverlay" class="side-menu-overlay" style="display:none;"></div>
+
+<div id="sideMenu" class="side-menu" style="display:none;">
+  <div class="side-menu-header">
+    <div class="side-menu-title">Menu</div>
+    <button type="button" id="sideMenuClose" class="side-menu-close" aria-label="Close menu">&times;</button>
+  </div>
+
+  <div class="side-menu-body">
+    <!-- add more links here later if you want -->
+    <a class="side-menu-link" href="@Url.Action("Index","Calendar", new { year = year, month = month })">
+      Calendar Home
+    </a>
+  </div>
+
+  <!-- ✅ Logout fixed at bottom -->
+  <div class="side-menu-footer">
+    <form method="post" action="@Url.Action("Logout","Account")" style="margin:0;">
+      @Html.AntiForgeryToken()
+      <button type="submit" class="side-menu-logout">
+        Log Out
+      </button>
+    </form>
+  </div>
+</div>
+
+
 <style>
+
+/* =========================
+   Date + Time side-by-side row
+   ========================= */
+.dt-row{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.dt-col label{
+  margin-top: 0;
+}
+
+/* Mobile: stack */
+@@media (max-width: 520px){
+  .dt-row{
+    grid-template-columns: 1fr;
+  }
+}
+
+
+    /* ================================
+   ✅ Hamburger + Side Menu
+   ================================ */
+
+.calendar-shell{ position: relative; }
+
+/* Hamburger button */
+.hamburger-btn{
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 42px;
+  height: 38px;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 20;
+}
+
+.hamburger-btn:hover{ background: rgba(0,0,0,0.03); }
+
+/* Overlay */
+.side-menu-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 1200;
+}
+
+/* Side panel */
+.side-menu{
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 280px;
+  height: 100vh;
+  background: #fff;
+  z-index: 1201;
+  box-shadow: -6px 0 20px rgba(0,0,0,0.18);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.side-menu-header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 14px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+
+.side-menu-title{
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.side-menu-close{
+  width: 38px;
+  height: 34px;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+/* Body */
+.side-menu-body{
+  padding: 12px 14px;
+  flex: 1;
+  overflow: auto;
+}
+
+.side-menu-link{
+  display: block;
+  padding: 10px 10px;
+  border-radius: 10px;
+  color: #111;
+  text-decoration: none;
+  border: 1px solid rgba(0,0,0,0.08);
+  margin-bottom: 10px;
+}
+
+.side-menu-link:hover{
+  background: rgba(0,0,0,0.03);
+}
+
+/* Footer (Logout bottom) */
+.side-menu-footer{
+  padding: 12px 14px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+}
+
+.side-menu-logout{
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: #dc3545; /* bootstrap danger */
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.side-menu-logout:hover{
+  filter: brightness(0.95);
+}
+
+
 /* ================================
    ✅ Full-width (stretch) calendar
    ================================ */
@@ -598,18 +766,12 @@
             '<div class="appt-time">' + escHtml(timeOnly || '') + '</div>' +
           '</div>' +
         '</div>' +
-
-        // ✅ services panel
         servicesHtml +
-
         '<div class="appt-meta" style="margin-top:6px;">' +
           '<div class="appt-meta-line"><span class="appt-meta-label">When:</span> <span class="appt-meta-value">' + escHtml(when) + '</span></div>' +
           '<div class="appt-meta-line"><span class="appt-meta-label">Cust:</span> <span class="appt-meta-value">' + escHtml(cust) + '</span></div>' +
           '<div class="appt-meta-line"><span class="appt-meta-label">Agent:</span> <span class="appt-meta-value">' + escHtml(agent) + '</span></div>' +
-
-          // ✅ buttons only when NOT fulfilled
           actionsHtml +
-
         '</div>' +
       '</div>'
     );
@@ -694,6 +856,7 @@
   // ====== init ======
   document.addEventListener('DOMContentLoaded', function () {
 
+    // ✅ Day cell click opens day modal
     document.querySelectorAll('.calendar-cell-day').forEach(function (cell) {
       cell.addEventListener('click', function (e) {
         e.stopPropagation();
@@ -708,23 +871,34 @@
       });
     });
 
+    // ✅ Close main modals
     function closeMainModals() {
-      document.getElementById('dayAppointmentsModal').style.display = 'none';
-      document.getElementById('monthAppointmentsModal').style.display = 'none';
-      document.getElementById('modalOverlay').style.display = 'none';
+      var d = document.getElementById('dayAppointmentsModal');
+      var m = document.getElementById('monthAppointmentsModal');
+      var ov = document.getElementById('modalOverlay');
+      if (d) d.style.display = 'none';
+      if (m) m.style.display = 'none';
+      if (ov) ov.style.display = 'none';
     }
 
-    document.getElementById('closeDayModal').addEventListener('click', closeMainModals);
-    document.getElementById('closeMonthModal').addEventListener('click', closeMainModals);
-    document.getElementById('modalOverlay').addEventListener('click', closeMainModals);
-    document.getElementById('modalOverlay').addEventListener('touchstart', closeMainModals);
+    var closeDay = document.getElementById('closeDayModal');
+    var closeMonth = document.getElementById('closeMonthModal');
+    var overlay = document.getElementById('modalOverlay');
 
+    if (closeDay) closeDay.addEventListener('click', closeMainModals);
+    if (closeMonth) closeMonth.addEventListener('click', closeMainModals);
+    if (overlay) {
+      overlay.addEventListener('click', closeMainModals);
+      overlay.addEventListener('touchstart', closeMainModals);
+    }
+
+    // ✅ Prevent clicking inside modal from closing
     document.querySelectorAll('.custom-modal-content').forEach(function (modalContent) {
       modalContent.addEventListener('mousedown', function (e) { e.stopPropagation(); });
       modalContent.addEventListener('touchstart', function (e) { e.stopPropagation(); });
     });
 
-    // confirm delete modal buttons
+    // ✅ Confirm delete modal buttons
     var btnCancel = document.getElementById('btnDeleteCancel');
     var btnYes = document.getElementById('btnDeleteYes');
     var btnCloseX = document.getElementById('closeConfirmDeleteModal');
@@ -759,7 +933,45 @@
         btnYes.disabled = false;
       }
     });
+
+    // =========================
+    // ✅ Hamburger menu logic (✅ MUST be inside DOMContentLoaded)
+    // =========================
+    var hb = document.getElementById('hamburgerBtn');
+    var menu = document.getElementById('sideMenu');
+    var menuOv = document.getElementById('sideMenuOverlay');
+    var closeBtn = document.getElementById('sideMenuClose');
+
+    function openMenu() {
+      if (menuOv) menuOv.style.display = 'block';
+      if (menu) menu.style.display = 'flex';
+    }
+
+    function closeMenu() {
+      if (menu) menu.style.display = 'none';
+      if (menuOv) menuOv.style.display = 'none';
+    }
+
+    if (hb) hb.addEventListener('click', function (e) {
+      e.preventDefault();
+      openMenu();
+    });
+
+    if (closeBtn) closeBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      closeMenu();
+    });
+
+    if (menuOv) menuOv.addEventListener('click', function () {
+      closeMenu();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeMenu();
+    });
+
   });
 </script>
+
 
 }

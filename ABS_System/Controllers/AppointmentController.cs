@@ -303,11 +303,11 @@ WHERE APPT_ID = @ID";
 
                 tx.Commit();
 
-                TempData["Ok"] = "Signature saved. Appointment marked as FULFILLED.";
+              TempData["Ok"] = "Signature saved. Appointment marked as FULFILLED.";
 
-                // redirect back to calendar month of this appointment
-                var (yy, mm) = GetApptYearMonth(apptId);
-                return RedirectToAction("Index", "Calendar", new { year = yy, month = mm });
+// ✅ stay on e-sign page after submit
+return RedirectToAction("Sign", "Appointment", new { id = apptId });
+
             }
             catch (Exception ex)
             {
@@ -546,7 +546,8 @@ WHERE APPT_ID = @id";
 
             ViewBag.SelectedServiceCodes = LoadSelectedServiceCodes(id);
             ViewBag.HasSignature = HasSignature(id);
-            ViewBag.SignatureUrl = Url.Action("SignatureImage", "Appointment", new { id });
+            ViewBag.SignatureUrl = Url.Action("SignatureImage", "Appointment", new { id, v = DateTime.UtcNow.Ticks });
+
 
             return View(model);
         }

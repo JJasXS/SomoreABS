@@ -1,22 +1,24 @@
-using Microsoft.AspNetCore.Mvc;
-using YourApp.Models;
-using System;
-using System.Collections.Concurrent;
-using System.Net.Mail;
-using System.Net;
-using YourApp.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using System.Security.Claims;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Mail;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using YourApp.Data;
+using YourApp.Models;
 
 namespace YourApp.Controllers
 {
     public class AccountController : Controller
     {
+        // OTP stored by AgentCode
         private static readonly ConcurrentDictionary<string, string> OtpStore = new();
+
         private readonly FirebirdDb _db;
         private readonly IConfiguration _config;
 
@@ -26,36 +28,62 @@ namespace YourApp.Controllers
             _config = config;
         }
 
+        // =========================================================
+        // LOGIN (GET)
+        // =========================================================
         [HttpGet]
         public IActionResult Login()
         {
             return View(new AgentLoginViewModel());
         }
 
+        // =========================================================
+        // LOGIN (POST) -> Generate OTP and Email
+        // =========================================================
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult Login(AgentLoginViewModel model)
         {
             Console.WriteLine($"[OTP] Login POST hit. Email={model?.Email}");
 
-            if (!ModelState.IsValid) return View(model);
+            if (!ModelState.IsValid)
+                return View(model);
+
+            var emailIn = (model.Email ?? "").Trim();
+
+            if (string.IsNullOrWhiteSpace(emailIn))
+            {
+                ModelState.AddModelError("Email", "Email is required.");
+                return View(model);
+            }
 
             // =========================
             // 1) Check agent exists by email only
             // =========================
             string? agentCode = null;
-            using (var conn = _db.Open())
-            using (var cmd = conn.CreateCommand())
-            {
-                cmd.CommandText = "SELECT CODE FROM AGENT WHERE EMAIL = @EMAIL";
-                cmd.Parameters.Add(FirebirdDb.P("@EMAIL", model.Email.Trim(),
-                    FirebirdSql.Data.FirebirdClient.FbDbType.VarChar));
 
-                using var r = cmd.ExecuteReader();
-                if (r.Read())
+            try
+            {
+                using (var conn = _db.Open())
+                using (var cmd = conn.CreateCommand())
                 {
-                    agentCode = r.IsDBNull(0) ? null : r.GetString(0).Trim();
+                    cmd.CommandText = "SELECT CODE FROM AGENT WHERE EMAIL = @EMAIL";
+                    cmd.Parameters.Add(FirebirdDb.P("@EMAIL", emailIn,
+                        FirebirdSql.Data.FirebirdClient.FbDbType.VarChar));
+
+                    using var r = cmd.ExecuteReader();
+                    if (r.Read())
+                    {
+                        agentCode = r.IsDBNull(0) ? null : r.GetString(0).Trim();
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[OTP] Login load agent FAILED:");
+                Console.WriteLine(ex.ToString());
+                ModelState.AddModelError("", "Server error while checking email. Please try again.");
+                return View(model);
             }
 
             if (string.IsNullOrEmpty(agentCode))
@@ -70,15 +98,15 @@ namespace YourApp.Controllers
             var otp = new Random().Next(100000, 999999).ToString();
             OtpStore[agentCode] = otp;
 
-            Console.WriteLine($"[OTP] Generated OTP for AgentCode={agentCode}, Email={model.Email}: {otp}");
+            Console.WriteLine($"[OTP] Generated OTP for AgentCode={agentCode}, Email={emailIn}: {otp}");
 
             // =========================
-            // 3) Send OTP email (REAL)
+            // 3) Send OTP email (SMTP)
             // =========================
             try
             {
                 Console.WriteLine("[OTP] Sending email via SMTP...");
-                SendOtpEmail(model.Email.Trim(), otp);
+                SendOtpEmail(emailIn, otp);
                 Console.WriteLine("[OTP] Email send OK");
             }
             catch (Exception ex)
@@ -94,15 +122,20 @@ namespace YourApp.Controllers
             // 4) Redirect to VerifyOtp
             // =========================
             TempData["AgentCode"] = agentCode;
-            TempData["Email"] = model.Email.Trim();
+            TempData["Email"] = emailIn;
+
             return RedirectToAction("VerifyOtp");
         }
 
+        // =========================================================
+        // VERIFY OTP (GET)
+        // =========================================================
         [HttpGet]
         public IActionResult VerifyOtp()
         {
             var agentCode = TempData["AgentCode"] as string;
             var email = TempData["Email"] as string;
+
             if (string.IsNullOrEmpty(agentCode) || string.IsNullOrEmpty(email))
                 return RedirectToAction("Login");
 
@@ -113,21 +146,28 @@ namespace YourApp.Controllers
             return View(new OtpViewModel { AgentCode = agentCode });
         }
 
+        // =========================================================
+        // VERIFY OTP (POST) -> Sign In cookie
+        // =========================================================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult VerifyOtp(OtpViewModel model)
+        public async Task<IActionResult> VerifyOtp(OtpViewModel model)
         {
-            if (!ModelState.IsValid) return View(model);
+            if (!ModelState.IsValid)
+                return View(model);
+
+            var agentCodeIn = (model.AgentCode ?? "").Trim();
+            var otpIn = (model.Otp ?? "").Trim();
 
             // ✅ 1) OTP check
-            if (!OtpStore.TryGetValue(model.AgentCode, out var otp) || otp != model.Otp)
+            if (!OtpStore.TryGetValue(agentCodeIn, out var otp) || otp != otpIn)
             {
                 ModelState.AddModelError("Otp", "Invalid OTP.");
                 return View(model);
             }
 
             // ✅ 2) OTP success → remove OTP
-            OtpStore.TryRemove(model.AgentCode, out _);
+            OtpStore.TryRemove(agentCodeIn, out _);
 
             // ✅ 3) Load Email + BranchNo from AGENT for claims
             string email = "";
@@ -139,7 +179,7 @@ namespace YourApp.Controllers
                 using (var cmd = conn.CreateCommand())
                 {
                     cmd.CommandText = "SELECT EMAIL, BRANCHNO FROM AGENT WHERE CODE = @CODE";
-                    cmd.Parameters.Add(FirebirdDb.P("@CODE", model.AgentCode.Trim(),
+                    cmd.Parameters.Add(FirebirdDb.P("@CODE", agentCodeIn,
                         FirebirdSql.Data.FirebirdClient.FbDbType.VarChar));
 
                     using var r = cmd.ExecuteReader();
@@ -167,7 +207,7 @@ namespace YourApp.Controllers
             {
                 new Claim(ClaimTypes.Name, email),
                 new Claim(ClaimTypes.Email, email),
-                new Claim("AgentCode", model.AgentCode.Trim()),
+                new Claim("AgentCode", agentCodeIn),
                 new Claim("BranchNo", branchNo),
                 new Claim("IsOffice", isOffice ? "1" : "0")
             };
@@ -175,8 +215,8 @@ namespace YourApp.Controllers
             var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
             var principal = new ClaimsPrincipal(identity);
 
-            // ✅ 5) Sign in (cookie)
-            HttpContext.SignInAsync(
+            // ✅ 5) Sign in (cookie) - use await
+            await HttpContext.SignInAsync(
                 CookieAuthenticationDefaults.AuthenticationScheme,
                 principal,
                 new AuthenticationProperties
@@ -184,9 +224,26 @@ namespace YourApp.Controllers
                     IsPersistent = true,
                     ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
                 }
-            ).GetAwaiter().GetResult();
+            );
 
             return RedirectToAction("Index", "Calendar");
+        }
+
+        // =========================================================
+        // LOGOUT (POST) -> MUST redirect to Login
+        // =========================================================
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Logout()
+        {
+            // clear server session (if used)
+            HttpContext.Session.Clear();
+
+            // sign out auth cookie
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+            // ✅ DO NOT go to Home/Index, go to Login
+            return RedirectToAction("Login", "Account");
         }
 
         // =========================================================
@@ -208,6 +265,7 @@ namespace YourApp.Controllers
             if (string.IsNullOrWhiteSpace(pass)) throw new Exception("Missing Smtp:Pass in appsettings.json");
 
             int port = int.Parse(portStr);
+
             bool enableSsl = true;
             if (!string.IsNullOrWhiteSpace(enableSslStr))
                 enableSsl = bool.Parse(enableSslStr);

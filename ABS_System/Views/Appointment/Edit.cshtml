@@ -12,6 +12,38 @@
 <h2>Edit Appointment</h2>
 
 <style>
+  /* =========================
+   Two columns (Customer + Agent)
+   ========================= */
+.two-col{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@@media (max-width: 520px){
+  .two-col{ grid-template-columns: 1fr; }
+}
+
+  /* =========================
+   Date + Time side-by-side row
+   ========================= */
+.dt-row{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.dt-col label{
+  margin-top: 0;
+}
+
+/* Mobile: stack */
+@@media (max-width: 520px){
+  .dt-row{ grid-template-columns: 1fr; }
+}
+
+
   /* ===============================
      Edit Appointment - Full Styles
      Copy paste replace your <style>
@@ -73,10 +105,7 @@
      Services section
      ========================= */
 
-  /* extra spacing after Appointment Time section */
-  .booking-form > div:nth-of-type(3) {
-    margin-bottom: 6px;
-  }
+ 
 
   .svc-header {
     display: flex;
@@ -200,6 +229,7 @@
   <input type="hidden" asp-for="ApptId" />
   <input type="hidden" asp-for="Title" id="TitleHidden" />
 
+<div class="two-col">
   <div>
     <label>Customer</label>
     <select asp-for="CustomerCode">
@@ -229,18 +259,23 @@
       }
     </select>
   </div>
+</div>
 
-  <!-- ✅ Split Date + Time (still submit ApptStart) -->
+<!-- ✅ Split Date + Time (still submit ApptStart) -->
 <div>
-  <label>Appointment Date</label>
-  <input type="date" id="ApptDate"
-         value="@Model.ApptStart.ToString("yyyy-MM-dd")" />
+  <div class="dt-row">
+    <div class="dt-col">
+      <label>Appointment Date</label>
+      <input type="date" id="ApptDate"
+             value="@Model.ApptStart.ToString("yyyy-MM-dd")" />
+    </div>
 
-  <div style="height:12px;"></div>
-
-  <label>Appointment Time</label>
-  <input type="time" id="ApptTime"
-         value="@Model.ApptStart.ToString("HH:mm")" />
+    <div class="dt-col">
+      <label>Appointment Time</label>
+      <input type="time" id="ApptTime"
+             value="@Model.ApptStart.ToString("HH:mm")" />
+    </div>
+  </div>
 
   <!-- ✅ Hidden real field that is submitted to controller -->
   <input asp-for="ApptStart" type="datetime-local" id="ApptStartHidden" style="display:none;"
