@@ -230,10 +230,28 @@ VALUES (@ID, CURRENT_TIMESTAMP, @BY, @REM, @PNG)";
                 }
 
                 // ✅ C3: DO NOT update APPOINTMENT.STATUS here.
+                // ✅ Mark appointment as fulfilled after e-sign saved
+using (var cmdAppt = conn.CreateCommand())
+{
+    cmdAppt.CommandText = @"
+UPDATE APPOINTMENT
+SET STATUS = 'FULFILLED',
+    LAST_UPD_DT = CURRENT_TIMESTAMP,
+    LAST_UPD_BY = @BY
+WHERE APPT_ID = @ID";
+
+    cmdAppt.Parameters.Add(FirebirdDb.P("@BY", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
+    cmdAppt.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
+
+    cmdAppt.ExecuteNonQuery();
+}
+
+                
 
             //    TempData["Ok"] = "Signature saved successfully.";
               //  return RedirectToAction("Edit", new { id = apptId });
-              TempData["Ok"] = "Signature saved successfully.";
+              TempData["Ok"] = "Signature saved. Appointment marked as FULFILLED.";
+
 
 // ✅ Go back to Calendar same month as the appointment
 int y = DateTime.Today.Year;
