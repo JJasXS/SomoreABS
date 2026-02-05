@@ -1,27 +1,100 @@
 @model YourApp.Models.AgentLoginViewModel
 
-<div class="d-flex justify-content-center align-items-center min-vh-100">
-    <div class="card shadow-sm" style="max-width: 420px; width: 100%;">
-        <div class="card-body p-4">
-            <h2 class="h4 mb-3 text-center">Agent Login</h2>
-            <p class="text-muted text-center mb-4">
-                Enter your email to receive a one-time password.
-            </p>
+@{
+    ViewData["Title"] = "Agent Login";
+}
 
-            <form asp-action="Login" method="post">
-                @Html.AntiForgeryToken()
-                <!-- Agent code removed, only email required -->
-                <div class="mb-3">
-                    <label asp-for="Email" class="form-label"></label>
-                    <input asp-for="Email" class="form-control text-center" />
-                    <span asp-validation-for="Email" class="text-danger small"></span>
-                </div>
-                <button type="submit" class="btn btn-primary w-100">Send OTP</button>
-            </form>
-        </div>
+<style>
+  /* Page wrapper: center inside main content area */
+  .login-wrap {
+    padding: 32px 16px;
+  }
+
+  /* Card styling */
+  .login-card {
+    max-width: 420px;
+    width: 100%;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 14px;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.08);
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .login-card .card-body {
+    padding: 28px 26px;
+  }
+
+  .login-title {
+    font-weight: 800;
+    letter-spacing: .2px;
+  }
+
+  .login-subtitle {
+    color: #6c757d;
+    margin-bottom: 18px;
+  }
+
+  /* Input: nicer + centered */
+  .login-input {
+    height: 46px;
+    border-radius: 10px;
+    text-align: center;
+  }
+
+  .login-input:focus {
+    border-color: rgba(13,110,253,0.55);
+    box-shadow: 0 0 0 0.18rem rgba(13,110,253,0.18);
+  }
+
+  /* Button */
+  .login-btn {
+    height: 46px;
+    border-radius: 10px;
+    font-weight: 800;
+  }
+
+  /* Little helper note */
+  .login-note {
+    margin-top: 12px;
+    font-size: 0.92rem;
+    color: #6c757d;
+  }
+</style>
+
+<div class="login-wrap">
+  <div class="d-flex justify-content-center align-items-center" style="min-height: calc(100vh - 220px);">
+    <div class="login-card">
+      <div class="card-body">
+
+        <h2 class="h4 mb-2 text-center login-title">Agent Login</h2>
+        <p class="text-center login-subtitle">
+          Enter your email to receive a one-time password.
+        </p>
+
+        <form asp-action="Login" method="post" novalidate>
+          @Html.AntiForgeryToken()
+
+          <div class="mb-3">
+            <label asp-for="Email" class="form-label fw-bold"></label>
+            <input asp-for="Email" class="form-control login-input" autocomplete="email" />
+            <span asp-validation-for="Email" class="text-danger small"></span>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 login-btn">
+            Send OTP
+          </button>
+
+          <div class="login-note text-center">
+            Check your inbox (and spam/junk) for the OTP.
+          </div>
+        </form>
+
+      </div>
     </div>
+  </div>
 </div>
 
 @section Scripts {
-    <partial name="_ValidationScriptsPartial" />
+  <partial name="_ValidationScriptsPartial" />
 }
