@@ -299,6 +299,10 @@
     window.customerNames = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.CustomerNames ?? new Dictionary<string, string>()));
     window.agentColors = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.AgentColors ?? new Dictionary<string, string>()));
 
+    // ✅ NEW: services per appointment + service names
+    window.apptServices = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.ApptServices ?? new Dictionary<long, List<string>>()));
+    window.serviceNames = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.ServiceNames ?? new Dictionary<string, string>()));
+
     function getAntiForgeryToken() {
         var el = document.querySelector('#antiForgeryForm input[name="__RequestVerificationToken"]');
         return el ? el.value : '';
@@ -345,7 +349,6 @@
         var m = document.getElementById('confirmDeleteModal');
         if (m) m.style.display = 'none';
 
-        // keep overlay only if day/month modal still open
         var dayOpen = document.getElementById('dayAppointmentsModal')?.style.display === 'block';
         var monthOpen = document.getElementById('monthAppointmentsModal')?.style.display === 'block';
 
@@ -402,7 +405,7 @@
 
         containerEl.querySelectorAll('a.appt-delete').forEach(function (a) {
             a.addEventListener('click', function (e) {
-                e.preventDefault();   // ✅ stop navigation
+                e.preventDefault();
                 e.stopPropagation();
                 var apptId = a.getAttribute('data-appt-id');
                 openConfirmDeleteModal(apptId);
@@ -410,7 +413,7 @@
         });
     }
 
-    // ====== Existing: status update AJAX (your original) ======
+    // ====== STATUS UPDATE AJAX ======
     async function setAppointmentStatus(apptId, newStatus) {
         var token = getAntiForgeryToken();
 
@@ -469,7 +472,52 @@
         });
     }
 
-    // ====== Build appointment card for modal (IMPORTANT: no /Appointment/Delete/ link) ======
+    // =========================
+    // ✅ NEW: Title click dropdown (services list)
+    // If appointment has >1 service, clicking title toggles a dashed list.
+    // =========================
+
+    function getServiceLinesHtml(apptId) {
+        var list = (window.apptServices && window.apptServices[apptId]) ? window.apptServices[apptId] : null;
+        if (!list || !Array.isArray(list) || list.length <= 1) return '';
+
+        var html = '<div class="appt-services" style="display:none; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(0,0,0,0.15);">';
+        html += '<div style="font-size:12px; font-weight:700; margin-bottom:4px;">Services</div>';
+
+        list.forEach(function(code){
+            var name = (window.serviceNames && window.serviceNames[code]) ? window.serviceNames[code] : code;
+            html += '<div class="appt-service-line" style="font-size:12px; line-height:1.35;">- ' + escHtml(name) + '</div>';
+        });
+
+        html += '</div>';
+        return html;
+    }
+
+    function wireTitleDropdown(containerEl) {
+        if (!containerEl) return;
+
+        containerEl.querySelectorAll('.appt-title-toggle').forEach(function (t) {
+            t.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                var card = t.closest('.appt-card');
+                if (!card) return;
+
+                var panel = card.querySelector('.appt-services');
+                if (!panel) return;
+
+                var isOpen = panel.style.display === 'block';
+                panel.style.display = isOpen ? 'none' : 'block';
+
+                // rotate caret
+                var caret = t.querySelector('.appt-caret');
+                if (caret) caret.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+            });
+        });
+    }
+
+    // ====== Build appointment card for modal ======
     function buildApptCard(appt) {
         var when = '';
         var timeOnly = '';
@@ -494,20 +542,29 @@
         var done = isFulfilled(appt);
         var doneClass = done ? ' is-fulfilled' : '';
 
+        // ✅ services dropdown only if >1 service
+        var servicesHtml = getServiceLinesHtml(appt.ApptId);
+        var hasMultiServices = servicesHtml && servicesHtml.length > 0;
+
+        var titleHtml =
+            '<div class="appt-title appt-title-toggle" style="cursor:' + (hasMultiServices ? 'pointer' : 'default') + '; display:flex; align-items:center; gap:8px;">' +
+                '<span>' + escHtml(toTitleCase(appt.Title || '')) + '</span>' +
+                (hasMultiServices ? '<span class="appt-caret" style="display:inline-block; transition:transform 0.15s ease;">&#9654;</span>' : '') +
+            '</div>';
+
         return (
             '<div class="appt-card modal-card' + doneClass + '" data-appt-id="' + appt.ApptId + '"' + style + '>' +
                 '<div class="appt-top">' +
-                    '<div class="appt-title">' + escHtml(toTitleCase(appt.Title || '')) + '</div>' +
+                    '<div>' + titleHtml + '</div>' +
                     '<div class="appt-top-right">' +
                         '<div class="appt-time">' + escHtml(timeOnly || '') + '</div>' +
-                        '<label class="appt-done-wrap" title="Mark as fulfilled">' +
-                            '<span></span>' +
-                          //  '<input type="checkbox" class="appt-done-cb" data-appt-id="' + appt.ApptId + '" ' + (done ? 'checked' : '') + ' />' +
-                        '</label>' +
                     '</div>' +
                 '</div>' +
 
-                '<div class="appt-meta">' +
+                // ✅ services panel
+                servicesHtml +
+
+                '<div class="appt-meta" style="margin-top:6px;">' +
                     '<div class="appt-meta-line"><span class="appt-meta-label">When:</span> <span class="appt-meta-value">' + escHtml(when) + '</span></div>' +
                     '<div class="appt-meta-line"><span class="appt-meta-label">Cust:</span> <span class="appt-meta-value">' + escHtml(cust) + '</span></div>' +
                     '<div class="appt-meta-line"><span class="appt-meta-label">Agent:</span> <span class="appt-meta-value">' + escHtml(agent) + '</span></div>' +
@@ -548,6 +605,7 @@
 
             wireTodoCheckboxes(list);
             wireDeleteConfirm(list);
+            wireTitleDropdown(list); // ✅ NEW
         }
 
         overlay.style.display = 'block';
@@ -590,6 +648,7 @@
 
             wireTodoCheckboxes(list);
             wireDeleteConfirm(list);
+            wireTitleDropdown(list); // ✅ NEW
         }
 
         overlay.style.display = 'block';
@@ -667,5 +726,6 @@
     });
 </script>
 }
+
 
 @await Html.PartialAsync("~/Views/Shared/LayoutPartials/_Footer.cshtml")

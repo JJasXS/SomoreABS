@@ -5,6 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+// ✅ add these (needed for FbDbType)
+using FirebirdSql.Data.FirebirdClient;
+
 namespace YourApp.Controllers
 {
     [Authorize]
@@ -61,12 +64,12 @@ namespace YourApp.Controllers
                 using var cmd = conn.CreateCommand();
 
                 cmd.CommandText = isOffice
-                ? @"
+                    ? @"
 SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS
 FROM APPOINTMENT ap
 WHERE ap.APPT_START >= @START AND ap.APPT_START <= @END
 ORDER BY ap.APPT_START"
-                : @"
+                    : @"
 SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS
 FROM APPOINTMENT ap
 JOIN AGENT a ON a.CODE = ap.AGENT_CODE
@@ -75,12 +78,12 @@ WHERE ap.APPT_START >= @START
   AND a.BRANCHNO = @BRANCHNO
 ORDER BY ap.APPT_START";
 
-                cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@START", firstDay, FirebirdSql.Data.FirebirdClient.FbDbType.TimeStamp));
-                cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@END", lastDay, FirebirdSql.Data.FirebirdClient.FbDbType.TimeStamp));
+                cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@START", firstDay, FbDbType.TimeStamp));
+                cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@END", lastDay, FbDbType.TimeStamp));
 
                 if (!isOffice)
                 {
-                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@BRANCHNO", userBranchNo, FirebirdSql.Data.FirebirdClient.FbDbType.VarChar));
+                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@BRANCHNO", userBranchNo, FbDbType.VarChar));
                 }
 
                 using var r = cmd.ExecuteReader();
@@ -103,6 +106,90 @@ ORDER BY ap.APPT_START";
                 // keep page working even if DB fails
             }
 
+            // =========================================================
+            // ✅ NEW: Build services per appointment for the whole month
+            // ViewBag.ApptServices: Dictionary<long, List<string>>  (ApptId -> ServiceCodes)
+            // ViewBag.ServiceNames: Dictionary<string, string>      (ServiceCode -> Description)
+            // =========================================================
+            var apptIds = monthAppointments.Select(a => a.ApptId).Distinct().ToList();
+
+            var apptServices = new Dictionary<long, List<string>>();
+            var serviceNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            try
+            {
+                if (apptIds.Count > 0)
+                {
+                    using var scope2 = HttpContext.RequestServices.CreateScope();
+                    var db2 = (YourApp.Data.FirebirdDb)scope2.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                    using var conn2 = db2.Open();
+
+                    // 1) ApptId -> Service Codes (from APPT_DTL)
+                    using (var cmdSvc = conn2.CreateCommand())
+                    {
+                        // Build IN list safely (@p0,@p1,...)
+                        var paramNames = new List<string>();
+                        for (int i = 0; i < apptIds.Count; i++)
+                        {
+                            var p = "@p" + i;
+                            paramNames.Add(p);
+                            cmdSvc.Parameters.Add(YourApp.Data.FirebirdDb.P(p, apptIds[i], FbDbType.BigInt));
+                        }
+
+                        cmdSvc.CommandText = $@"
+SELECT APPT_ID, SERVICE_CODE
+FROM APPT_DTL
+WHERE APPT_ID IN ({string.Join(",", paramNames)})
+ORDER BY APPT_ID, SERVICE_CODE";
+
+                        using var rSvc = cmdSvc.ExecuteReader();
+                        while (rSvc.Read())
+                        {
+                            var apptId = rSvc.GetInt64(0);
+                            var code = rSvc.IsDBNull(1) ? "" : rSvc.GetString(1).Trim();
+
+                            if (string.IsNullOrWhiteSpace(code)) continue;
+
+                            if (!apptServices.TryGetValue(apptId, out var list))
+                            {
+                                list = new List<string>();
+                                apptServices[apptId] = list;
+                            }
+
+                            // case-insensitive distinct
+                            if (!list.Contains(code, StringComparer.OrdinalIgnoreCase))
+                                list.Add(code);
+                        }
+                    }
+
+                    // 2) Service Code -> Service Description (from ST_ITEM)
+                    using (var cmdNames = conn2.CreateCommand())
+                    {
+                        cmdNames.CommandText = @"
+SELECT CODE, DESCRIPTION
+FROM ST_ITEM
+WHERE STOCKGROUP = 'SERVICE'";
+
+                        using var rNames = cmdNames.ExecuteReader();
+                        while (rNames.Read())
+                        {
+                            var code = rNames.IsDBNull(0) ? "" : rNames.GetString(0).Trim();
+                            var desc = rNames.IsDBNull(1) ? "" : rNames.GetString(1).Trim();
+
+                            if (!string.IsNullOrWhiteSpace(code))
+                                serviceNames[code] = desc;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // keep page working even if service lookup fails
+            }
+
+            ViewBag.ApptServices = apptServices;
+            ViewBag.ServiceNames = serviceNames;
+
             // ===== Dictionaries (IMPORTANT: case-insensitive) =====
             var agentNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var agentBranchNos = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -124,7 +211,7 @@ ORDER BY ap.APPT_START";
 
                 if (!isOffice)
                 {
-                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@BRANCHNO", userBranchNo, FirebirdSql.Data.FirebirdClient.FbDbType.VarChar));
+                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@BRANCHNO", userBranchNo, FbDbType.VarChar));
                 }
 
                 using var r = cmd.ExecuteReader();
@@ -196,7 +283,7 @@ ORDER BY ap.APPT_START";
             var d = (date ?? DateTime.Today).Date;
             var model = new CalendarEventVm { Date = d };
 
-            // Query ST_ITEM for service products
+            // Query ST_ITEM for service products (descriptions only)
             List<string> serviceDescriptions = new();
             try
             {
@@ -205,6 +292,7 @@ ORDER BY ap.APPT_START";
                 using var conn = db.Open();
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"SELECT DESCRIPTION FROM ST_ITEM WHERE STOCKGROUP = 'service' ORDER BY DESCRIPTION";
+
                 using var r = cmd.ExecuteReader();
                 while (r.Read())
                 {
