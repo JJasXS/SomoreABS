@@ -116,7 +116,38 @@ WHERE APPT_ID = @ID";
             ViewBag.SignatureUrl = Url.Action("SignatureImage", "Appointment", new { id });
 
             // default signer name (if logged in) else blank
-            ViewBag.DefaultSignedBy = User?.Identity?.Name ?? "";
+           // ViewBag.DefaultSignedBy = User?.Identity?.Name ?? "";
+
+            // customer name displayed as signer
+            // ✅ Default signer should be CUSTOMER name (not staff login)
+string custName = "";
+
+try
+{
+    using var connName = _db.Open();
+    using var cmdName = connName.CreateCommand();
+
+    cmdName.CommandText = @"
+SELECT COMPANYNAME
+FROM AR_CUSTOMER
+WHERE CODE = @CODE";
+
+    cmdName.Parameters.Add(FirebirdDb.P("@CODE", (appt.CustomerCode ?? "").Trim(), FbDbType.VarChar));
+
+    var v = cmdName.ExecuteScalar();
+    if (v != null && v != DBNull.Value)
+        custName = v.ToString()?.Trim() ?? "";
+}
+catch
+{
+    // ignore, keep empty
+}
+
+// fallback: if no company name, show CUSTOMER_CODE; if still empty, blank
+ViewBag.DefaultSignedBy = !string.IsNullOrWhiteSpace(custName)
+    ? custName
+    : ((appt.CustomerCode ?? "").Trim());
+
 
             // statement text shown on Sign page
             ViewBag.StatementText =

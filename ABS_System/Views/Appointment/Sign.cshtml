@@ -23,8 +23,12 @@
                 </div>
 
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                    <a class="btn btn-outline-secondary" href="/Calendar/Index?year=@Model.ApptStart.Year&month=@Model.ApptStart.Month">Back to Calendar</a>
-                </div>
+    <a class="btn btn-outline-secondary"
+       href="/Calendar/Index?year=@Model.ApptStart.Year&month=@Model.ApptStart.Month">
+        &larr; Back
+    </a>
+</div>
+
             </div>
 
             <hr />
@@ -150,7 +154,7 @@
                      ========================= -->
                 <div class="row" style="row-gap: 12px;">
                     <div class="col-md-6">
-                        <label style="font-weight:700;">Signed By (Name)</label>
+                        <label style="font-weight:700;">Signed By (Customer)</label>
                         <input class="form-control" name="signedBy" value="@defaultSignedBy" placeholder="Enter name (optional)" />
                         <div style="font-size:12px; opacity:.7; margin-top:4px;">
                             Customer can type their name here (optional).
@@ -176,10 +180,21 @@
                             <canvas id="sigCanvas" style="width:100%; height:220px; display:block;"></canvas>
                         </div>
 
-                        <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
-                            <button type="button" class="btn btn-outline-secondary" id="clearBtn">Clear</button>
-                            <button type="submit" class="btn btn-primary" id="submitBtn">Submit Signature</button>
-                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap;">
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button type="button" class="btn btn-outline-secondary" id="clearBtn">Clear</button>
+    </div>
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-left:auto;">
+        <a class="btn btn-outline-secondary"
+           href="/Calendar/Index?year=@Model.ApptStart.Year&month=@Model.ApptStart.Month">
+            Back to Calendar
+        </a>
+
+        <button type="submit" class="btn btn-primary" id="submitBtn">Submit Signature</button>
+    </div>
+</div>
+
 
                         <div style="font-size:12px; opacity:.75; margin-top:8px;">
                             Use mouse or finger to sign. Press <b>Clear</b> to redo.
