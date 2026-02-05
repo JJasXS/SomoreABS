@@ -20,7 +20,67 @@ namespace YourApp.Controllers
         }
 
         // =========================================================
-        // QUICK STATUS UPDATE (AJAX)
+        // ✅ DELETE (AJAX) - FK-safe + NO Delete.cshtml
+        // POST: /Appointment/DeleteAjax
+        // =========================================================
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult DeleteAjax(long id)
+        {
+            if (id <= 0)
+                return Json(new { ok = false, message = "Invalid appointment id." });
+
+            try
+            {
+                using var conn = _db.Open();
+                using var tx = conn.BeginTransaction();
+
+                // 1) delete signature first (child)
+                using (var cmdSig = conn.CreateCommand())
+                {
+                    cmdSig.Transaction = tx;
+                    cmdSig.CommandText = "DELETE FROM APPT_SIGNATURE WHERE APPT_ID = @id";
+                    cmdSig.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
+                    cmdSig.ExecuteNonQuery();
+                }
+
+                // 2) delete details first (child)
+                using (var cmdDtl = conn.CreateCommand())
+                {
+                    cmdDtl.Transaction = tx;
+                    cmdDtl.CommandText = "DELETE FROM APPT_DTL WHERE APPT_ID = @id";
+                    cmdDtl.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
+                    cmdDtl.ExecuteNonQuery();
+                }
+
+                // 3) delete parent
+                int rows;
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = "DELETE FROM APPOINTMENT WHERE APPT_ID = @id";
+                    cmd.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
+                    rows = cmd.ExecuteNonQuery();
+                }
+
+                if (rows <= 0)
+                {
+                    tx.Rollback();
+                    return Json(new { ok = false, message = "Appointment not found or already deleted." });
+                }
+
+                tx.Commit();
+                return Json(new { ok = true });
+            }
+            catch (Exception ex)
+            {
+                // return JSON so frontend can show alert instead of dev error page
+                return StatusCode(500, new { ok = false, message = "Delete failed.", detail = ex.Message });
+            }
+        }
+
+        // =========================================================
+        // ✅ QUICK STATUS UPDATE (AJAX)
         // POST: /Appointment/SetStatus
         // =========================================================
         [HttpPost]
@@ -67,7 +127,7 @@ WHERE APPT_ID = @ID";
         }
 
         // =========================================================
-        // SIGNATURE (GET) - Option 1: Statement + Signature pad
+        // ✅ SIGNATURE (GET)
         // GET: /Appointment/Sign/5
         // =========================================================
         [HttpGet]
@@ -106,50 +166,17 @@ WHERE APPT_ID = @ID";
             }
             catch
             {
-                // keep appt as null
+                // keep appt null
             }
 
             if (appt == null) return NotFound();
 
-            // signature flags for UI
             ViewBag.HasSignature = HasSignature(id);
             ViewBag.SignatureUrl = Url.Action("SignatureImage", "Appointment", new { id });
 
-            // default signer name (if logged in) else blank
-           // ViewBag.DefaultSignedBy = User?.Identity?.Name ?? "";
+            // ✅ Default signer is CUSTOMER company name (fallback to CustomerCode)
+            ViewBag.DefaultSignedBy = GetCustomerCompanyName(appt.CustomerCode);
 
-            // customer name displayed as signer
-            // ✅ Default signer should be CUSTOMER name (not staff login)
-string custName = "";
-
-try
-{
-    using var connName = _db.Open();
-    using var cmdName = connName.CreateCommand();
-
-    cmdName.CommandText = @"
-SELECT COMPANYNAME
-FROM AR_CUSTOMER
-WHERE CODE = @CODE";
-
-    cmdName.Parameters.Add(FirebirdDb.P("@CODE", (appt.CustomerCode ?? "").Trim(), FbDbType.VarChar));
-
-    var v = cmdName.ExecuteScalar();
-    if (v != null && v != DBNull.Value)
-        custName = v.ToString()?.Trim() ?? "";
-}
-catch
-{
-    // ignore, keep empty
-}
-
-// fallback: if no company name, show CUSTOMER_CODE; if still empty, blank
-ViewBag.DefaultSignedBy = !string.IsNullOrWhiteSpace(custName)
-    ? custName
-    : ((appt.CustomerCode ?? "").Trim());
-
-
-            // statement text shown on Sign page
             ViewBag.StatementText =
                 "I hereby confirm and acknowledge that the appointment details shown are correct. " +
                 "I agree that this e-signature is valid and may be used as proof of acknowledgement.";
@@ -158,7 +185,7 @@ ViewBag.DefaultSignedBy = !string.IsNullOrWhiteSpace(custName)
         }
 
         // =========================================================
-        // SIGNATURE SAVE (POST) - Option 1: Statement + Signature
+        // ✅ SIGNATURE SAVE (POST)
         // POST: /Appointment/SignSave
         // =========================================================
         [HttpPost]
@@ -200,7 +227,7 @@ ViewBag.DefaultSignedBy = !string.IsNullOrWhiteSpace(custName)
                 return RedirectToAction("Sign", new { id = apptId });
             }
 
-            // You don't have STATEMENT column, so we store statement + remarks inside REMARKS
+            // Store statement + remarks inside REMARKS
             string combinedRemarks = statementText;
             if (!string.IsNullOrWhiteSpace(remarks))
             {
@@ -212,20 +239,23 @@ ViewBag.DefaultSignedBy = !string.IsNullOrWhiteSpace(custName)
             try
             {
                 using var conn = _db.Open();
+                using var tx = conn.BeginTransaction();
 
-                // 1) Check if signature row exists (B1: 1 per appointment)
+                // 1) check exists
                 bool exists;
                 using (var cmdChk = conn.CreateCommand())
                 {
+                    cmdChk.Transaction = tx;
                     cmdChk.CommandText = "SELECT COUNT(*) FROM APPT_SIGNATURE WHERE APPT_ID = @ID";
                     cmdChk.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
                     exists = Convert.ToInt32(cmdChk.ExecuteScalar()) > 0;
                 }
 
-                // 2) UPSERT
+                // 2) upsert signature
                 if (exists)
                 {
                     using var cmdUp = conn.CreateCommand();
+                    cmdUp.Transaction = tx;
                     cmdUp.CommandText = @"
 UPDATE APPT_SIGNATURE
 SET SIGNED_DT = CURRENT_TIMESTAMP,
@@ -236,16 +266,14 @@ WHERE APPT_ID = @ID";
 
                     cmdUp.Parameters.Add(FirebirdDb.P("@BY", string.IsNullOrWhiteSpace(signedBy) ? null : signedBy, FbDbType.VarChar));
                     cmdUp.Parameters.Add(FirebirdDb.P("@REM", string.IsNullOrWhiteSpace(combinedRemarks) ? null : combinedRemarks, FbDbType.VarChar));
-
-                    var pPng = new FbParameter("@PNG", FbDbType.Binary) { Value = pngBytes };
-                    cmdUp.Parameters.Add(pPng);
-
+                    cmdUp.Parameters.Add(new FbParameter("@PNG", FbDbType.Binary) { Value = pngBytes });
                     cmdUp.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
                     cmdUp.ExecuteNonQuery();
                 }
                 else
                 {
                     using var cmdIns = conn.CreateCommand();
+                    cmdIns.Transaction = tx;
                     cmdIns.CommandText = @"
 INSERT INTO APPT_SIGNATURE (APPT_ID, SIGNED_DT, SIGNED_BY, REMARKS, SIGNATURE_PNG)
 VALUES (@ID, CURRENT_TIMESTAMP, @BY, @REM, @PNG)";
@@ -253,63 +281,33 @@ VALUES (@ID, CURRENT_TIMESTAMP, @BY, @REM, @PNG)";
                     cmdIns.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
                     cmdIns.Parameters.Add(FirebirdDb.P("@BY", string.IsNullOrWhiteSpace(signedBy) ? null : signedBy, FbDbType.VarChar));
                     cmdIns.Parameters.Add(FirebirdDb.P("@REM", string.IsNullOrWhiteSpace(combinedRemarks) ? null : combinedRemarks, FbDbType.VarChar));
-
-                    var pPng = new FbParameter("@PNG", FbDbType.Binary) { Value = pngBytes };
-                    cmdIns.Parameters.Add(pPng);
-
+                    cmdIns.Parameters.Add(new FbParameter("@PNG", FbDbType.Binary) { Value = pngBytes });
                     cmdIns.ExecuteNonQuery();
                 }
 
-                // ✅ C3: DO NOT update APPOINTMENT.STATUS here.
-                // ✅ Mark appointment as fulfilled after e-sign saved
-using (var cmdAppt = conn.CreateCommand())
-{
-    cmdAppt.CommandText = @"
+                // 3) mark appointment as fulfilled
+                using (var cmdAppt = conn.CreateCommand())
+                {
+                    cmdAppt.Transaction = tx;
+                    cmdAppt.CommandText = @"
 UPDATE APPOINTMENT
 SET STATUS = 'FULFILLED',
     LAST_UPD_DT = CURRENT_TIMESTAMP,
     LAST_UPD_BY = @BY
 WHERE APPT_ID = @ID";
 
-    cmdAppt.Parameters.Add(FirebirdDb.P("@BY", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
-    cmdAppt.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
+                    cmdAppt.Parameters.Add(FirebirdDb.P("@BY", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
+                    cmdAppt.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
+                    cmdAppt.ExecuteNonQuery();
+                }
 
-    cmdAppt.ExecuteNonQuery();
-}
+                tx.Commit();
 
-                
+                TempData["Ok"] = "Signature saved. Appointment marked as FULFILLED.";
 
-            //    TempData["Ok"] = "Signature saved successfully.";
-              //  return RedirectToAction("Edit", new { id = apptId });
-              TempData["Ok"] = "Signature saved. Appointment marked as FULFILLED.";
-
-
-// ✅ Go back to Calendar same month as the appointment
-int y = DateTime.Today.Year;
-int mth = DateTime.Today.Month;
-
-try
-{
-    using var conn2 = _db.Open();
-    using var cmd2 = conn2.CreateCommand();
-    cmd2.CommandText = "SELECT APPT_START FROM APPOINTMENT WHERE APPT_ID = @ID";
-    cmd2.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
-
-    var dt = cmd2.ExecuteScalar();
-    if (dt != null && dt != DBNull.Value)
-    {
-        var apptStart = Convert.ToDateTime(dt);
-        y = apptStart.Year;
-        mth = apptStart.Month;
-    }
-}
-catch
-{
-    // ignore, fallback to today month/year
-}
-
-return RedirectToAction("Index", "Calendar", new { year = y, month = mth });
-
+                // redirect back to calendar month of this appointment
+                var (yy, mm) = GetApptYearMonth(apptId);
+                return RedirectToAction("Index", "Calendar", new { year = yy, month = mm });
             }
             catch (Exception ex)
             {
@@ -319,7 +317,7 @@ return RedirectToAction("Index", "Calendar", new { year = y, month = mth });
         }
 
         // =========================================================
-        // SIGNATURE IMAGE (GET) - show png in <img src="">
+        // ✅ SIGNATURE IMAGE (GET)
         // GET: /Appointment/SignatureImage/5
         // =========================================================
         [HttpGet]
@@ -364,24 +362,8 @@ WHERE APPT_ID = @ID";
             }
         }
 
-        private bool HasSignature(long apptId)
-        {
-            try
-            {
-                using var conn = _db.Open();
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT COUNT(*) FROM APPT_SIGNATURE WHERE APPT_ID = @ID";
-                cmd.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
-                return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
         // =========================================================
-        // LIST
+        // ✅ LIST
         // =========================================================
         public IActionResult Index()
         {
@@ -413,7 +395,7 @@ ORDER BY APPT_START DESC";
         }
 
         // =========================================================
-        // CREATE (GET)
+        // ✅ CREATE (GET)
         // =========================================================
         [HttpGet]
         public IActionResult Create(DateTime? apptStart)
@@ -433,7 +415,7 @@ ORDER BY APPT_START DESC";
         }
 
         // =========================================================
-        // CREATE (POST)
+        // ✅ CREATE (POST)
         // =========================================================
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -478,44 +460,50 @@ ORDER BY APPT_START DESC";
             }
 
             long newApptId;
+
+            // use transaction so appointment + dtl insert is safe
             using (var conn = _db.Open())
-            using (var cmd = conn.CreateCommand())
+            using (var tx = conn.BeginTransaction())
             {
-                cmd.CommandText = @"
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = @"
 INSERT INTO APPOINTMENT
 (CUSTOMER_CODE, AGENT_CODE, APPT_START, TITLE, NOTES, STATUS, CREATED_DT, CREATED_BY)
 VALUES
 (@CUSTOMER_CODE, @AGENT_CODE, @APPT_START, @TITLE, @NOTES, @STATUS, CURRENT_TIMESTAMP, @CREATED_BY)
 RETURNING APPT_ID";
 
-                cmd.Parameters.Add(FirebirdDb.P("@CUSTOMER_CODE", m.CustomerCode, FbDbType.VarChar));
-                cmd.Parameters.Add(FirebirdDb.P("@AGENT_CODE", m.AgentCode, FbDbType.VarChar));
-                cmd.Parameters.Add(FirebirdDb.P("@APPT_START", m.ApptStart, FbDbType.TimeStamp));
-                cmd.Parameters.Add(FirebirdDb.P("@TITLE", string.IsNullOrWhiteSpace(m.Title) ? null : m.Title, FbDbType.VarChar));
-                cmd.Parameters.Add(FirebirdDb.P("@NOTES", m.Notes, FbDbType.Text));
-                cmd.Parameters.Add(FirebirdDb.P("@STATUS", m.Status, FbDbType.VarChar));
-                cmd.Parameters.Add(FirebirdDb.P("@CREATED_BY", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
+                    cmd.Parameters.Add(FirebirdDb.P("@CUSTOMER_CODE", m.CustomerCode, FbDbType.VarChar));
+                    cmd.Parameters.Add(FirebirdDb.P("@AGENT_CODE", m.AgentCode, FbDbType.VarChar));
+                    cmd.Parameters.Add(FirebirdDb.P("@APPT_START", m.ApptStart, FbDbType.TimeStamp));
+                    cmd.Parameters.Add(FirebirdDb.P("@TITLE", string.IsNullOrWhiteSpace(m.Title) ? null : m.Title, FbDbType.VarChar));
+                    cmd.Parameters.Add(FirebirdDb.P("@NOTES", m.Notes, FbDbType.Text));
+                    cmd.Parameters.Add(FirebirdDb.P("@STATUS", m.Status, FbDbType.VarChar));
+                    cmd.Parameters.Add(FirebirdDb.P("@CREATED_BY", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
 
-                newApptId = Convert.ToInt64(cmd.ExecuteScalar());
-            }
+                    newApptId = Convert.ToInt64(cmd.ExecuteScalar());
+                }
 
-            using (var conn = _db.Open())
-            {
                 foreach (var code in selectedServiceCodes)
                 {
-                    using var cmd = conn.CreateCommand();
-                    cmd.CommandText = @"INSERT INTO APPT_DTL (APPT_ID, SERVICE_CODE) VALUES (@APPT_ID, @SERVICE_CODE)";
-                    cmd.Parameters.Add(FirebirdDb.P("@APPT_ID", newApptId, FbDbType.BigInt));
-                    cmd.Parameters.Add(FirebirdDb.P("@SERVICE_CODE", code.Trim(), FbDbType.VarChar));
-                    cmd.ExecuteNonQuery();
+                    using var cmdDtl = conn.CreateCommand();
+                    cmdDtl.Transaction = tx;
+                    cmdDtl.CommandText = @"INSERT INTO APPT_DTL (APPT_ID, SERVICE_CODE) VALUES (@APPT_ID, @SERVICE_CODE)";
+                    cmdDtl.Parameters.Add(FirebirdDb.P("@APPT_ID", newApptId, FbDbType.BigInt));
+                    cmdDtl.Parameters.Add(FirebirdDb.P("@SERVICE_CODE", code.Trim(), FbDbType.VarChar));
+                    cmdDtl.ExecuteNonQuery();
                 }
+
+                tx.Commit();
             }
 
             return RedirectToAction("Index", "Calendar", new { year = m.ApptStart.Year, month = m.ApptStart.Month });
         }
 
         // =========================================================
-        // EDIT (GET)
+        // ✅ EDIT (GET)
         // =========================================================
         [HttpGet]
         public IActionResult Edit(long id)
@@ -557,8 +545,6 @@ WHERE APPT_ID = @id";
                 return NotFound();
 
             ViewBag.SelectedServiceCodes = LoadSelectedServiceCodes(id);
-
-            // show signature section in edit page
             ViewBag.HasSignature = HasSignature(id);
             ViewBag.SignatureUrl = Url.Action("SignatureImage", "Appointment", new { id });
 
@@ -566,7 +552,7 @@ WHERE APPT_ID = @id";
         }
 
         // =========================================================
-        // EDIT (POST)
+        // ✅ EDIT (POST)
         // =========================================================
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -583,8 +569,6 @@ WHERE APPT_ID = @id";
             m.CustomerCode = (m.CustomerCode ?? "").Trim();
             m.AgentCode = (m.AgentCode ?? "").Trim();
             m.Title = (m.Title ?? "").Trim();
-
-            // allow changing status via edit page (or keep booked)
             m.Status = string.IsNullOrWhiteSpace(m.Status) ? "BOOKED" : m.Status.Trim();
 
             if (!ModelState.IsValid)
@@ -612,9 +596,13 @@ WHERE APPT_ID = @id";
             }
 
             using (var conn = _db.Open())
-            using (var cmd = conn.CreateCommand())
+            using (var tx = conn.BeginTransaction())
             {
-                cmd.CommandText = @"
+                // update appointment
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = @"
 UPDATE APPOINTMENT
 SET
   CUSTOMER_CODE = @CUSTOMER_CODE,
@@ -627,22 +615,21 @@ SET
   LAST_UPD_BY   = @BY
 WHERE APPT_ID   = @APPT_ID";
 
-                cmd.Parameters.Add(FirebirdDb.P("@CUSTOMER_CODE", m.CustomerCode, FbDbType.VarChar));
-                cmd.Parameters.Add(FirebirdDb.P("@AGENT_CODE", m.AgentCode, FbDbType.VarChar));
-                cmd.Parameters.Add(FirebirdDb.P("@APPT_START", m.ApptStart, FbDbType.TimeStamp));
-                cmd.Parameters.Add(FirebirdDb.P("@TITLE", string.IsNullOrWhiteSpace(m.Title) ? null : m.Title, FbDbType.VarChar));
-                cmd.Parameters.Add(FirebirdDb.P("@NOTES", m.Notes, FbDbType.Text));
-                cmd.Parameters.Add(FirebirdDb.P("@STATUS", m.Status, FbDbType.VarChar));
-                cmd.Parameters.Add(FirebirdDb.P("@BY", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
-                cmd.Parameters.Add(FirebirdDb.P("@APPT_ID", m.ApptId, FbDbType.BigInt));
+                    cmd.Parameters.Add(FirebirdDb.P("@CUSTOMER_CODE", m.CustomerCode, FbDbType.VarChar));
+                    cmd.Parameters.Add(FirebirdDb.P("@AGENT_CODE", m.AgentCode, FbDbType.VarChar));
+                    cmd.Parameters.Add(FirebirdDb.P("@APPT_START", m.ApptStart, FbDbType.TimeStamp));
+                    cmd.Parameters.Add(FirebirdDb.P("@TITLE", string.IsNullOrWhiteSpace(m.Title) ? null : m.Title, FbDbType.VarChar));
+                    cmd.Parameters.Add(FirebirdDb.P("@NOTES", m.Notes, FbDbType.Text));
+                    cmd.Parameters.Add(FirebirdDb.P("@STATUS", m.Status, FbDbType.VarChar));
+                    cmd.Parameters.Add(FirebirdDb.P("@BY", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
+                    cmd.Parameters.Add(FirebirdDb.P("@APPT_ID", m.ApptId, FbDbType.BigInt));
+                    cmd.ExecuteNonQuery();
+                }
 
-                cmd.ExecuteNonQuery();
-            }
-
-            using (var conn = _db.Open())
-            {
+                // replace details
                 using (var cmdDel = conn.CreateCommand())
                 {
+                    cmdDel.Transaction = tx;
                     cmdDel.CommandText = "DELETE FROM APPT_DTL WHERE APPT_ID = @id";
                     cmdDel.Parameters.Add(FirebirdDb.P("@id", m.ApptId, FbDbType.BigInt));
                     cmdDel.ExecuteNonQuery();
@@ -651,92 +638,111 @@ WHERE APPT_ID   = @APPT_ID";
                 foreach (var code in selectedServiceCodes)
                 {
                     using var cmdIns = conn.CreateCommand();
+                    cmdIns.Transaction = tx;
                     cmdIns.CommandText = "INSERT INTO APPT_DTL (APPT_ID, SERVICE_CODE) VALUES (@APPT_ID, @SERVICE_CODE)";
                     cmdIns.Parameters.Add(FirebirdDb.P("@APPT_ID", m.ApptId, FbDbType.BigInt));
                     cmdIns.Parameters.Add(FirebirdDb.P("@SERVICE_CODE", code.Trim(), FbDbType.VarChar));
                     cmdIns.ExecuteNonQuery();
                 }
+
+                tx.Commit();
             }
 
             return RedirectToAction("Index", "Calendar", new { year = m.ApptStart.Year, month = m.ApptStart.Month });
         }
 
         // =========================================================
-        // DELETE (GET)
+        // ❌ DELETE (GET/POST) DISABLED - we use AJAX delete only
+        // (prevents going to Delete.cshtml)
         // =========================================================
         [HttpGet]
         public IActionResult Delete(long id)
         {
-            Appointment model = null;
-
-            using (var conn = _db.Open())
-            using (var cmd = conn.CreateCommand())
-            {
-                cmd.CommandText = @"
-SELECT APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, TITLE, STATUS
-FROM APPOINTMENT
-WHERE APPT_ID = @id";
-
-                cmd.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
-
-                using var r = cmd.ExecuteReader();
-                if (r.Read())
-                {
-                    model = new Appointment
-                    {
-                        ApptId = r.GetInt64(0),
-                        CustomerCode = r.IsDBNull(1) ? "" : r.GetString(1).Trim(),
-                        AgentCode = r.IsDBNull(2) ? "" : r.GetString(2).Trim(),
-                        ApptStart = r.GetDateTime(3),
-                        Title = r.IsDBNull(4) ? null : r.GetString(4).Trim(),
-                        Status = r.IsDBNull(5) ? "BOOKED" : r.GetString(5).Trim()
-                    };
-                }
-            }
-
-            if (model == null)
-                return NotFound();
-
-            return View(model);
+            return NotFound();
         }
 
-        // =========================================================
-        // DELETE (POST)
-        // =========================================================
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public IActionResult DeleteConfirmed(long id)
         {
-            using (var conn = _db.Open())
-            {
-                using (var cmdSig = conn.CreateCommand())
-                {
-                    cmdSig.CommandText = "DELETE FROM APPT_SIGNATURE WHERE APPT_ID = @id";
-                    cmdSig.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
-                    cmdSig.ExecuteNonQuery();
-                }
-
-                using (var cmdDtl = conn.CreateCommand())
-                {
-                    cmdDtl.CommandText = "DELETE FROM APPT_DTL WHERE APPT_ID = @id";
-                    cmdDtl.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
-                    cmdDtl.ExecuteNonQuery();
-                }
-
-                using (var cmd = conn.CreateCommand())
-                {
-                    cmd.CommandText = "DELETE FROM APPOINTMENT WHERE APPT_ID = @id";
-                    cmd.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
-                    cmd.ExecuteNonQuery();
-                }
-            }
-
-            return RedirectToAction("Index", "Calendar");
+            return NotFound();
         }
 
         // =========================================================
         // HELPERS
         // =========================================================
+
+        private bool HasSignature(long apptId)
+        {
+            try
+            {
+                using var conn = _db.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT COUNT(*) FROM APPT_SIGNATURE WHERE APPT_ID = @ID";
+                cmd.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
+                return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private string GetCustomerCompanyName(string customerCode)
+        {
+            var code = (customerCode ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(code)) return "";
+
+            try
+            {
+                using var conn = _db.Open();
+                using var cmd = conn.CreateCommand();
+
+                cmd.CommandText = @"
+SELECT COMPANYNAME
+FROM AR_CUSTOMER
+WHERE CODE = @CODE";
+
+                cmd.Parameters.Add(FirebirdDb.P("@CODE", code, FbDbType.VarChar));
+
+                var v = cmd.ExecuteScalar();
+                var name = (v == null || v == DBNull.Value) ? "" : v.ToString()?.Trim();
+                return !string.IsNullOrWhiteSpace(name) ? name : code;
+            }
+            catch
+            {
+                return code;
+            }
+        }
+
+        private (int year, int month) GetApptYearMonth(long apptId)
+        {
+            int y = DateTime.Today.Year;
+            int m = DateTime.Today.Month;
+
+            try
+            {
+                using var conn = _db.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT APPT_START FROM APPOINTMENT WHERE APPT_ID = @ID";
+                cmd.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
+
+                var dt = cmd.ExecuteScalar();
+                if (dt != null && dt != DBNull.Value)
+                {
+                    var apptStart = Convert.ToDateTime(dt);
+                    y = apptStart.Year;
+                    m = apptStart.Month;
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
+            return (y, m);
+        }
+
         private void LoadAgentsAndCustomers(out List<dynamic> agents, out List<dynamic> customers)
         {
             agents = new List<dynamic>();
@@ -842,6 +848,7 @@ WHERE APPT_ID = @id";
         {
             using var conn = _db.Open();
 
+            // NOTE: your DB might not have APPT_END, so we keep your fallback logic.
             try
             {
                 using var cmd = conn.CreateCommand();
