@@ -10,63 +10,62 @@
 <h2>Create Appointment</h2>
 
 <style>
+  /* =========================
+     Base form card
+     ========================= */
   .booking-form {
     max-width: 420px;
     margin: 0 auto;
     background: #f8f9fa;
-    border-radius: 10px;
-    padding: 32px 28px 24px 28px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    border-radius: 12px;
+    padding: 28px 24px 22px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+    border: 1px solid rgba(0,0,0,0.06);
+  }
+
+  /* Each form block spacing (Customer, Agent, Time, Services...) */
+  .booking-form .field-block {
+    margin-bottom: 16px;
   }
 
   .booking-form label {
-    font-weight: 600;
-    margin-bottom: 4px;
+    font-weight: 700;
+    margin-bottom: 6px;
     display: block;
+    color: #212529;
+    font-size: 0.95rem;
   }
 
+  /* Inputs / selects */
   .booking-form input,
   .booking-form select {
     width: 100%;
-    padding: 7px 10px;
-    margin-bottom: 14px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    font-size: 1em;
+    padding: 9px 11px;
+    border: 1px solid rgba(0,0,0,0.18);
+    border-radius: 8px;
+    font-size: 1rem;
     background: #fff;
+    margin: 0; /* ✅ IMPORTANT: remove default margin so spacing is controlled by .field-block */
+    outline: none;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
   }
 
-  .booking-form .form-actions {
-    display: flex;
-    gap: 12px;
-    margin-top: 10px;
+  .booking-form input:focus,
+  .booking-form select:focus {
+    border-color: rgba(13,110,253,0.55);
+    box-shadow: 0 0 0 0.18rem rgba(13,110,253,0.18);
   }
 
-  .booking-form button,
-  .booking-form a {
-    padding: 7px 18px;
-    border-radius: 5px;
-    border: none;
-    font-size: 1em;
-    text-decoration: none;
-    color: #fff;
-    background: #007bff;
-    transition: background 0.2s;
-    cursor: pointer;
-  }
-
-  .booking-form a { background: #6c757d; }
-
-  .booking-form button:hover,
-  .booking-form a:hover { background: #0056b3; }
-
+  /* =========================
+     Validation summary
+     ========================= */
   .validation-summary {
     background: #fff3f3;
     border: 1px solid #f5c2c7;
     color: #842029;
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 10px 12px;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
     font-size: 0.95em;
   }
 
@@ -75,46 +74,121 @@
     padding-left: 18px;
   }
 
+  /* =========================
+     Services section
+     ========================= */
   .svc-header {
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px; /* ✅ space between header and the box */
   }
 
-  .svc-add-btn {
-    padding: 6px 10px;
-    border-radius: 6px;
-    border: none;
-    background: #198754;
-    color: #fff;
+  .svc-box {
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 10px;
+    padding: 12px;
+  }
+
+  /* gap between rows + top spacing inside box */
+  #serviceRows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;        /* ✅ spacing between each service row */
+    margin-top: 2px;  /* ✅ small breathing space from top */
   }
 
   .svc-row {
-    display:flex;
-    gap:8px;
-    align-items:center;
-    margin-bottom: 10px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
   }
 
-  .svc-row select { margin-bottom: 0; }
+  /* select inside row */
+  .svc-row .svc-dd {
+    height: 40px;
+  }
+
+  .svc-add-btn {
+    padding: 7px 12px;
+    border-radius: 9px;
+    border: none;
+    background: #198754;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+  }
+
+  .svc-add-btn:hover { filter: brightness(0.95); }
 
   .svc-remove-btn {
-    padding: 6px 10px;
-    border-radius: 6px;
+    width: 44px;
+    height: 40px;
+    border-radius: 9px;
     border: none;
     background: #dc3545;
     color: #fff;
-    height: 38px;
+    font-weight: 900;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
+  .svc-remove-btn:hover { filter: brightness(0.95); }
+
   .svc-hint {
-    display:block;
-    margin-top: 4px;
+    display: block;
+    margin-top: 10px;
     font-size: 0.92em;
     color: #6c757d;
   }
+
+  /* =========================
+     Form action buttons
+     ========================= */
+  .form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .form-actions button,
+  .form-actions a {
+    padding: 9px 18px;
+    border-radius: 9px;
+    border: none;
+    font-size: 1em;
+    text-decoration: none;
+    color: #fff;
+    background: #0d6efd;
+    transition: filter 0.15s ease;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .form-actions a {
+    background: #6c757d;
+  }
+
+  .form-actions button:hover,
+  .form-actions a:hover {
+    filter: brightness(0.95);
+  }
+
+  /* ✅ Extra gap between Appointment Time and Services */
+.appt-time-block {
+  margin-bottom: 26px !important;
+}
+
 </style>
+
+
 
 <form asp-action="Create" method="post" class="booking-form">
   @Html.AntiForgeryToken()
@@ -154,12 +228,24 @@
     </select>
   </div>
 
-  <!-- ✅ Only Appointment Time (ApptStart) -->
-  <div>
-    <label>Appointment Time</label>
-    <input asp-for="ApptStart" type="datetime-local"
-           value="@Model.ApptStart.ToString("yyyy-MM-ddTHH:mm")" />
-  </div>
+<!-- ✅ Split Date + Time (still submit ApptStart) -->
+<div class="field-block appt-time-block">
+  <label>Appointment Date</label>
+  <input type="date" id="ApptDate"
+         value="@Model.ApptStart.ToString("yyyy-MM-dd")" />
+
+  <div style="height:12px;"></div>
+
+  <label>Appointment Time</label>
+  <input type="time" id="ApptTime"
+         value="@Model.ApptStart.ToString("HH:mm")" />
+
+  <!-- ✅ Hidden real field that is submitted to controller -->
+  <input asp-for="ApptStart" type="datetime-local" id="ApptStartHidden" style="display:none;"
+         value="@Model.ApptStart.ToString("yyyy-MM-ddTHH:mm")" />
+</div>
+
+
 
   <!-- ✅ Services (dynamic rows) -->
   <div>
@@ -171,7 +257,7 @@
     <input type="hidden" name="ServiceCodes" id="ServiceCodesHidden" value="" />
     <div id="serviceRows"></div>
 
-    <small class="svc-hint">Tip: Pick 1 or more services. Title will auto-fill from first service.</small>
+    <small class="svc-hint">Tip: Pick the services to include in this appointment.</small>
   </div>
 
   <div class="form-actions">
@@ -187,6 +273,24 @@
     const serviceItems = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
       serviceItemsList.Select(x => new { code = x.CODE, desc = x.DESCRIPTION }).ToList()
     ));
+
+    function syncApptStartHidden() {
+  const d = (document.getElementById('ApptDate')?.value || '').trim();
+  const t = (document.getElementById('ApptTime')?.value || '').trim();
+
+  const hidden = document.getElementById('ApptStartHidden');
+  if (!hidden) return;
+
+  // If either is missing, clear hidden so validation can catch it if you enforce required
+  if (!d || !t) {
+    hidden.value = '';
+    return;
+  }
+
+  // datetime-local expects: YYYY-MM-DDTHH:mm
+  hidden.value = `${d}T${t}`;
+}
+
 
     function escHtml(s) {
       return (s || '')
@@ -258,18 +362,32 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-      addRow('');
+  addRow('');
 
-      document.getElementById('btnAddService').addEventListener('click', function () {
-        addRow('');
-      });
+  // ✅ init hidden datetime from split fields
+  syncApptStartHidden();
 
-      const form = document.querySelector('form.booking-form');
-      if (form) {
-        form.addEventListener('submit', function () {
-          syncHidden();
-        });
-      }
+  // ✅ keep hidden datetime updated live
+  const apptDate = document.getElementById('ApptDate');
+  const apptTime = document.getElementById('ApptTime');
+  if (apptDate) apptDate.addEventListener('change', syncApptStartHidden);
+  if (apptTime) apptTime.addEventListener('change', syncApptStartHidden);
+
+  document.getElementById('btnAddService').addEventListener('click', function () {
+    addRow('');
+  });
+
+  const form = document.querySelector('form.booking-form');
+  if (form) {
+    form.addEventListener('submit', function () {
+      // ✅ ensure ApptStart is correct before submit
+      syncApptStartHidden();
+
+      // existing
+      syncHidden();
     });
+  }
+});
+
   </script>
 }

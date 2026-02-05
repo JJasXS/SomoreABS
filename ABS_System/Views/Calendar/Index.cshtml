@@ -510,9 +510,10 @@
                 var isOpen = panel.style.display === 'block';
                 panel.style.display = isOpen ? 'none' : 'block';
 
-                // rotate caret
-                var caret = t.querySelector('.appt-caret');
-                if (caret) caret.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+                // toggle "...more" / "...less"
+var more = t.querySelector('.appt-more');
+if (more) more.textContent = isOpen ? '(more)' : '(less)';
+
             });
         });
     }
@@ -547,10 +548,14 @@
         var hasMultiServices = servicesHtml && servicesHtml.length > 0;
 
         var titleHtml =
-            '<div class="appt-title appt-title-toggle" style="cursor:' + (hasMultiServices ? 'pointer' : 'default') + '; display:flex; align-items:center; gap:8px;">' +
-                '<span>' + escHtml(toTitleCase(appt.Title || '')) + '</span>' +
-                (hasMultiServices ? '<span class="appt-caret" style="display:inline-block; transition:transform 0.15s ease;">&#9654;</span>' : '') +
-            '</div>';
+    '<div class="appt-title appt-title-toggle" style="cursor:' + (hasMultiServices ? 'pointer' : 'default') + '; display:flex; align-items:center; gap:8px;">' +
+        '<span>' + escHtml(toTitleCase(appt.Title || '')) + '</span>' +
+        (hasMultiServices
+            ? '<span class="appt-more" style="font-size:12px; font-weight:700; opacity:0.85;">(more)</span>'
+            : ''
+        ) +
+    '</div>';
+
 
         return (
             '<div class="appt-card modal-card' + doneClass + '" data-appt-id="' + appt.ApptId + '"' + style + '>' +
