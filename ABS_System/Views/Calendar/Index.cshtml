@@ -161,6 +161,35 @@
 .calendar-shell .scrollable-appt-list{
   max-height: 86px;
 }
+
+.modal-overlay{
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+
+  /* dark background */
+  background: rgba(0,0,0,0.55);
+
+  /* optional nicer look */
+  backdrop-filter: blur(1px);
+
+  /* must be BELOW modal (your modal is z-index:1000) */
+  z-index: 900;
+
+  /* must be clickable */
+  cursor: pointer;
+}
+
+
+/* Force fulfilled look everywhere (grid + modal) */
+.appt-card.is-fulfilled,
+.appt-card.modal-card.is-fulfilled,
+.appt-card.in-cell.is-fulfilled {
+  opacity: 0.45 !important;
+}
+
 </style>
 
 <div class="calendar-toolbar">
