@@ -2,9 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using YourApp.Data;        // AppDbContext + FirebirdDb + DbInitializer
 using FirebirdWeb.Helpers; // DbHelper
 using Microsoft.AspNetCore.Authentication.Cookies;
+using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
-
+QuestPDF.Settings.License = LicenseType.Community; // Set QuestPDF license type
 // =========================
 // Services
 // =========================

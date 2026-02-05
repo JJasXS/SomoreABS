@@ -22,6 +22,9 @@ namespace YourApp.Models
 
         public string? Title { get; set; }
         public string? Notes { get; set; }
+        public string? CustomerName { get; set; }
+        public string? AgentName { get; set; }
+
 
         public string Status { get; set; } = "NEW";
 

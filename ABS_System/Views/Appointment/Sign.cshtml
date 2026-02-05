@@ -1,3 +1,8 @@
+
+<div style="position:fixed; top:10px; right:10px; z-index:99999; background:red; color:white; padding:6px 10px; font-weight:900; border-radius:10px;">
+  SIGN VIEW LOADED ✅ (NEW)
+</div>
+
 @model YourApp.Models.Appointment
 @{
     ViewData["Title"] = "E-Sign Appointment";
@@ -31,10 +36,13 @@
         &larr; Back
     </a>
 
-    <!-- ✅ Print / Save PDF -->
-    <button type="button" class="btn btn-outline-primary" id="printBtn">
-        🖨️ 
-    </button>
+    <a class="btn btn-outline-primary"
+   target="_blank"
+   href="@Url.Action("PrintPdf", "Appointment", new { id = Model.ApptId })">
+    🖨️
+</a>
+
+
 </div>
 
 
@@ -220,7 +228,8 @@
 <style>
 @@media print {
   /* Hide buttons */
-  #printBtn, #submitBtn, #clearBtn, a.btn, button.btn { display:none !important; }
+#submitBtn, #clearBtn, a.btn, button.btn { display:none !important; }
+
 
   /* Remove shadow */
   .card, .shadow-sm { box-shadow:none !important; }
@@ -358,44 +367,8 @@
         dataUrlInput.value = pngDataUrl;
     });
 
-    // =========================
-    // ✅ Print / Save PDF
-    // =========================
-    const printBtn = document.getElementById('printBtn');
 
-    function ensureCanvasPreviewForPrint() {
-        // Some browsers don’t print canvas well, so convert to image
-        const previewId = 'sigCanvasPreviewImg';
-        const old = document.getElementById(previewId);
-        if (old) old.remove();
-
-        if (!hasInk) return;
-
-        const img = document.createElement('img');
-        img.id = previewId;
-        img.src = canvas.toDataURL('image/png');
-        img.alt = 'Signature Preview';
-        img.style.maxWidth = '100%';
-        img.style.height = 'auto';
-        img.style.border = '1px solid rgba(0,0,0,0.12)';
-        img.style.borderRadius = '12px';
-        img.style.padding = '10px';
-        img.style.background = '#fff';
-        img.style.marginTop = '10px';
-
-        const canvasWrap = canvas.closest('div');
-        if (canvasWrap && canvasWrap.parentElement) {
-            canvasWrap.parentElement.appendChild(img);
-        }
-    }
-
-    if (printBtn) {
-        printBtn.addEventListener('click', function () {
-            ensureCanvasPreviewForPrint();
-            window.print();
-        });
-    }
-
+    
 
 })();
 </script>

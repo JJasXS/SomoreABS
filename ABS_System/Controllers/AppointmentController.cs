@@ -1,11 +1,14 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using FirebirdSql.Data.FirebirdClient;
+using QuestPDF.Fluent;
 using YourApp.Data;
 using YourApp.Models;
+using YourApp.Documents;
 
 namespace YourApp.Controllers
 {
@@ -74,7 +77,6 @@ namespace YourApp.Controllers
             }
             catch (Exception ex)
             {
-                // return JSON so frontend can show alert instead of dev error page
                 return StatusCode(500, new { ok = false, message = "Delete failed.", detail = ex.Message });
             }
         }
@@ -118,7 +120,7 @@ WHERE APPT_ID = @ID";
                 if (rows <= 0)
                     return Json(new { ok = false, message = "Appointment not found." });
 
-                return Json(new { ok = true, status = status });
+                return Json(new { ok = true, status });
             }
             catch (Exception ex)
             {
@@ -135,7 +137,7 @@ WHERE APPT_ID = @ID";
         {
             if (id <= 0) return NotFound();
 
-            Appointment appt = null;
+            Appointment? appt = null;
 
             try
             {
@@ -303,11 +305,8 @@ WHERE APPT_ID = @ID";
 
                 tx.Commit();
 
-              TempData["Ok"] = "Signature saved. Appointment marked as FULFILLED.";
-
-// ✅ stay on e-sign page after submit
-return RedirectToAction("Sign", "Appointment", new { id = apptId });
-
+                TempData["Ok"] = "Signature saved. Appointment marked as FULFILLED.";
+                return RedirectToAction("Sign", "Appointment", new { id = apptId });
             }
             catch (Exception ex)
             {
@@ -340,9 +339,9 @@ WHERE APPT_ID = @ID";
                     return NotFound();
 
                 byte[] bytes;
-                using (var ms = new System.IO.MemoryStream())
+                using (var ms = new MemoryStream())
                 {
-                    long read = 0;
+                    long read;
                     long offset = 0;
                     var buffer = new byte[8192];
 
@@ -360,6 +359,114 @@ WHERE APPT_ID = @ID";
             {
                 return NotFound();
             }
+        }
+
+        // =========================================================
+        // ✅ PRINT PDF (QuestPDF)
+        // GET: /Appointment/PrintPdf/5
+        // =========================================================
+        [HttpGet]
+        public IActionResult PrintPdf(long id)
+        {
+            if (id <= 0) return NotFound();
+
+            Appointment? appt = null;
+            byte[]? sigBytes = null;
+            string statementText = "";
+
+            try
+            {
+                using var conn = _db.Open();
+
+                // 1) Load appointment
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = @"
+SELECT APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, TITLE, STATUS, NOTES
+FROM APPOINTMENT
+WHERE APPT_ID = @ID";
+
+                    cmd.Parameters.Add(FirebirdDb.P("@ID", id, FbDbType.BigInt));
+
+                    using var r = cmd.ExecuteReader();
+                    if (r.Read())
+                    {
+                        appt = new Appointment
+                        {
+                            ApptId = r.GetInt64(0),
+                            CustomerCode = r.IsDBNull(1) ? "" : r.GetString(1).Trim(),
+                            AgentCode = r.IsDBNull(2) ? "" : r.GetString(2).Trim(),
+                            ApptStart = r.GetDateTime(3),
+                            Title = r.IsDBNull(4) ? "" : r.GetString(4).Trim(),
+                            Status = r.IsDBNull(5) ? "BOOKED" : r.GetString(5).Trim(),
+                            Notes = r.IsDBNull(6) ? null : r.GetString(6)
+                        };
+                    }
+                }
+
+                if (appt == null) return NotFound();
+
+                // 2) Fill names (safe even if Appointment model doesn't have these props)
+                var custName = GetCustomerName(appt.CustomerCode, conn);
+                var agentName = GetAgentName(appt.AgentCode, conn);
+                SetIfPropertyExists(appt, "CustomerName", custName);
+                SetIfPropertyExists(appt, "AgentName", agentName);
+
+                // 3) Load signature PNG bytes + remarks from APPT_SIGNATURE
+                using (var cmdSig = conn.CreateCommand())
+                {
+                    cmdSig.CommandText = @"
+SELECT SIGNATURE_PNG, REMARKS
+FROM APPT_SIGNATURE
+WHERE APPT_ID = @ID";
+
+                    cmdSig.Parameters.Add(FirebirdDb.P("@ID", id, FbDbType.BigInt));
+
+                    using var r2 = cmdSig.ExecuteReader();
+                    if (r2.Read())
+                    {
+                        // signature bytes
+                        if (!r2.IsDBNull(0))
+                        {
+                            using var ms = new MemoryStream();
+                            long read;
+                            long offset = 0;
+                            var buffer = new byte[8192];
+
+                            while ((read = r2.GetBytes(0, offset, buffer, 0, buffer.Length)) > 0)
+                            {
+                                ms.Write(buffer, 0, (int)read);
+                                offset += read;
+                            }
+                            sigBytes = ms.ToArray();
+                        }
+
+                        if (!r2.IsDBNull(1))
+                            statementText = r2.GetString(1);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "Failed to build PDF: " + ex.Message);
+            }
+
+            // fallback statement if no signature record yet
+            if (string.IsNullOrWhiteSpace(statementText))
+            {
+                statementText =
+                    "I hereby confirm and acknowledge that the appointment details shown are correct. " +
+                    "I agree that this e-signature is valid and may be used as proof of acknowledgement.";
+            }
+
+            // Put statement into Notes for PDF (your PDF uses Notes)
+            appt!.Notes = statementText;
+
+            var doc = new AppointmentPdf(appt, sigBytes);
+            var pdfBytes = doc.GeneratePdf();
+
+            var filename = $"Appointment_{appt.ApptId}.pdf";
+            return File(pdfBytes, "application/pdf", filename);
         }
 
         // =========================================================
@@ -429,8 +536,6 @@ ORDER BY APPT_START DESC";
             m.CustomerCode = (m.CustomerCode ?? "").Trim();
             m.AgentCode = (m.AgentCode ?? "").Trim();
             m.Title = (m.Title ?? "").Trim();
-
-            // force default on create
             m.Status = "BOOKED";
 
             var selectedServiceCodes = ParseCsv(Request.Form["ServiceCodes"].ToString());
@@ -461,7 +566,6 @@ ORDER BY APPT_START DESC";
 
             long newApptId;
 
-            // use transaction so appointment + dtl insert is safe
             using (var conn = _db.Open())
             using (var tx = conn.BeginTransaction())
             {
@@ -513,7 +617,7 @@ RETURNING APPT_ID";
             ViewBag.Customers = customers;
             ViewBag.ServiceItems = LoadServiceItems();
 
-            Appointment model = null;
+            Appointment? model = null;
 
             using (var conn = _db.Open())
             using (var cmd = conn.CreateCommand())
@@ -547,7 +651,6 @@ WHERE APPT_ID = @id";
             ViewBag.SelectedServiceCodes = LoadSelectedServiceCodes(id);
             ViewBag.HasSignature = HasSignature(id);
             ViewBag.SignatureUrl = Url.Action("SignatureImage", "Appointment", new { id, v = DateTime.UtcNow.Ticks });
-
 
             return View(model);
         }
@@ -599,7 +702,6 @@ WHERE APPT_ID = @id";
             using (var conn = _db.Open())
             using (var tx = conn.BeginTransaction())
             {
-                // update appointment
                 using (var cmd = conn.CreateCommand())
                 {
                     cmd.Transaction = tx;
@@ -627,7 +729,6 @@ WHERE APPT_ID   = @APPT_ID";
                     cmd.ExecuteNonQuery();
                 }
 
-                // replace details
                 using (var cmdDel = conn.CreateCommand())
                 {
                     cmdDel.Transaction = tx;
@@ -654,20 +755,13 @@ WHERE APPT_ID   = @APPT_ID";
 
         // =========================================================
         // ❌ DELETE (GET/POST) DISABLED - we use AJAX delete only
-        // (prevents going to Delete.cshtml)
         // =========================================================
         [HttpGet]
-        public IActionResult Delete(long id)
-        {
-            return NotFound();
-        }
+        public IActionResult Delete(long id) => NotFound();
 
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
-        public IActionResult DeleteConfirmed(long id)
-        {
-            return NotFound();
-        }
+        public IActionResult DeleteConfirmed(long id) => NotFound();
 
         // =========================================================
         // HELPERS
@@ -716,6 +810,63 @@ WHERE CODE = @CODE";
             }
         }
 
+        // ✅ Used by PrintPdf - reuses existing conn
+        private string GetCustomerName(string customerCode, FbConnection conn)
+        {
+            var code = (customerCode ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(code)) return "";
+
+            try
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT COMPANYNAME FROM AR_CUSTOMER WHERE CODE = @CODE";
+                cmd.Parameters.Add(FirebirdDb.P("@CODE", code, FbDbType.VarChar));
+
+                var v = cmd.ExecuteScalar();
+                var name = (v == null || v == DBNull.Value) ? "" : v.ToString()?.Trim();
+                return !string.IsNullOrWhiteSpace(name) ? name : code;
+            }
+            catch
+            {
+                return code;
+            }
+        }
+
+        // ✅ Used by PrintPdf - reuses existing conn
+        private string GetAgentName(string agentCode, FbConnection conn)
+        {
+            var code = (agentCode ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(code)) return "";
+
+            try
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT DESCRIPTION FROM AGENT WHERE CODE = @CODE";
+                cmd.Parameters.Add(FirebirdDb.P("@CODE", code, FbDbType.VarChar));
+
+                var v = cmd.ExecuteScalar();
+                var name = (v == null || v == DBNull.Value) ? "" : v.ToString()?.Trim();
+                return !string.IsNullOrWhiteSpace(name) ? name : code;
+            }
+            catch
+            {
+                return code;
+            }
+        }
+
+// ✅ Safe: only sets if property exists (so your code won't crash)
+private static void SetIfPropertyExists(object target, string propName, string value)
+{
+    var prop = target.GetType().GetProperty(propName);
+    if (prop == null) return;
+    if (!prop.CanWrite) return;
+
+    // ✅ For nullable reference types: string? is still typeof(string) at runtime
+    if (prop.PropertyType != typeof(string)) return;
+
+    prop.SetValue(target, value);
+}
+
         private (int year, int month) GetApptYearMonth(long apptId)
         {
             int y = DateTime.Today.Year;
@@ -736,10 +887,7 @@ WHERE CODE = @CODE";
                     m = apptStart.Month;
                 }
             }
-            catch
-            {
-                // ignore
-            }
+            catch { }
 
             return (y, m);
         }
@@ -779,9 +927,9 @@ WHERE CODE = @CODE";
             }
         }
 
-        private List<YourApp.Models.ST_ITEM> LoadServiceItems()
+        private List<ST_ITEM> LoadServiceItems()
         {
-            var serviceItems = new List<YourApp.Models.ST_ITEM>();
+            var serviceItems = new List<ST_ITEM>();
 
             try
             {
@@ -792,7 +940,7 @@ WHERE CODE = @CODE";
                 using var r = cmd.ExecuteReader();
                 while (r.Read())
                 {
-                    serviceItems.Add(new YourApp.Models.ST_ITEM
+                    serviceItems.Add(new ST_ITEM
                     {
                         CODE = r.IsDBNull(0) ? "" : r.GetString(0).Trim(),
                         DESCRIPTION = r.IsDBNull(1) ? "" : r.GetString(1).Trim(),
@@ -800,10 +948,7 @@ WHERE CODE = @CODE";
                     });
                 }
             }
-            catch
-            {
-                // silent
-            }
+            catch { }
 
             return serviceItems;
         }
@@ -849,7 +994,6 @@ WHERE CODE = @CODE";
         {
             using var conn = _db.Open();
 
-            // NOTE: your DB might not have APPT_END, so we keep your fallback logic.
             try
             {
                 using var cmd = conn.CreateCommand();
