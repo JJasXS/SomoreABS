@@ -291,8 +291,6 @@
         }
     </tbody>
 </table>
-
-@section Scripts {
 <script>
     var allAppointments = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(monthAppointments));
     window.agentNames = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.AgentNames ?? new Dictionary<string, string>()));
