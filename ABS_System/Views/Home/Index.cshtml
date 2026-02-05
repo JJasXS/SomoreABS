@@ -2,24 +2,48 @@
 
 @{
     ViewData["Title"] = "Home";
+
+    var titleText = string.IsNullOrWhiteSpace(Model?.HeaderText1)
+        ? "Welcome"
+        : Model!.HeaderText1;
+
+    var subText = string.IsNullOrWhiteSpace(Model?.HeaderText2)
+        ? "This is your appointment booking system."
+        : Model!.HeaderText2;
+
+    var companyName = string.IsNullOrWhiteSpace(Model?.TenantName)
+        ? "My Company"
+        : Model!.TenantName;
 }
 
-@await Html.PartialAsync("_TenantHeader", Model)
+<div class="container" style="max-width: 980px; margin-top: 22px; margin-bottom: 28px;">
+    <div class="card shadow-sm" style="border-radius: 14px;">
+        <div class="card-body p-4 p-md-5 text-center">
 
-<div class="text-center mt-4">
-    <h1 class="display-5 mb-3">
-        @(string.IsNullOrWhiteSpace(Model.HeaderText1) ? "Welcome" : Model.HeaderText1)
-    </h1>
+            <h1 class="display-5 mb-3" style="font-weight: 800;">
+                @titleText
+            </h1>
 
-    <p class="lead mb-4">
-        @(string.IsNullOrWhiteSpace(Model.HeaderText2)
-            ? "This is your appointment booking system."
-            : Model.HeaderText2)
-    </p>
+            <p class="lead mb-4" style="opacity: .85;">
+                @subText
+            </p>
 
-    <p class="mb-4">
-        <a class="btn btn-primary" href="@Url.Action("Login", "Account")">Login with OTP</a>
-    </p>
+            <div class="d-flex justify-content-center gap-2 flex-wrap">
+                <a class="btn btn-primary px-4" href="@Url.Action("Login", "Account")">
+                    Login with OTP
+                </a>
+
+              
+            </div>
+
+            <hr class="my-4" />
+
+            <div class="text-muted" style="font-size: 13px;">
+                <div><b>@companyName</b></div>
+               <!-- <div style="opacity:.8;">Secure access via one-time password (OTP).</div> -->
+                <div style="opacity:.8;">Service managed by ProAcc System Consulting.</div>
+            </div>
+
+        </div>
+    </div>
 </div>
-
-@await Html.PartialAsync("_TenantFooter", Model)

@@ -230,11 +230,23 @@
     </select>
   </div>
 
-  <div>
-    <label>Appointment Time</label>
-    <input asp-for="ApptStart" type="datetime-local"
-           value="@Model.ApptStart.ToString("yyyy-MM-ddTHH:mm")" />
-  </div>
+  <!-- ✅ Split Date + Time (still submit ApptStart) -->
+<div>
+  <label>Appointment Date</label>
+  <input type="date" id="ApptDate"
+         value="@Model.ApptStart.ToString("yyyy-MM-dd")" />
+
+  <div style="height:12px;"></div>
+
+  <label>Appointment Time</label>
+  <input type="time" id="ApptTime"
+         value="@Model.ApptStart.ToString("HH:mm")" />
+
+  <!-- ✅ Hidden real field that is submitted to controller -->
+  <input asp-for="ApptStart" type="datetime-local" id="ApptStartHidden" style="display:none;"
+         value="@Model.ApptStart.ToString("yyyy-MM-ddTHH:mm")" />
+</div>
+
 
   <div>
     <div class="svc-header">
@@ -272,6 +284,26 @@
     // ---------------------------
     // Utils
     // ---------------------------
+
+// ✅ Combine Date + Time into hidden ApptStart for model binding
+function syncApptStartHidden() {
+  const d = (document.getElementById('ApptDate')?.value || '').trim();
+  const t = (document.getElementById('ApptTime')?.value || '').trim();
+  const hidden = document.getElementById('ApptStartHidden');
+
+  if (!hidden) return;
+
+  if (!d || !t) {
+    hidden.value = '';
+    return;
+  }
+
+  hidden.value = `${d}T${t}`; // datetime-local format
+}
+
+
+
+
     function escHtml(s) {
       return (s || '')
         .replace(/&/g, '&amp;')
@@ -417,29 +449,44 @@
     // ---------------------------
     document.addEventListener('DOMContentLoaded', function () {
 
-      // Preload existing selections (Edit)
-      if (Array.isArray(preselected) && preselected.length > 0) {
-        for (const c of preselected) addRow((c || '').trim());
-      } else {
-        addRow('');
-      }
+  // ✅ Init hidden datetime from existing date/time
+  syncApptStartHidden();
 
-      document.getElementById('btnAddService').addEventListener('click', function () {
-        addRow('');
-      });
+  // ✅ keep hidden datetime updated when user changes date/time
+  const apptDate = document.getElementById('ApptDate');
+  const apptTime = document.getElementById('ApptTime');
+  if (apptDate) apptDate.addEventListener('change', syncApptStartHidden);
+  if (apptTime) apptTime.addEventListener('change', syncApptStartHidden);
 
-      const form = document.getElementById('apptForm');
-      if (form) {
-        form.addEventListener('submit', function (e) {
-          syncHidden();
+  // Preload existing selections (Edit)
+  if (Array.isArray(preselected) && preselected.length > 0) {
+    for (const c of preselected) addRow((c || '').trim());
+  } else {
+    addRow('');
+  }
 
-          if (!validateBeforeSubmit()) {
-            e.preventDefault();
-            e.stopPropagation();
-            return false;
-          }
-        });
+  document.getElementById('btnAddService').addEventListener('click', function () {
+    addRow('');
+  });
+
+  const form = document.getElementById('apptForm');
+  if (form) {
+    form.addEventListener('submit', function (e) {
+
+      // ✅ ensure hidden ApptStart is correct before submit
+      syncApptStartHidden();
+
+      // existing services hidden sync
+      syncHidden();
+
+      if (!validateBeforeSubmit()) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
       }
     });
+  }
+});
+
   </script>
 }

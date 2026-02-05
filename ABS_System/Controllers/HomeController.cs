@@ -19,7 +19,7 @@ public class HomeController : Controller
     {
         // For now we always load the DEFAULT tenant.
         // Later you can map TENANT_CODE from host name, query string, etc.
-        var model = LoadTenantBranding("DEFAULT");
+        var model = LoadTenantBranding("SOMORE");
         return View(model);
     }
 

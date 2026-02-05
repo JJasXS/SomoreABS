@@ -1,26 +1,39 @@
-﻿<!DOCTYPE html>
+﻿@using YourApp.Models
+@{
+    var tenant = ViewBag.TenantBranding as TenantBrandingVm;
+    var pageTitle = ViewData["Title"] as string ?? "YourApp";
+}
+
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - ABS_System</title>
-    <script type="importmap"></script>
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/ABS_System.styles.css" asp-append-version="true" />
-</head>
-<body>
-    @* Header removed for custom partial *@
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
-    </div>
+    <title>@pageTitle</title>
 
-    @* Footer removed for custom partial *@
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <!-- ✅ Bootstrap (required for btn, container, card, etc.) -->
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+
+    <!-- ✅ Your custom layout CSS -->
+    <link rel="stylesheet" href="~/css/layout.css" asp-append-version="true" />
+
+    <!-- Optional site css if you have it -->
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+
+<body class="d-flex flex-column min-vh-100">
+
+    @await Html.PartialAsync("~/Views/Shared/_TenantHeader.cshtml", tenant)
+
+    <main class="flex-fill">
+        @RenderBody()
+    </main>
+
+    @await Html.PartialAsync("~/Views/Shared/_TenantFooter.cshtml", tenant)
+
+    <!-- ✅ Bootstrap JS -->
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
-    @await RenderSectionAsync("Scripts", required: false)
+
+    @RenderSection("Scripts", required: false)
 </body>
 </html>
