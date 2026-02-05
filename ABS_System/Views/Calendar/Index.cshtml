@@ -421,10 +421,12 @@
                         '<div class="appt-meta-line"><span class="appt-meta-label">Cust:</span> <span class="appt-meta-value">' + escHtml(cust) + '</span></div>' +
                         '<div class="appt-meta-line"><span class="appt-meta-label">Agent:</span> <span class="appt-meta-value">' + escHtml(agent) + '</span></div>' +
 
-                        '<div class="appt-actions" style="margin-top:6px; display:flex; gap:6px; align-items:center;">' +
-                            '<a href="/Appointment/Edit/' + appt.ApptId + '" class="btn btn-sm btn-primary">Edit</a>' +
-                            '<a href="/Appointment/Delete/' + appt.ApptId + '" class="btn btn-sm btn-danger" onclick="return confirm(\'Are you sure you want to delete this appointment?\');">Delete</a>' +
-                        '</div>' +
+                       '<div class="appt-actions" style="margin-top:6px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">' +
+    '<a href="/Appointment/Edit/' + appt.ApptId + '" class="btn btn-sm btn-primary">Edit</a>' +
+    '<a href="/Appointment/Sign/' + appt.ApptId + '" class="btn btn-sm btn-secondary">Submit E-Sign</a>' +
+    '<a href="/Appointment/Delete/' + appt.ApptId + '" class="btn btn-sm btn-danger" onclick="return confirm(\'Are you sure you want to delete this appointment?\');">Delete</a>' +
+'</div>' +
+
                     '</div>' +
                 '</div>'
             );

@@ -1,0 +1,314 @@
+@model YourApp.Models.Appointment
+@{
+    ViewData["Title"] = "E-Sign Appointment";
+
+    bool hasSig = (bool)(ViewBag.HasSignature ?? false);
+    string sigUrl = (string)(ViewBag.SignatureUrl ?? "");
+    string defaultSignedBy = (string)(ViewBag.DefaultSignedBy ?? "");
+    string statementText = (string)(ViewBag.StatementText ?? "");
+}
+
+@await Html.PartialAsync("~/Views/Shared/LayoutPartials/_Header.cshtml")
+
+<div class="container" style="max-width: 980px; margin-top: 18px; margin-bottom: 24px;">
+    <div class="card shadow-sm" style="border-radius: 14px;">
+        <div class="card-body">
+
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                <div>
+                    <h3 style="margin:0; font-weight:800;">E-Signature</h3>
+                    <div style="margin-top:4px; font-size:12px; opacity:.75;">
+                        Appointment ID: <b>@Model.ApptId</b>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <a class="btn btn-secondary" href="/Appointment/Edit/@Model.ApptId">Back to Edit</a>
+                    <a class="btn btn-outline-secondary" href="/Calendar/Index?year=@Model.ApptStart.Year&month=@Model.ApptStart.Month">Back to Calendar</a>
+                </div>
+            </div>
+
+            <hr />
+
+            @if (TempData["Err"] != null)
+            {
+                <div class="alert alert-danger" style="border-radius:12px;">
+                    @TempData["Err"]
+                </div>
+            }
+            @if (TempData["Ok"] != null)
+            {
+                <div class="alert alert-success" style="border-radius:12px;">
+                    @TempData["Ok"]
+                </div>
+            }
+
+            <!-- =========================
+                 Appointment summary
+                 ========================= -->
+            <div class="row" style="row-gap: 12px;">
+                <div class="col-md-7">
+                    <div class="card" style="border-radius:14px; border:1px solid rgba(0,0,0,0.08);">
+                        <div class="card-body">
+                            <div style="font-weight:800; margin-bottom:10px;">Appointment Details</div>
+
+                            <div class="row" style="row-gap:8px;">
+                                <div class="col-sm-6">
+                                    <div style="font-size:12px; opacity:.7;">Date/Time</div>
+                                    <div style="font-weight:700;">@Model.ApptStart.ToString("yyyy-MM-dd HH:mm")</div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div style="font-size:12px; opacity:.7;">Status</div>
+                                    <div style="font-weight:700;">@(Model.Status ?? "")</div>
+                                </div>
+
+                                <div class="col-sm-6">
+                                    <div style="font-size:12px; opacity:.7;">Customer Code</div>
+                                    <div style="font-weight:700;">@(Model.CustomerCode ?? "")</div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div style="font-size:12px; opacity:.7;">Agent Code</div>
+                                    <div style="font-weight:700;">@(Model.AgentCode ?? "")</div>
+                                </div>
+
+                                <div class="col-12">
+                                    <div style="font-size:12px; opacity:.7;">Title</div>
+                                    <div style="font-weight:700;">@(Model.Title ?? "")</div>
+                                </div>
+
+                                @if (!string.IsNullOrWhiteSpace(Model.Notes))
+                                {
+                                    <div class="col-12">
+                                        <div style="font-size:12px; opacity:.7;">Notes</div>
+                                        <div style="white-space:pre-wrap;">@Model.Notes</div>
+                                    </div>
+                                }
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-5">
+                    <div class="card" style="border-radius:14px; border:1px solid rgba(0,0,0,0.08);">
+                        <div class="card-body">
+                            <div style="font-weight:800; margin-bottom:10px;">Existing Signature</div>
+
+                            @if (hasSig && !string.IsNullOrWhiteSpace(sigUrl))
+                            {
+                                <div style="border:1px solid rgba(0,0,0,0.12); border-radius:12px; padding:10px; background:#fff;">
+                                    <img src="@sigUrl" alt="Signature" style="max-width:100%; height:auto;" />
+                                </div>
+                                <div style="margin-top:8px; font-size:12px; opacity:.75;">
+                                    Submitting again will <b>replace</b> the existing signature.
+                                </div>
+                            }
+                            else
+                            {
+                                <div style="font-size:12px; opacity:.75;">
+                                    No signature saved yet.
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="height: 14px;"></div>
+
+            <form method="post" action="/Appointment/SignSave" id="signForm">
+                @Html.AntiForgeryToken()
+
+                <input type="hidden" name="apptId" value="@Model.ApptId" />
+                <input type="hidden" name="signatureDataUrl" id="signatureDataUrl" value="" />
+                <input type="hidden" name="statementText" id="statementTextHidden" value="" />
+
+                <!-- =========================
+                     Statement + agree
+                     ========================= -->
+                <div class="card" style="border-radius:14px; border:1px solid rgba(0,0,0,0.08);">
+                    <div class="card-body">
+                        <div style="font-weight:800; margin-bottom:8px;">Statement</div>
+
+                        <div id="statementBox"
+                             style="background:#f8f9fa; border-radius:12px; padding:12px; border:1px solid rgba(0,0,0,0.08); white-space:pre-wrap;">
+                            @statementText
+                        </div>
+
+                        <div class="form-check" style="margin-top:10px;">
+                            <input class="form-check-input" type="checkbox" value="1" id="agreeCb">
+                            <label class="form-check-label" for="agreeCb" style="font-weight:700;">
+                                I agree to the statement above.
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="height: 12px;"></div>
+
+                <!-- =========================
+                     Signed By / Remarks
+                     ========================= -->
+                <div class="row" style="row-gap: 12px;">
+                    <div class="col-md-6">
+                        <label style="font-weight:700;">Signed By (Name)</label>
+                        <input class="form-control" name="signedBy" value="@defaultSignedBy" placeholder="Enter name (optional)" />
+                        <div style="font-size:12px; opacity:.7; margin-top:4px;">
+                            Customer can type their name here (optional).
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label style="font-weight:700;">Remarks (Optional)</label>
+                        <input class="form-control" name="remarks" placeholder="Optional notes" />
+                    </div>
+                </div>
+
+                <div style="height: 12px;"></div>
+
+                <!-- =========================
+                     Signature Pad
+                     ========================= -->
+                <div class="card" style="border-radius:14px; border:1px solid rgba(0,0,0,0.08);">
+                    <div class="card-body">
+                        <div style="font-weight:800; margin-bottom:8px;">Signature</div>
+
+                        <div style="border:1px solid rgba(0,0,0,0.18); border-radius:12px; overflow:hidden; background:#fff;">
+                            <canvas id="sigCanvas" style="width:100%; height:220px; display:block;"></canvas>
+                        </div>
+
+                        <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
+                            <button type="button" class="btn btn-outline-secondary" id="clearBtn">Clear</button>
+                            <button type="submit" class="btn btn-primary" id="submitBtn">Submit Signature</button>
+                        </div>
+
+                        <div style="font-size:12px; opacity:.75; margin-top:8px;">
+                            Use mouse or finger to sign. Press <b>Clear</b> to redo.
+                        </div>
+                    </div>
+                </div>
+
+            </form>
+
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const canvas = document.getElementById('sigCanvas');
+    const clearBtn = document.getElementById('clearBtn');
+    const form = document.getElementById('signForm');
+    const dataUrlInput = document.getElementById('signatureDataUrl');
+    const agreeCb = document.getElementById('agreeCb');
+    const statementBox = document.getElementById('statementBox');
+    const statementHidden = document.getElementById('statementTextHidden');
+
+    // IMPORTANT: resize canvas to match CSS size, and keep drawing accurate on HiDPI
+    function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+
+        // reset size
+        canvas.width = Math.floor(rect.width * ratio);
+        canvas.height = Math.floor(rect.height * ratio);
+
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#111';
+    }
+
+    let drawing = false;
+    let hasInk = false;
+
+    function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+        const clientY = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
+        return { x: clientX - rect.left, y: clientY - rect.top };
+    }
+
+    function startDraw(e) {
+        e.preventDefault();
+        drawing = true;
+
+        const p = getPos(e);
+        const ctx = canvas.getContext('2d');
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+    }
+
+    function moveDraw(e) {
+        if (!drawing) return;
+        e.preventDefault();
+
+        const p = getPos(e);
+        const ctx = canvas.getContext('2d');
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        hasInk = true;
+    }
+
+    function endDraw(e) {
+        if (!drawing) return;
+        e.preventDefault();
+        drawing = false;
+    }
+
+    function clearCanvas() {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        hasInk = false;
+    }
+
+    // init
+    window.addEventListener('resize', function () {
+        // resizing clears canvas; acceptable for our use-case
+        resizeCanvas();
+        hasInk = false;
+    });
+
+    // run once after layout
+    setTimeout(resizeCanvas, 0);
+
+    // mouse
+    canvas.addEventListener('mousedown', startDraw);
+    canvas.addEventListener('mousemove', moveDraw);
+    canvas.addEventListener('mouseup', endDraw);
+    canvas.addEventListener('mouseleave', endDraw);
+
+    // touch
+    canvas.addEventListener('touchstart', startDraw, { passive: false });
+    canvas.addEventListener('touchmove', moveDraw, { passive: false });
+    canvas.addEventListener('touchend', endDraw, { passive: false });
+
+    clearBtn.addEventListener('click', function () {
+        clearCanvas();
+    });
+
+    form.addEventListener('submit', function (e) {
+        const statement = (statementBox ? statementBox.innerText : '').trim();
+        statementHidden.value = statement;
+
+        if (!agreeCb.checked) {
+            e.preventDefault();
+            alert('Please tick "I agree" before submitting.');
+            return;
+        }
+
+        if (!hasInk) {
+            e.preventDefault();
+            alert('Please sign in the signature box before submitting.');
+            return;
+        }
+
+        // export PNG base64
+        const pngDataUrl = canvas.toDataURL('image/png');
+        dataUrlInput.value = pngDataUrl;
+    });
+})();
+</script>
+
+@await Html.PartialAsync("~/Views/Shared/LayoutPartials/_Footer.cshtml")
