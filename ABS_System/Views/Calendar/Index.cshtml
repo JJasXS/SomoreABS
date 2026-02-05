@@ -43,6 +43,7 @@
 }
 
 <link rel="stylesheet" href="~/css/calendar.css" />
+<div class="calendar-shell">
 
 <h2 class="calendar-title">
     Calendar -
@@ -111,60 +112,55 @@
 </div>
 
 <style>
-    .modal-overlay {
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,0.5);
-        z-index: 1000;
-        display: none;
-    }
+/* ================================
+   ✅ Full-width (stretch) calendar
+   ================================ */
 
-    .custom-modal { z-index: 1001; }
-    #confirmDeleteModal { z-index: 1002; }
+/* 1) Make the outer wrapper stretch the page */
+.calendar-shell{
+  width: 100% !important;     /* ✅ stretch */
+  max-width: none !important; /* ✅ remove limit */
+  margin: 0 !important;       /* ✅ no centering gap */
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 2px 14px rgba(0,0,0,0.06);
+}
 
-    /* Done look */
-    .appt-card.is-fulfilled {
-        opacity: 0.45;
-        transition: opacity 0.15s ease;
-    }
+/* 2) Make the toolbar stretch too */
+.calendar-shell .calendar-toolbar{
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 0 12px 0 !important;
+}
 
-    /* calendar in-cell smaller */
-    .appt-card.in-cell { font-size: 0.74rem !important; }
-    .appt-card.in-cell .appt-title,
-    .appt-card.in-cell .appt-time { font-size: 0.82rem !important; }
+/* 3) IMPORTANT: make the calendar table stretch */
+.calendar-shell .calendar-table{
+  width: 100% !important;     /* ✅ stretch full width */
+  margin: 0 !important;
+  table-layout: fixed;        /* ✅ equal width columns */
+}
 
-    .appt-top {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-    }
+/* 4) Slightly tighter cells (optional) */
+.calendar-shell .calendar-table th,
+.calendar-shell .calendar-table td{
+  padding: 6px !important;
+  vertical-align: top;
+}
 
-    .appt-top-right {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
+/* 5) Prevent long titles from breaking layout */
+.calendar-shell .appt-card.in-cell .appt-title{
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-    .appt-done-wrap {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        user-select: none;
-        font-size: 12px;
-        opacity: 0.95;
-    }
-
-    .appt-done-wrap input[type="checkbox"] {
-        width: 16px;
-        height: 16px;
-        cursor: pointer;
-    }
-
-    .appt-saving {
-        pointer-events: none;
-        opacity: 0.7;
-    }
+/* 6) Optional: reduce the appt list height so cells stay tidy */
+.calendar-shell .scrollable-appt-list{
+  max-height: 86px;
+}
 </style>
 
 <div class="calendar-toolbar">
@@ -290,6 +286,8 @@
         }
     </tbody>
 </table>
+</div>
+
 
 @section Scripts {
 <script>
