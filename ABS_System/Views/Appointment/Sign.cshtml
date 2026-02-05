@@ -11,7 +11,11 @@
 
 <div class="container" style="max-width: 980px; margin-top: 18px; margin-bottom: 24px;">
     <div class="card shadow-sm" style="border-radius: 14px;">
+
+
         <div class="card-body">
+            <div id="printArea">
+
 
             <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
                 <div>
@@ -26,7 +30,13 @@
        href="/Calendar/Index?year=@Model.ApptStart.Year&month=@Model.ApptStart.Month">
         &larr; Back
     </a>
+
+    <!-- ✅ Print / Save PDF -->
+    <button type="button" class="btn btn-outline-primary" id="printBtn">
+        🖨️ 
+    </button>
 </div>
+
 
             </div>
 
@@ -202,10 +212,36 @@
                 </div>
 
             </form>
-
+</div><!-- /#printArea -->
         </div>
     </div>
 </div>
+
+<style>
+@@media print {
+  /* Hide buttons */
+  #printBtn, #submitBtn, #clearBtn, a.btn, button.btn { display:none !important; }
+
+  /* Remove shadow */
+  .card, .shadow-sm { box-shadow:none !important; }
+
+  /* Print only printArea */
+  body * { visibility:hidden !important; }
+  #printArea, #printArea * { visibility:visible !important; }
+
+  #printArea {
+    position:absolute;
+    left:0; top:0;
+    width:100% !important;
+  }
+
+  .container { max-width:100% !important; margin:0 !important; }
+  img { max-width:100% !important; height:auto !important; }
+
+  .card { break-inside:avoid; page-break-inside:avoid; }
+}
+</style>
+
 
 <script>
 (function () {
@@ -321,6 +357,46 @@
         const pngDataUrl = canvas.toDataURL('image/png');
         dataUrlInput.value = pngDataUrl;
     });
+
+    // =========================
+    // ✅ Print / Save PDF
+    // =========================
+    const printBtn = document.getElementById('printBtn');
+
+    function ensureCanvasPreviewForPrint() {
+        // Some browsers don’t print canvas well, so convert to image
+        const previewId = 'sigCanvasPreviewImg';
+        const old = document.getElementById(previewId);
+        if (old) old.remove();
+
+        if (!hasInk) return;
+
+        const img = document.createElement('img');
+        img.id = previewId;
+        img.src = canvas.toDataURL('image/png');
+        img.alt = 'Signature Preview';
+        img.style.maxWidth = '100%';
+        img.style.height = 'auto';
+        img.style.border = '1px solid rgba(0,0,0,0.12)';
+        img.style.borderRadius = '12px';
+        img.style.padding = '10px';
+        img.style.background = '#fff';
+        img.style.marginTop = '10px';
+
+        const canvasWrap = canvas.closest('div');
+        if (canvasWrap && canvasWrap.parentElement) {
+            canvasWrap.parentElement.appendChild(img);
+        }
+    }
+
+    if (printBtn) {
+        printBtn.addEventListener('click', function () {
+            ensureCanvasPreviewForPrint();
+            window.print();
+        });
+    }
+
+
 })();
 </script>
 
