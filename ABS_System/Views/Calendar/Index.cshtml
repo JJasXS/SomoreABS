@@ -957,14 +957,23 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
       btnYes.disabled = true;
 
       try {
-        await deleteAppointmentAjax(pendingDeleteId);
-        removeAppointmentFromUI(pendingDeleteId);
-        closeConfirmDeleteModal();
-      } catch (err) {
-        alert('Failed to delete appointment: ' + (err && err.message ? err.message : err));
-      } finally {
-        btnYes.disabled = false;
-      }
+  await deleteAppointmentAjax(pendingDeleteId);
+
+  closeConfirmDeleteModal();
+
+// ✅ close any open modals + overlay immediately (no chance to "stay")
+closeMainModals(); // closes day/month + overlay
+
+// ✅ HARD refresh (best)
+window.location.href = window.location.href; 
+return;
+
+} catch (err) {
+  alert('Failed to delete appointment: ' + (err && err.message ? err.message : err));
+  btnYes.disabled = false; // only re-enable if delete failed
+}
+
+
     });
 
     // =========================
