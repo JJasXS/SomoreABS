@@ -440,36 +440,49 @@
                                 @if (appts.Count > 0)
                                 {
                                     <div class="scrollable-appt-list appt-card-list in-cell">
-                                        @foreach (var appt in appts)
-                                        {
-                                            var agentCode = (appt.AgentCode ?? "").Trim();
-                                            string cardColor = null;
+                                     
+                                     
+                                     @foreach (var appt in appts)
+{
+    var agentCode = (appt.AgentCode ?? "").Trim();
+    string cardColor = null;
 
-                                            if (!string.IsNullOrEmpty(agentCode) && agentColors.TryGetValue(agentCode, out var c))
-                                                cardColor = c;
+    if (!string.IsNullOrEmpty(agentCode) && agentColors.TryGetValue(agentCode, out var c))
+        cardColor = c;
 
-                                            var style = "display:flex !important; align-items:center !important; min-height:20px !important; padding:2px 8px !important;";
-                                            if (!string.IsNullOrEmpty(cardColor))
-                                                style = $"background-color:{cardColor} !important; " + style;
+    var style = "display:flex !important; align-items:center !important; min-height:20px !important; padding:2px 8px !important;";
+    if (!string.IsNullOrEmpty(cardColor))
+        style = $"background-color:{cardColor} !important; " + style;
 
-                                            var statusUp = (appt.Status ?? "").Trim().ToUpperInvariant();
-                                            var isDone = (statusUp == "FULFILLED" || statusUp == "DONE" || statusUp == "COMPLETED");
-                                            var doneClass = isDone ? " is-fulfilled" : "";
-                                            var rawTitle = (appt.Title ?? "").Trim();
-                                            var titleCased = string.IsNullOrWhiteSpace(rawTitle)
-                                                ? rawTitle
-                                                : System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(rawTitle.ToLower());
+    var statusUp = (appt.Status ?? "").Trim().ToUpperInvariant();
+    var isDone = (statusUp == "FULFILLED" || statusUp == "DONE" || statusUp == "COMPLETED");
+    var doneClass = isDone ? " is-fulfilled" : "";
 
-                                            <div class="appt-card in-cell@doneClass"
-                                                 data-appt-id="@appt.ApptId"
-                                                 data-status="@statusUp"
-                                                 style="@style">
-                                                <span class="appt-title" style="@(isDone ? "opacity:0.45; font-weight:500;" : "")">
-                                                    @titleCased
-                                                </span>
-                                            </div>
-                                        }
-                                    </div>
+    // ✅ Title = Customer Name (same mapping as modal)
+    var custCode = (appt.CustomerCode ?? "").Trim();
+    var custName = (!string.IsNullOrEmpty(custCode) && customerNames.TryGetValue(custCode, out var cn))
+        ? (cn ?? "").Trim()
+        : "";
+
+    // ✅ Keep customer casing (DON'T ToLower customer names)
+    var displayTitle = !string.IsNullOrWhiteSpace(custName)
+        ? custName
+        : (!string.IsNullOrWhiteSpace(custCode) ? custCode : (appt.Title ?? ""));
+
+    <text>
+        <div class="appt-card in-cell@doneClass"
+             data-appt-id="@appt.ApptId"
+             data-status="@statusUp"
+             style="@style">
+            <span class="appt-title" style="@(isDone ? "opacity:0.45; font-weight:500;" : "")">
+                @displayTitle
+            </span>
+        </div>
+    </text>
+}
+
+                                     
+                                      </div>
                                 }
                             </td>
 
