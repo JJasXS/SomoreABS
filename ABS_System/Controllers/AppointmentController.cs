@@ -362,6 +362,66 @@ WHERE APPT_ID = @ID";
         }
 
         // =========================================================
+        // ✅ NEW: Get services purchased by customer (SAFE ADD-ON)
+        // GET: /Appointment/GetCustomerServices?customerCode=XXXX
+        //
+        // ✅ REQUIREMENT (your request):
+        // - Use SL_SO + SL_SODTL ONLY
+        // - "items" returned are ONLY those present in customer's SL_SO/SL_SODTL
+        // - description comes from SL_SODTL (not ST_ITEM)
+        // =========================================================
+        [HttpGet]
+        public IActionResult GetCustomerServices(string customerCode)
+        {
+            customerCode = (customerCode ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(customerCode))
+                return Json(new { ok = true, items = new List<object>() });
+
+            try
+            {
+                using var conn = _db.Open();
+                using var cmd = conn.CreateCommand();
+
+                // ✅ CONFIRMED MAPPING:
+                // SL_SO.CODE     = Customer Code
+                // SL_SO.DOCNO    joins SL_SODTL.DOCNO
+                // SL_SODTL.ITEMCODE = purchased item/service code
+                //
+                // ✅ IMPORTANT:
+                // Replace d.DESCRIPTION below if your SL_SODTL uses another column name
+                // e.g. d.ITEMDESC / d.DESC / d.DESC1 etc.
+                cmd.CommandText = @"
+SELECT DISTINCT
+    d.ITEMCODE,
+    TRIM(COALESCE(d.DESCRIPTION, d.ITEMCODE)) AS ITEMDESC
+FROM SL_SO s
+JOIN SL_SODTL d ON d.DOCKEY = s.DOCKEY
+WHERE s.CODE = @CUST
+ORDER BY 2";
+
+
+                cmd.Parameters.Add(FirebirdDb.P("@CUST", customerCode, FbDbType.VarChar));
+
+                var items = new List<object>();
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    var code = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                    var desc = r.IsDBNull(1) ? "" : r.GetString(1).Trim();
+
+                    if (!string.IsNullOrWhiteSpace(code))
+                        items.Add(new { code, desc });
+                }
+
+                return Json(new { ok = true, items });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { ok = false, message = "Failed to load customer services.", detail = ex.Message });
+            }
+        }
+
+        // =========================================================
         // ✅ PRINT PDF (QuestPDF)
         // GET: /Appointment/PrintPdf/5
         // =========================================================
@@ -505,31 +565,28 @@ ORDER BY APPT_START DESC";
         // ✅ CREATE (GET)
         // =========================================================
         [HttpGet]
-public IActionResult Create(DateTime? apptStart)
-{
-    var email = (User?.Identity?.Name ?? "").Trim();
+        public IActionResult Create(DateTime? apptStart)
+        {
+            var email = (User?.Identity?.Name ?? "").Trim();
 
-    // ✅ STEP 2: get logged-in user's BRANCHNO from AGENT table
-    var branchNo = GetBranchNoByEmail(email);
+            // ✅ STEP 2: get logged-in user's BRANCHNO from AGENT table
+            var branchNo = GetBranchNoByEmail(email);
 
-    var start = apptStart ?? DateTime.Now;
+            var start = apptStart ?? DateTime.Now;
 
-    // ✅ load only agents from same branch
-    LoadAgentsAndCustomers(branchNo, out var agents, out var customers);
+            // ✅ load only agents from same branch
+            LoadAgentsAndCustomers(branchNo, out var agents, out var customers);
 
-    ViewBag.Agents = agents;
-    ViewBag.Customers = customers;
-    ViewBag.ServiceItems = LoadServiceItems();
+            ViewBag.Agents = agents;
+            ViewBag.Customers = customers;
+            ViewBag.ServiceItems = LoadServiceItems();
 
-    return View(new Appointment
-    {
-        ApptStart = start,
-        Status = "BOOKED"
-    });
-}
-
-
-
+            return View(new Appointment
+            {
+                ApptStart = start,
+                Status = "BOOKED"
+            });
+        }
 
         // =========================================================
         // ✅ CREATE (POST)
@@ -538,10 +595,9 @@ public IActionResult Create(DateTime? apptStart)
         [ValidateAntiForgeryToken]
         public IActionResult Create(Appointment m)
         {
-            
             var email = (User?.Identity?.Name ?? "").Trim();
-var branchNo = GetBranchNoByEmail(email);
-LoadAgentsAndCustomers(branchNo, out var agents, out var customers);
+            var branchNo = GetBranchNoByEmail(email);
+            LoadAgentsAndCustomers(branchNo, out var agents, out var customers);
 
             ViewBag.Agents = agents;
             ViewBag.Customers = customers;
@@ -627,8 +683,8 @@ RETURNING APPT_ID";
         public IActionResult Edit(long id)
         {
             var email = (User?.Identity?.Name ?? "").Trim();
-var branchNo = GetBranchNoByEmail(email);
-LoadAgentsAndCustomers(branchNo, out var agents, out var customers);
+            var branchNo = GetBranchNoByEmail(email);
+            LoadAgentsAndCustomers(branchNo, out var agents, out var customers);
 
             ViewBag.Agents = agents;
             ViewBag.Customers = customers;
@@ -680,8 +736,8 @@ WHERE APPT_ID = @id";
         public IActionResult Edit(Appointment m)
         {
             var email = (User?.Identity?.Name ?? "").Trim();
-var branchNo = GetBranchNoByEmail(email);
-LoadAgentsAndCustomers(branchNo, out var agents, out var customers);
+            var branchNo = GetBranchNoByEmail(email);
+            LoadAgentsAndCustomers(branchNo, out var agents, out var customers);
 
             ViewBag.Agents = agents;
             ViewBag.Customers = customers;
@@ -874,18 +930,18 @@ WHERE CODE = @CODE";
             }
         }
 
-// ✅ Safe: only sets if property exists (so your code won't crash)
-private static void SetIfPropertyExists(object target, string propName, string value)
-{
-    var prop = target.GetType().GetProperty(propName);
-    if (prop == null) return;
-    if (!prop.CanWrite) return;
+        // ✅ Safe: only sets if property exists (so your code won't crash)
+        private static void SetIfPropertyExists(object target, string propName, string value)
+        {
+            var prop = target.GetType().GetProperty(propName);
+            if (prop == null) return;
+            if (!prop.CanWrite) return;
 
-    // ✅ For nullable reference types: string? is still typeof(string) at runtime
-    if (prop.PropertyType != typeof(string)) return;
+            // ✅ For nullable reference types: string? is still typeof(string) at runtime
+            if (prop.PropertyType != typeof(string)) return;
 
-    prop.SetValue(target, value);
-}
+            prop.SetValue(target, value);
+        }
 
         private (int year, int month) GetApptYearMonth(long apptId)
         {
@@ -912,53 +968,52 @@ private static void SetIfPropertyExists(object target, string propName, string v
             return (y, m);
         }
 
-private void LoadAgentsAndCustomers(string branchNo, out List<dynamic> agents, out List<dynamic> customers)
-{
-    agents = new List<dynamic>();
-    customers = new List<dynamic>();
+        private void LoadAgentsAndCustomers(string branchNo, out List<dynamic> agents, out List<dynamic> customers)
+        {
+            agents = new List<dynamic>();
+            customers = new List<dynamic>();
 
-    branchNo = (branchNo ?? "").Trim();
+            branchNo = (branchNo ?? "").Trim();
 
-    using var conn = _db.Open();
-    using var cmd = conn.CreateCommand();
+            using var conn = _db.Open();
+            using var cmd = conn.CreateCommand();
 
-    // ✅ Filter agent list by branchNo (if branchNo empty, return none for safety)
-cmd.CommandText = @"
+            // ✅ Filter agent list by branchNo
+            cmd.CommandText = @"
 SELECT CODE, DESCRIPTION
 FROM AGENT
 WHERE (@BRANCHNO = '1' OR BRANCHNO = @BRANCHNO)
 ORDER BY DESCRIPTION";
 
-cmd.Parameters.Add(FirebirdDb.P("@BRANCHNO", branchNo, FbDbType.VarChar));
+            cmd.Parameters.Add(FirebirdDb.P("@BRANCHNO", branchNo, FbDbType.VarChar));
 
-
-    using (var r = cmd.ExecuteReader())
-    {
-        while (r.Read())
-        {
-            agents.Add(new
+            using (var r = cmd.ExecuteReader())
             {
-                Code = r.IsDBNull(0) ? "" : r.GetString(0).Trim(),
-                Description = r.IsDBNull(1) ? "" : r.GetString(1).Trim()
-            });
-        }
-    }
+                while (r.Read())
+                {
+                    agents.Add(new
+                    {
+                        Code = r.IsDBNull(0) ? "" : r.GetString(0).Trim(),
+                        Description = r.IsDBNull(1) ? "" : r.GetString(1).Trim()
+                    });
+                }
+            }
 
-    // ✅ Customers stays same (no branch filter)
-    cmd.Parameters.Clear();
-    cmd.CommandText = "SELECT CODE, COMPANYNAME FROM AR_CUSTOMER ORDER BY COMPANYNAME";
-    using (var r = cmd.ExecuteReader())
-    {
-        while (r.Read())
-        {
-            customers.Add(new
+            // ✅ Customers stays same
+            cmd.Parameters.Clear();
+            cmd.CommandText = "SELECT CODE, COMPANYNAME FROM AR_CUSTOMER ORDER BY COMPANYNAME";
+            using (var r = cmd.ExecuteReader())
             {
-                Code = r.IsDBNull(0) ? "" : r.GetString(0).Trim(),
-                Name = r.IsDBNull(1) ? "" : r.GetString(1).Trim()
-            });
+                while (r.Read())
+                {
+                    customers.Add(new
+                    {
+                        Code = r.IsDBNull(0) ? "" : r.GetString(0).Trim(),
+                        Name = r.IsDBNull(1) ? "" : r.GetString(1).Trim()
+                    });
+                }
+            }
         }
-    }
-}
 
         private List<ST_ITEM> LoadServiceItems()
         {
@@ -1086,33 +1141,29 @@ WHERE {columnName} = @CODE
         }
 
         private string GetBranchNoByEmail(string email)
-{
-    email = (email ?? "").Trim();
-    if (string.IsNullOrWhiteSpace(email)) return "";
+        {
+            email = (email ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(email)) return "";
 
-    try
-    {
-        using var conn = _db.Open();
-        using var cmd = conn.CreateCommand();
+            try
+            {
+                using var conn = _db.Open();
+                using var cmd = conn.CreateCommand();
 
-        // 🔥 IMPORTANT: change EMAIL to your real column name if different
-        cmd.CommandText = @"
+                cmd.CommandText = @"
 SELECT FIRST 1 BRANCHNO
 FROM AGENT
 WHERE LOWER(EMAIL) = LOWER(@EMAIL)";
 
-        cmd.Parameters.Add(FirebirdDb.P("@EMAIL", email, FbDbType.VarChar));
+                cmd.Parameters.Add(FirebirdDb.P("@EMAIL", email, FbDbType.VarChar));
 
-        var v = cmd.ExecuteScalar();
-        return (v == null || v == DBNull.Value) ? "" : v.ToString().Trim();
+                var v = cmd.ExecuteScalar();
+                return (v == null || v == DBNull.Value) ? "" : v.ToString().Trim();
+            }
+            catch
+            {
+                return "";
+            }
+        }
     }
-    catch
-    {
-        return "";
-    }
-}
-
-    }
-
-    
 }

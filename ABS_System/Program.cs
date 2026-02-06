@@ -6,6 +6,7 @@ using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 QuestPDF.Settings.License = LicenseType.Community; // Set QuestPDF license type
+
 // =========================
 // Services
 // =========================
@@ -63,6 +64,9 @@ using (var scope = app.Services.CreateScope())
 
         // ✅ Customer signature proof table
         init.EnsureApptSignatureSchema();
+
+        // ✅ NEW: Sales Order Detail extra fields
+        init.EnsureSalesOrderDetailClaimColumns();
 
         Console.WriteLine("====================================================");
         Console.WriteLine("[DBINIT] ✅ Firebird schema ensured successfully.");

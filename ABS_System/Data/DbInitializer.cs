@@ -177,6 +177,45 @@ CREATE TABLE BRANCH (
         }
 
         // =========================================================
+        // ✅ NEW) Ensure SL_SODTL has CLAIMED + PREV_CLAIMED (default 0)
+        // =========================================================
+        public void EnsureSalesOrderDetailClaimColumns()
+        {
+            using var conn = _db.Open();
+
+            // You asked: SL_SODTL, columns: CLAIMED, PREV_CLAIMED, default 0
+            Log("Checking SL_SODTL.CLAIMED + SL_SODTL.PREV_CLAIMED ...");
+
+            EnsureDecimalColumnWithDefaultZero(conn, tableName: "SL_SODTL", columnName: "CLAIMED");
+            EnsureDecimalColumnWithDefaultZero(conn, tableName: "SL_SODTL", columnName: "PREV_CLAIMED");
+
+            Log("SL_SODTL claim columns ensured OK.");
+        }
+
+        // Adds DECIMAL(18,2) DEFAULT 0 and backfills NULLs to 0
+        private void EnsureDecimalColumnWithDefaultZero(FbConnection conn, string tableName, string columnName)
+        {
+            var t = tableName.ToUpperInvariant();
+            var c = columnName.ToUpperInvariant();
+
+            if (ColumnExists(conn, t, c))
+            {
+                Log($"{t}.{c} already exists, skip.");
+                return;
+            }
+
+            Log($"Adding column {t}.{c} (DECIMAL(18,2) DEFAULT 0) ...");
+
+            // 1) Add column with DEFAULT 0
+            ExecNonQuery(conn, $"ALTER TABLE {t} ADD {c} DECIMAL(18,2) DEFAULT 0");
+
+            // 2) Backfill existing rows (just in case)
+            ExecNonQuery(conn, $"UPDATE {t} SET {c} = 0 WHERE {c} IS NULL");
+
+            Log($"{t}.{c} added + backfilled OK.");
+        }
+
+        // =========================================================
         // 2) Ensure APPOINTMENT schema exists
         // =========================================================
         public void EnsureAppointmentSchema()
