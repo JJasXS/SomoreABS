@@ -22,7 +22,6 @@ namespace YourApp.Documents
         public void Compose(IDocumentContainer container)
         {
             const string reportTitle = "Appointment Acknowledgement";
-            string apptIdText = _appt.ApptId.ToString();
 
             container.Page(page =>
             {
@@ -31,7 +30,7 @@ namespace YourApp.Documents
                 page.DefaultTextStyle(x => x.FontSize(11));
 
                 // =========================
-                // HEADER (single chain)
+                // HEADER
                 // =========================
                 page.Header().Element(header =>
                 {
@@ -49,16 +48,8 @@ namespace YourApp.Documents
                                     .FontColor(Colors.Grey.Darken2);
                             });
 
-                            row.ConstantItem(160).AlignRight().Column(col =>
-                            {
-                                col.Item().Text("Appointment ID")
-                                    .FontSize(9)
-                                    .FontColor(Colors.Grey.Darken2);
-
-                                col.Item().Text(apptIdText)
-                                    .FontSize(14)
-                                    .Bold();
-                            });
+                            // ✅ Appointment ID removed
+                            row.ConstantItem(160).AlignRight().Text("");
                         });
 
                         h.Item().LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
@@ -72,7 +63,7 @@ namespace YourApp.Documents
                 {
                     col.Spacing(16);
 
-                    // --- Status banner ---
+                    // --- Status banner (ONLY status now) ---
                     col.Item().Element(e =>
                     {
                         var status = (_appt.Status ?? "-").Trim();
@@ -90,15 +81,11 @@ namespace YourApp.Documents
                                  c.Item().Text(status).Bold().FontSize(12);
                              });
 
-                             r.ConstantItem(220).AlignRight().Column(c =>
-                             {
-                                 c.Item().Text("Appointment Date/Time").FontSize(9).FontColor(Colors.Grey.Darken2);
-                                 c.Item().Text($"{_appt.ApptStart:yyyy-MM-dd HH:mm}").Bold().FontSize(12);
-                             });
+                             // ✅ removed the right-side Appointment Date/Time block
                          });
                     });
 
-                    // --- Details card (2 columns) ---
+                    // --- Details card (ONLY left column now) ---
                     col.Item().Element(card =>
                     {
                         card.Border(1)
@@ -111,26 +98,25 @@ namespace YourApp.Documents
                                 c.Item().Text("Appointment Details").Bold().FontSize(12);
                                 c.Item().LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
 
-                                c.Item().Row(r =>
+                                c.Item().Column(one =>
                                 {
-                                    r.Spacing(16);
+                                    one.Spacing(8);
 
-                                    r.RelativeItem().Column(left =>
-                                    {
-                                        left.Spacing(8);
-                                        Field(left, "Customer", string.IsNullOrWhiteSpace(_appt.CustomerName) ? _appt.CustomerCode : _appt.CustomerName);
-                                        Field(left, "Agent", string.IsNullOrWhiteSpace(_appt.AgentName) ? _appt.AgentCode : _appt.AgentName);
+                                    Field(one, "Customer",
+                                        string.IsNullOrWhiteSpace(_appt.CustomerName)
+                                            ? _appt.CustomerCode
+                                            : _appt.CustomerName);
 
-                                        Field(left, "Title", _appt.Title);
-                                    });
+                                    Field(one, "Agent",
+                                        string.IsNullOrWhiteSpace(_appt.AgentName)
+                                            ? _appt.AgentCode
+                                            : _appt.AgentName);
 
-                                    r.RelativeItem().Column(right =>
-                                    {
-                                        right.Spacing(8);
-                                        Field(right, "Appointment ID", _appt.ApptId.ToString());
-                                        Field(right, "Date/Time", $"{_appt.ApptStart:yyyy-MM-dd HH:mm}");
-                                        Field(right, "Status", _appt.Status);
-                                    });
+                                    Field(one, "Title", _appt.Title);
+
+                                    // ✅ removed:
+                                    // Field(right, "Date/Time", ...)
+                                    // Field(right, "Status", ...)
                                 });
                             });
                     });
@@ -152,7 +138,7 @@ namespace YourApp.Documents
                                  });
                     });
 
-                    // --- Signature section ---
+                    // --- Signature section (small bottom-right) ---
                     col.Item().Element(sig =>
                     {
                         bool hasSig = _signature != null && _signature.Length > 0;
@@ -179,13 +165,15 @@ namespace YourApp.Documents
                                if (hasSig)
                                {
                                    c.Item()
-                                    .Height(130)
+                                    .AlignRight()
+                                    .Width(220)
+                                    .Height(80)
                                     .Border(1)
                                     .BorderColor(Colors.Grey.Lighten2)
                                     .Background(Colors.White)
-                                    .Padding(10)
-                                    .AlignMiddle()
-                                    .AlignCenter()
+                                    .Padding(6)
+                                    .AlignBottom()
+                                    .AlignRight()
                                     .Image(_signature!)
                                     .FitArea();
                                }
@@ -200,7 +188,7 @@ namespace YourApp.Documents
                 });
 
                 // =========================
-                // FOOTER (single chain)
+                // FOOTER
                 // =========================
                 page.Footer().Element(footer =>
                 {
