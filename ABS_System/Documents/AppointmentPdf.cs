@@ -63,7 +63,7 @@ namespace YourApp.Documents
                 {
                     col.Spacing(16);
 
-                    // --- Status banner (ONLY status now) ---
+                    // --- Status banner (KEEP Date/Time here) ---
                     col.Item().Element(e =>
                     {
                         var status = (_appt.Status ?? "-").Trim();
@@ -81,11 +81,21 @@ namespace YourApp.Documents
                                  c.Item().Text(status).Bold().FontSize(12);
                              });
 
-                             // ✅ removed the right-side Appointment Date/Time block
+                             // ✅ Date/Time stays ONLY here
+                             r.ConstantItem(220).AlignRight().Column(c =>
+                             {
+                                 c.Item().Text("Appointment Date/Time")
+                                     .FontSize(9)
+                                     .FontColor(Colors.Grey.Darken2);
+
+                                 c.Item().Text($"{_appt.ApptStart:yyyy-MM-dd HH:mm}")
+                                     .Bold()
+                                     .FontSize(12);
+                             });
                          });
                     });
 
-                    // --- Details card (ONLY left column now) ---
+                    // --- Details card (NO Date/Time, NO Status) ---
                     col.Item().Element(card =>
                     {
                         card.Border(1)
@@ -114,9 +124,9 @@ namespace YourApp.Documents
 
                                     Field(one, "Title", _appt.Title);
 
-                                    // ✅ removed:
-                                    // Field(right, "Date/Time", ...)
-                                    // Field(right, "Status", ...)
+                                    // ✅ Removed:
+                                    // Date/Time
+                                    // Status
                                 });
                             });
                     });
@@ -138,7 +148,7 @@ namespace YourApp.Documents
                                  });
                     });
 
-                    // --- Signature section (small bottom-right) ---
+                    // --- Signature section (small, bottom-right) ---
                     col.Item().Element(sig =>
                     {
                         bool hasSig = _signature != null && _signature.Length > 0;
