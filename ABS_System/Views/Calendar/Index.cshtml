@@ -145,6 +145,11 @@
 
 <style>
 
+  /* ✅ Line-through ONLY for calendar cell cards (in-cell), NOT modal */
+.appt-card.in-cell.is-fulfilled .appt-title{
+  text-decoration: line-through !important;
+}
+
 /* =========================
    Date + Time side-by-side row
    ========================= */
@@ -449,9 +454,11 @@
 
     if (!string.IsNullOrEmpty(agentCode) && agentColors.TryGetValue(agentCode, out var c))
         cardColor = c;
+var style =
+  "display:flex !important; align-items:center !important; min-height:20px !important; padding:1px 8px !important; font-size:7px !important; line-height:1.2 !important;";
 
-    var style = "display:flex !important; align-items:center !important; min-height:20px !important; padding:2px 8px !important;";
-    if (!string.IsNullOrEmpty(cardColor))
+   
+   if (!string.IsNullOrEmpty(cardColor))
         style = $"background-color:{cardColor} !important; " + style;
 
     var statusUp = (appt.Status ?? "").Trim().ToUpperInvariant();
@@ -464,17 +471,29 @@
         ? (cn ?? "").Trim()
         : "";
 
-    // ✅ Keep customer casing (DON'T ToLower customer names)
-    var displayTitle = !string.IsNullOrWhiteSpace(custName)
-        ? custName
-        : (!string.IsNullOrWhiteSpace(custCode) ? custCode : (appt.Title ?? ""));
+   string ToTitleCaseSafe(string s)
+{
+    s = (s ?? "").Trim().ToLowerInvariant();
+    if (s == "") return s;
+    return System.Text.RegularExpressions.Regex.Replace(
+        s,
+        @"(^|[\s-])([a-z])",
+        m => m.Groups[1].Value + m.Groups[2].Value.ToUpperInvariant()
+    );
+}
+
+var displayTitle = !string.IsNullOrWhiteSpace(custName)
+    ? ToTitleCaseSafe(custName)
+    : (!string.IsNullOrWhiteSpace(custCode) ? custCode : ToTitleCaseSafe(appt.Title));
+
 
     <text>
         <div class="appt-card in-cell@doneClass"
              data-appt-id="@appt.ApptId"
              data-status="@statusUp"
              style="@style">
-            <span class="appt-title" style="@(isDone ? "opacity:0.45; font-weight:500;" : "")">
+            <span class="appt-title" style="@(isDone ? "opacity:0.45; font-weight:480;" : "font-weight:500;")">
+
                 @displayTitle
             </span>
         </div>
@@ -753,7 +772,8 @@
 
     var titleHtml =
       '<div class="appt-title appt-title-toggle" style="cursor:' + (hasMultiServices ? 'pointer' : 'default') + '; display:flex; align-items:center; gap:8px;">' +
-        '<span>' + escHtml(toTitleCase(appt.Title || '')) + '</span>' +
+        '<span>' + escHtml(toTitleCase(cust || appt.Title || '')) + '</span>' +
+
         (hasMultiServices
           ? '<span class="appt-more" style="font-size:12px; font-weight:700; opacity:0.85;">(more)</span>'
           : ''

@@ -505,21 +505,31 @@ ORDER BY APPT_START DESC";
         // ✅ CREATE (GET)
         // =========================================================
         [HttpGet]
-        public IActionResult Create(DateTime? apptStart)
-        {
-            var start = apptStart ?? DateTime.Now;
+public IActionResult Create(DateTime? apptStart)
+{
+    var email = (User?.Identity?.Name ?? "").Trim();
 
-            LoadAgentsAndCustomers(out var agents, out var customers);
-            ViewBag.Agents = agents;
-            ViewBag.Customers = customers;
-            ViewBag.ServiceItems = LoadServiceItems();
+    // ✅ STEP 2: get logged-in user's BRANCHNO from AGENT table
+    var branchNo = GetBranchNoByEmail(email);
 
-            return View(new Appointment
-            {
-                ApptStart = start,
-                Status = "BOOKED"
-            });
-        }
+    var start = apptStart ?? DateTime.Now;
+
+    // ✅ load only agents from same branch
+    LoadAgentsAndCustomers(branchNo, out var agents, out var customers);
+
+    ViewBag.Agents = agents;
+    ViewBag.Customers = customers;
+    ViewBag.ServiceItems = LoadServiceItems();
+
+    return View(new Appointment
+    {
+        ApptStart = start,
+        Status = "BOOKED"
+    });
+}
+
+
+
 
         // =========================================================
         // ✅ CREATE (POST)
@@ -528,7 +538,11 @@ ORDER BY APPT_START DESC";
         [ValidateAntiForgeryToken]
         public IActionResult Create(Appointment m)
         {
-            LoadAgentsAndCustomers(out var agents, out var customers);
+            
+            var email = (User?.Identity?.Name ?? "").Trim();
+var branchNo = GetBranchNoByEmail(email);
+LoadAgentsAndCustomers(branchNo, out var agents, out var customers);
+
             ViewBag.Agents = agents;
             ViewBag.Customers = customers;
             ViewBag.ServiceItems = LoadServiceItems();
@@ -612,7 +626,10 @@ RETURNING APPT_ID";
         [HttpGet]
         public IActionResult Edit(long id)
         {
-            LoadAgentsAndCustomers(out var agents, out var customers);
+            var email = (User?.Identity?.Name ?? "").Trim();
+var branchNo = GetBranchNoByEmail(email);
+LoadAgentsAndCustomers(branchNo, out var agents, out var customers);
+
             ViewBag.Agents = agents;
             ViewBag.Customers = customers;
             ViewBag.ServiceItems = LoadServiceItems();
@@ -662,7 +679,10 @@ WHERE APPT_ID = @id";
         [ValidateAntiForgeryToken]
         public IActionResult Edit(Appointment m)
         {
-            LoadAgentsAndCustomers(out var agents, out var customers);
+            var email = (User?.Identity?.Name ?? "").Trim();
+var branchNo = GetBranchNoByEmail(email);
+LoadAgentsAndCustomers(branchNo, out var agents, out var customers);
+
             ViewBag.Agents = agents;
             ViewBag.Customers = customers;
             ViewBag.ServiceItems = LoadServiceItems();
@@ -892,40 +912,53 @@ private static void SetIfPropertyExists(object target, string propName, string v
             return (y, m);
         }
 
-        private void LoadAgentsAndCustomers(out List<dynamic> agents, out List<dynamic> customers)
+private void LoadAgentsAndCustomers(string branchNo, out List<dynamic> agents, out List<dynamic> customers)
+{
+    agents = new List<dynamic>();
+    customers = new List<dynamic>();
+
+    branchNo = (branchNo ?? "").Trim();
+
+    using var conn = _db.Open();
+    using var cmd = conn.CreateCommand();
+
+    // ✅ Filter agent list by branchNo (if branchNo empty, return none for safety)
+cmd.CommandText = @"
+SELECT CODE, DESCRIPTION
+FROM AGENT
+WHERE (@BRANCHNO = '1' OR BRANCHNO = @BRANCHNO)
+ORDER BY DESCRIPTION";
+
+cmd.Parameters.Add(FirebirdDb.P("@BRANCHNO", branchNo, FbDbType.VarChar));
+
+
+    using (var r = cmd.ExecuteReader())
+    {
+        while (r.Read())
         {
-            agents = new List<dynamic>();
-            customers = new List<dynamic>();
-
-            using var conn = _db.Open();
-            using var cmd = conn.CreateCommand();
-
-            cmd.CommandText = "SELECT CODE, DESCRIPTION FROM AGENT ORDER BY DESCRIPTION";
-            using (var r = cmd.ExecuteReader())
+            agents.Add(new
             {
-                while (r.Read())
-                {
-                    agents.Add(new
-                    {
-                        Code = r.IsDBNull(0) ? "" : r.GetString(0).Trim(),
-                        Description = r.IsDBNull(1) ? "" : r.GetString(1).Trim()
-                    });
-                }
-            }
-
-            cmd.CommandText = "SELECT CODE, COMPANYNAME FROM AR_CUSTOMER ORDER BY COMPANYNAME";
-            using (var r = cmd.ExecuteReader())
-            {
-                while (r.Read())
-                {
-                    customers.Add(new
-                    {
-                        Code = r.IsDBNull(0) ? "" : r.GetString(0).Trim(),
-                        Name = r.IsDBNull(1) ? "" : r.GetString(1).Trim()
-                    });
-                }
-            }
+                Code = r.IsDBNull(0) ? "" : r.GetString(0).Trim(),
+                Description = r.IsDBNull(1) ? "" : r.GetString(1).Trim()
+            });
         }
+    }
+
+    // ✅ Customers stays same (no branch filter)
+    cmd.Parameters.Clear();
+    cmd.CommandText = "SELECT CODE, COMPANYNAME FROM AR_CUSTOMER ORDER BY COMPANYNAME";
+    using (var r = cmd.ExecuteReader())
+    {
+        while (r.Read())
+        {
+            customers.Add(new
+            {
+                Code = r.IsDBNull(0) ? "" : r.GetString(0).Trim(),
+                Name = r.IsDBNull(1) ? "" : r.GetString(1).Trim()
+            });
+        }
+    }
+}
 
         private List<ST_ITEM> LoadServiceItems()
         {
@@ -1051,5 +1084,35 @@ WHERE {columnName} = @CODE
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
+
+        private string GetBranchNoByEmail(string email)
+{
+    email = (email ?? "").Trim();
+    if (string.IsNullOrWhiteSpace(email)) return "";
+
+    try
+    {
+        using var conn = _db.Open();
+        using var cmd = conn.CreateCommand();
+
+        // 🔥 IMPORTANT: change EMAIL to your real column name if different
+        cmd.CommandText = @"
+SELECT FIRST 1 BRANCHNO
+FROM AGENT
+WHERE LOWER(EMAIL) = LOWER(@EMAIL)";
+
+        cmd.Parameters.Add(FirebirdDb.P("@EMAIL", email, FbDbType.VarChar));
+
+        var v = cmd.ExecuteScalar();
+        return (v == null || v == DBNull.Value) ? "" : v.ToString().Trim();
     }
+    catch
+    {
+        return "";
+    }
+}
+
+    }
+
+    
 }
