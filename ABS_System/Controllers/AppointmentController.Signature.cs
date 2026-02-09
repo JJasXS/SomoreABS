@@ -180,6 +180,59 @@ WHERE APPT_ID = @ID";
                     cmdAppt.ExecuteNonQuery();
                 }
 
+                // Update CLAIMED and PREV_CLAIMED in SL_SODTL for each service in APPT_DTL
+                using (var cmdDtl = conn.CreateCommand())
+                {
+                    cmdDtl.Transaction = tx;
+                    cmdDtl.CommandText = @"SELECT SERVICE_CODE FROM APPT_DTL WHERE APPT_ID = @APPTID";
+                    cmdDtl.Parameters.Add(FirebirdDb.P("@APPTID", apptId, FbDbType.BigInt));
+                    var serviceCodes = new List<string>();
+                    using (var r = cmdDtl.ExecuteReader())
+                    {
+                        while (r.Read())
+                        {
+                            if (!r.IsDBNull(0))
+                                serviceCodes.Add(r.GetString(0).Trim());
+                        }
+                    }
+
+                    // Get customer code for this appointment
+                    string customerCode = "";
+                    using (var cmdCust = conn.CreateCommand())
+                    {
+                        cmdCust.Transaction = tx;
+                        cmdCust.CommandText = "SELECT CUSTOMER_CODE FROM APPOINTMENT WHERE APPT_ID = @ID";
+                        cmdCust.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
+                        var v = cmdCust.ExecuteScalar();
+                        customerCode = (v == null || v == DBNull.Value) ? "" : v.ToString().Trim();
+                    }
+
+                    int totalAffected = 0;
+                    foreach (var svc in serviceCodes)
+                    {
+                        int affected = 0;
+                        using (var cmdSo = conn.CreateCommand())
+                        {
+                            cmdSo.Transaction = tx;
+                            cmdSo.CommandText = @"
+UPDATE SL_SODTL d
+SET PREV_CLAIMED = COALESCE(CLAIMED,0),
+    CLAIMED = COALESCE(CLAIMED,0) + 1
+WHERE d.ITEMCODE = @SVC
+  AND d.DOCKEY IN (
+      SELECT s.DOCKEY FROM SL_SO s
+      WHERE s.CODE = @CUST
+  )";
+                            cmdSo.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
+                            cmdSo.Parameters.Add(FirebirdDb.P("@CUST", customerCode, FbDbType.VarChar));
+                            affected = cmdSo.ExecuteNonQuery();
+                        }
+                        totalAffected += affected;
+                        TempData[$"ClaimedDebug_{svc}"] = $"SERVICE_CODE={svc}, CUSTOMER_CODE={customerCode}, RowsAffected={affected}";
+                    }
+                    TempData["ClaimedDebugTotal"] = $"Total SL_SODTL rows affected: {totalAffected}";
+                }
+
                 tx.Commit();
 
                 TempData["Ok"] = "Signature saved. Appointment marked as FULFILLED.";
