@@ -330,13 +330,14 @@ WHERE APPT_ID = @ID";
                 using var conn = _db.Open();
                 using var cmd = conn.CreateCommand();
 
-                cmd.CommandText = @"
+                                cmd.CommandText = @"
 SELECT DISTINCT
-    d.ITEMCODE,
-    TRIM(COALESCE(d.DESCRIPTION, d.ITEMCODE)) AS ITEMDESC
+        d.ITEMCODE,
+        TRIM(COALESCE(d.DESCRIPTION, d.ITEMCODE)) AS ITEMDESC
 FROM SL_SO s
 JOIN SL_SODTL d ON d.DOCKEY = s.DOCKEY
 WHERE s.CODE = @CUST
+    AND (COALESCE(d.CLAIMED,0) + COALESCE(d.PREV_CLAIMED,0)) < COALESCE(d.QTY,0)
 ORDER BY 2";
 
                 cmd.Parameters.Add(FirebirdDb.P("@CUST", customerCode, FbDbType.VarChar));
