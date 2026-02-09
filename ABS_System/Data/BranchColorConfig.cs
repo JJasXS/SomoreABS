@@ -10,10 +10,10 @@ namespace YourApp.Data
         // Map branch numbers to color hex codes
         public static readonly Dictionary<string, string> BranchColors = new()
         {
-            { "1", "#FFB6C1" }, // Light Pink
-            { "2", "#ADD8E6" }, // Light Blue
-            { "3", "#90EE90" }, // Light Green
-            { "4", "#FFD700" }  // Gold
+            { "1", "#ffb6c1" }, // Light Pink
+            { "2", "#9ae6ff" }, // Light Blue
+            { "3", "#74db74" }, // Light Green
+            { "4", "#e2ce5a" }  // Gold
         };
     }
 }

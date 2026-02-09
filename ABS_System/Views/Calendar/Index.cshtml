@@ -767,6 +767,21 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
     var done = isFulfilled(appt);
     var doneClass = done ? ' is-fulfilled' : '';
 
+    // Status letter logic
+    var statusLetter = '';
+    var statusUp = (appt.Status || '').trim().toUpperCase();
+    var statusColor = '';
+    if (statusUp === 'CANCELLED') {
+      statusLetter = 'C';
+      statusColor = '#d9534f'; // red
+    } else if (statusUp === 'FULFILLED' || statusUp === 'DONE' || statusUp === 'COMPLETED') {
+      statusLetter = 'F';
+      statusColor = '#5cb85c'; // green
+    } else {
+      statusLetter = 'B';
+      statusColor = '#0275d8'; // blue
+    }
+
     // ✅ services dropdown only if >1 service
     var servicesHtml = getServiceLinesHtml(appt.ApptId);
     var hasMultiServices = servicesHtml && servicesHtml.length > 0;
@@ -774,7 +789,7 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
     var titleHtml =
       '<div class="appt-title appt-title-toggle" style="cursor:' + (hasMultiServices ? 'pointer' : 'default') + '; display:flex; align-items:center; gap:8px;">' +
         '<span>' + escHtml(toTitleCase(cust || appt.Title || '')) + '</span>' +
-
+        '<span class="appt-status-letter" style="font-size:13px; font-weight:700; margin-left:4px; color:' + statusColor + ';">[' + statusLetter + ']</span>' +
         (hasMultiServices
           ? '<span class="appt-more" style="font-size:12px; font-weight:700; opacity:0.85;">(more)</span>'
           : ''
