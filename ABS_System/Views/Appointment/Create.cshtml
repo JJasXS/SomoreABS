@@ -295,10 +295,14 @@
 
       for (const it of serviceItems) {
         const code = (it.code || '').trim();
-        const desc = (it.desc || '').trim();
-        const text = `${code} - ${desc}`;
+        let desc = (it.desc || '').trim();
+        let text = `${code} - ${desc}`;
         const sel = (selectedValue && selectedValue === code) ? 'selected' : '';
-        html += `<option value="${escHtml(code)}" ${sel}>${escHtml(text)}</option>`;
+        // If description contains 'Last one!' flag, show warning
+        if (desc.includes('(Last one!)')) {
+          text = `${code} - <span style='color:red;font-weight:bold;'>${escHtml(desc)}</span>`;
+        }
+        html += `<option value="${escHtml(code)}" ${sel}>${text}</option>`;
       }
 
       html += `</select>`;

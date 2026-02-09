@@ -211,24 +211,47 @@ WHERE APPT_ID = @ID";
                     foreach (var svc in serviceCodes)
                     {
                         int affected = 0;
+                        // Get QTY from APPT_DTL for this service and appointment
+                        int qty = 0;
+                        using (var cmdQty = conn.CreateCommand())
+                        {
+                            cmdQty.Transaction = tx;
+                            cmdQty.CommandText = @"SELECT COUNT(*) FROM APPT_DTL WHERE APPT_ID = @APPTID AND SERVICE_CODE = @SVC";
+                            cmdQty.Parameters.Add(FirebirdDb.P("@APPTID", apptId, FbDbType.BigInt));
+                            cmdQty.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
+                            qty = Convert.ToInt32(cmdQty.ExecuteScalar());
+                        }
+                        // Get previous CLAIMED value
+                        int prevClaimed = 0;
+                        using (var cmdPrev = conn.CreateCommand())
+                        {
+                            cmdPrev.Transaction = tx;
+                            cmdPrev.CommandText = @"SELECT CLAIMED FROM SL_SODTL d WHERE d.ITEMCODE = @SVC AND d.DOCKEY IN (SELECT s.DOCKEY FROM SL_SO s WHERE s.CODE = @CUST) ROWS 1";
+                            cmdPrev.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
+                            cmdPrev.Parameters.Add(FirebirdDb.P("@CUST", customerCode, FbDbType.VarChar));
+                            var v = cmdPrev.ExecuteScalar();
+                            prevClaimed = (v == null || v == DBNull.Value) ? 0 : Convert.ToInt32(v);
+                        }
                         using (var cmdSo = conn.CreateCommand())
                         {
                             cmdSo.Transaction = tx;
                             cmdSo.CommandText = @"
 UPDATE SL_SODTL d
-SET PREV_CLAIMED = COALESCE(CLAIMED,0),
-    CLAIMED = COALESCE(CLAIMED,0) + 1
+SET PREV_CLAIMED = COALESCE(PREV_CLAIMED,0) + @PREV,
+    CLAIMED = @QTY
 WHERE d.ITEMCODE = @SVC
   AND d.DOCKEY IN (
       SELECT s.DOCKEY FROM SL_SO s
       WHERE s.CODE = @CUST
   )";
+                            cmdSo.Parameters.Add(FirebirdDb.P("@PREV", prevClaimed, FbDbType.Integer));
+                            cmdSo.Parameters.Add(FirebirdDb.P("@QTY", qty, FbDbType.Integer));
                             cmdSo.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
                             cmdSo.Parameters.Add(FirebirdDb.P("@CUST", customerCode, FbDbType.VarChar));
                             affected = cmdSo.ExecuteNonQuery();
                         }
                         totalAffected += affected;
-                        TempData[$"ClaimedDebug_{svc}"] = $"SERVICE_CODE={svc}, CUSTOMER_CODE={customerCode}, RowsAffected={affected}";
+                        TempData[$"ClaimedDebug_{svc}"] = $"SERVICE_CODE={svc}, CUSTOMER_CODE={customerCode}, QTY={qty}, PREV_CLAIMED+={prevClaimed}, RowsAffected={affected}";
                     }
                     TempData["ClaimedDebugTotal"] = $"Total SL_SODTL rows affected: {totalAffected}";
                 }

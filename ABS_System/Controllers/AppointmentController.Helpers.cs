@@ -181,26 +181,54 @@ ORDER BY DESCRIPTION";
         private List<ST_ITEM> LoadServiceItems()
         {
             var serviceItems = new List<ST_ITEM>();
-
             try
             {
                 using var conn = _db.Open();
                 using var cmd = conn.CreateCommand();
+                // Query all service items
                 cmd.CommandText = @"SELECT CODE, DESCRIPTION FROM ST_ITEM WHERE STOCKGROUP = 'SERVICE' ORDER BY DESCRIPTION";
-
                 using var r = cmd.ExecuteReader();
+                var allItems = new List<ST_ITEM>();
                 while (r.Read())
                 {
-                    serviceItems.Add(new ST_ITEM
+                    allItems.Add(new ST_ITEM
                     {
                         CODE = r.IsDBNull(0) ? "" : r.GetString(0).Trim(),
                         DESCRIPTION = r.IsDBNull(1) ? "" : r.GetString(1).Trim(),
                         STOCKGROUP = "SERVICE"
                     });
                 }
+                r.Close();
+
+                // Query CLAIMED, PREV_CLAIMED, QTY for each service
+                using var cmdDtl = conn.CreateCommand();
+                cmdDtl.CommandText = @"SELECT CODE, QTY, CLAIMED, PREV_CLAIMED FROM SL_SODTL WHERE CODE IN ('" + string.Join("','", allItems.Select(x => x.CODE)) + "')";
+                var claimedInfo = new Dictionary<string, (int qty, int claimed, int prevClaimed)>();
+                using var rDtl = cmdDtl.ExecuteReader();
+                while (rDtl.Read())
+                {
+                    var code = rDtl.IsDBNull(0) ? "" : rDtl.GetString(0).Trim();
+                    var qty = rDtl.IsDBNull(1) ? 0 : rDtl.GetInt32(1);
+                    var claimed = rDtl.IsDBNull(2) ? 0 : rDtl.GetInt32(2);
+                    var prevClaimed = rDtl.IsDBNull(3) ? 0 : rDtl.GetInt32(3);
+                    claimedInfo[code] = (qty, claimed, prevClaimed);
+                }
+
+                foreach (var item in allItems)
+                {
+                    if (claimedInfo.TryGetValue(item.CODE, out var info))
+                    {
+                        var totalClaimed = info.claimed + info.prevClaimed;
+                        // Hide service if fully claimed
+                        if (totalClaimed >= info.qty)
+                            continue;
+                        // Add a property for frontend warning if only one left
+                        item.DESCRIPTION += (info.qty - totalClaimed == 1) ? " <span style=\"color:red\">(Last one!)</span>" : "";
+                    }
+                    serviceItems.Add(item);
+                }
             }
             catch { }
-
             return serviceItems;
         }
 
