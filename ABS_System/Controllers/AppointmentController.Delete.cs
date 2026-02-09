@@ -80,7 +80,8 @@ namespace YourApp.Controllers
             var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "BOOKED",
-                "FULFILLED"
+                "FULFILLED",
+                "CANCELLED"
             };
 
             if (!allowed.Contains(status))

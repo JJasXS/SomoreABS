@@ -104,12 +104,12 @@
 
         <div class="custom-modal-body">
             <div style="margin-bottom:12px;">
-                Are you sure you want to delete this appointment?
+                Are you sure you want to cancel this appointment?
             </div>
 
             <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:10px;">
-                <button type="button" id="btnDeleteCancel" class="btn btn-secondary">Cancel</button>
-                <button type="button" id="btnDeleteYes" class="btn btn-danger">Yes, Delete</button>
+                <button type="button" id="btnDeleteCancel" class="btn btn-secondary">Close</button>
+                <button type="button" id="btnDeleteYes" class="btn btn-warning">Cancel Appointment</button>
             </div>
         </div>
     </div>
@@ -462,7 +462,7 @@ var style =
         style = $"background-color:{cardColor} !important; " + style;
 
     var statusUp = (appt.Status ?? "").Trim().ToUpperInvariant();
-    var isDone = (statusUp == "FULFILLED" || statusUp == "DONE" || statusUp == "COMPLETED");
+    var isDone = (statusUp == "FULFILLED" || statusUp == "DONE" || statusUp == "COMPLETED" || statusUp == "CANCELLED");
     var doneClass = isDone ? " is-fulfilled" : "";
 
     // ✅ Title = Customer Name (same mapping as modal)
@@ -552,7 +552,7 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
 
   function isFulfilled(appt) {
     var status = (appt.Status || '').toString().trim().toUpperCase();
-    return status === 'FULFILLED' || status === 'DONE' || status === 'COMPLETED';
+    return status === 'FULFILLED' || status === 'DONE' || status === 'COMPLETED' || status === 'CANCELLED';
   }
 
   function cssEscape(v) {
@@ -585,14 +585,15 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
     }
   }
 
-  async function deleteAppointmentAjax(apptId) {
+  async function cancelAppointmentAjax(apptId) {
     var token = getAntiForgeryToken();
 
     var body = new URLSearchParams();
     body.append('id', apptId);
+    body.append('status', 'CANCELLED');
     body.append('__RequestVerificationToken', token);
 
-    var res = await fetch('/Appointment/DeleteAjax', {
+    var res = await fetch('/Appointment/SetStatus', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
       body: body.toString()
@@ -602,7 +603,7 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
 
     var json = await res.json();
     if (!json || json.ok !== true) {
-      throw new Error((json && json.message) ? json.message : 'Delete failed');
+      throw new Error((json && json.message) ? json.message : 'Cancel failed');
     }
     return json;
   }
@@ -787,7 +788,7 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
         '<div class="appt-actions" style="margin-top:6px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">' +
           '<a href="/Appointment/Edit/' + appt.ApptId + '" class="btn btn-sm btn-primary">Edit</a>' +
           '<a href="/Appointment/Sign/' + appt.ApptId + '" class="btn btn-sm btn-secondary">Submit E-Sign</a>' +
-          '<a href="#" class="btn btn-sm btn-danger appt-delete" data-appt-id="' + appt.ApptId + '">Delete</a>' +
+          '<a href="#" class="btn btn-sm btn-danger appt-delete" data-appt-id="' + appt.ApptId + '">Cancelled?</a>' +
         '</div>';
     }
 
@@ -957,23 +958,17 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
       btnYes.disabled = true;
 
       try {
-  await deleteAppointmentAjax(pendingDeleteId);
+        await cancelAppointmentAjax(pendingDeleteId);
 
-  closeConfirmDeleteModal();
+        closeConfirmDeleteModal();
+        closeMainModals(); // closes day/month + overlay
+        window.location.href = window.location.href;
+        return;
 
-// ✅ close any open modals + overlay immediately (no chance to "stay")
-closeMainModals(); // closes day/month + overlay
-
-// ✅ HARD refresh (best)
-window.location.href = window.location.href; 
-return;
-
-} catch (err) {
-  alert('Failed to delete appointment: ' + (err && err.message ? err.message : err));
-  btnYes.disabled = false; // only re-enable if delete failed
-}
-
-
+      } catch (err) {
+        alert('Failed to cancel appointment: ' + (err && err.message ? err.message : err));
+        btnYes.disabled = false; // only re-enable if cancel failed
+      }
     });
 
     // =========================

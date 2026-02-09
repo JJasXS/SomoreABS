@@ -19,77 +19,73 @@ build_property.TargetFrameworkIdentifier = .NETCoreApp
 build_property.TargetFrameworkVersion = v10.0
 build_property.RootNamespace = ABS_System
 build_property.RootNamespace = ABS_System
-build_property.ProjectDir = C:\Users\sd01\ABS_System\ABS_System\
+build_property.ProjectDir = C:\Users\sd01\ABS_System\ABS_SYstem\
 build_property.EnableComHosting = 
 build_property.EnableGeneratedComInterfaceComImportInterop = 
 build_property.RazorLangVersion = 9.0
 build_property.SupportLocalizedComponentNames = 
 build_property.GenerateRazorMetadataSourceChecksumAttributes = 
-build_property.MSBuildProjectDirectory = C:\Users\sd01\ABS_System\ABS_System
+build_property.MSBuildProjectDirectory = C:\Users\sd01\ABS_System\ABS_SYstem
 build_property._RazorSourceGeneratorDebug = 
 build_property.EffectiveAnalysisLevelStyle = 10.0
 build_property.EnableCodeStyleSeverity = 
 
-[C:/Users/sd01/ABS_System/ABS_System/Views/Account/Login.cshtml]
+[C:/Users/sd01/ABS_System/ABS_SYstem/Views/Account/Login.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQWNjb3VudFxMb2dpbi5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/sd01/ABS_System/ABS_System/Views/Account/VerifyOtp.cshtml]
+[C:/Users/sd01/ABS_System/ABS_SYstem/Views/Account/VerifyOtp.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQWNjb3VudFxWZXJpZnlPdHAuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/sd01/ABS_System/ABS_System/Views/Appointment/Create.cshtml]
+[C:/Users/sd01/ABS_System/ABS_SYstem/Views/Appointment/Create.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQXBwb2ludG1lbnRcQ3JlYXRlLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/sd01/ABS_System/ABS_System/Views/Appointment/Delete.cshtml]
-build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQXBwb2ludG1lbnRcRGVsZXRlLmNzaHRtbA==
-build_metadata.AdditionalFiles.CssScope = 
-
-[C:/Users/sd01/ABS_System/ABS_System/Views/Appointment/Edit.cshtml]
+[C:/Users/sd01/ABS_System/ABS_SYstem/Views/Appointment/Edit.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQXBwb2ludG1lbnRcRWRpdC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/sd01/ABS_System/ABS_System/Views/Appointment/Sign.cshtml]
+[C:/Users/sd01/ABS_System/ABS_SYstem/Views/Appointment/Sign.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQXBwb2ludG1lbnRcU2lnbi5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/sd01/ABS_System/ABS_System/Views/Calendar/Index.cshtml]
+[C:/Users/sd01/ABS_System/ABS_SYstem/Views/Calendar/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQ2FsZW5kYXJcSW5kZXguY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/sd01/ABS_System/ABS_System/Views/Home/Index.cshtml]
+[C:/Users/sd01/ABS_System/ABS_SYstem/Views/Home/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxJbmRleC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/sd01/ABS_System/ABS_System/Views/Home/Privacy.cshtml]
+[C:/Users/sd01/ABS_System/ABS_SYstem/Views/Home/Privacy.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxQcml2YWN5LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/sd01/ABS_System/ABS_System/Views/Shared/Error.cshtml]
+[C:/Users/sd01/ABS_System/ABS_SYstem/Views/Shared/Error.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXEVycm9yLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/sd01/ABS_System/ABS_System/Views/Shared/_TenantFooter.cshtml]
+[C:/Users/sd01/ABS_System/ABS_SYstem/Views/Shared/_TenantFooter.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9UZW5hbnRGb290ZXIuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/sd01/ABS_System/ABS_System/Views/Shared/_TenantHeader.cshtml]
+[C:/Users/sd01/ABS_System/ABS_SYstem/Views/Shared/_TenantHeader.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9UZW5hbnRIZWFkZXIuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/sd01/ABS_System/ABS_System/Views/Shared/_ValidationScriptsPartial.cshtml]
+[C:/Users/sd01/ABS_System/ABS_SYstem/Views/Shared/_ValidationScriptsPartial.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9WYWxpZGF0aW9uU2NyaXB0c1BhcnRpYWwuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/sd01/ABS_System/ABS_System/Views/_ViewImports.cshtml]
+[C:/Users/sd01/ABS_System/ABS_SYstem/Views/_ViewImports.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcX1ZpZXdJbXBvcnRzLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/sd01/ABS_System/ABS_System/Views/_ViewStart.cshtml]
+[C:/Users/sd01/ABS_System/ABS_SYstem/Views/_ViewStart.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcX1ZpZXdTdGFydC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/sd01/ABS_System/ABS_System/Views/Shared/_Layout.cshtml]
+[C:/Users/sd01/ABS_System/ABS_SYstem/Views/Shared/_Layout.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9MYXlvdXQuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = b-3otq7pz13w
