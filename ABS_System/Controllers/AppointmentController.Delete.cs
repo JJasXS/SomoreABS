@@ -33,7 +33,7 @@ namespace YourApp.Controllers
                     cmd.CommandText = "SELECT CUSTOMER_CODE FROM APPOINTMENT WHERE APPT_ID = @id";
                     cmd.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
                     var v = cmd.ExecuteScalar();
-                    customerCode = (v == null || v == DBNull.Value) ? "" : v.ToString().Trim();
+                    customerCode = (v == null || v == DBNull.Value) ? "" : (v?.ToString()?.Trim() ?? "");
                 }
                 using (var cmd = conn.CreateCommand())
                 {
@@ -48,7 +48,7 @@ namespace YourApp.Controllers
                     }
                 }
 
-                // Undo CLAIMED/PREV_CLAIMED for each service
+                // Undo CLAIMED/UDF_PREV_CLAIMED for each service
                 foreach (var svc in serviceCodes)
                 {
                     int qty = 0;
@@ -64,7 +64,7 @@ namespace YourApp.Controllers
                     using (var cmdPrev = conn.CreateCommand())
                     {
                         cmdPrev.Transaction = tx;
-                        cmdPrev.CommandText = @"SELECT CLAIMED FROM SL_SODTL d WHERE d.ITEMCODE = @SVC AND d.DOCKEY IN (SELECT s.DOCKEY FROM SL_SO s WHERE s.CODE = @CUST) ROWS 1";
+                        cmdPrev.CommandText = @"SELECT UDF_CLAIMED FROM SL_SODTL d WHERE d.ITEMCODE = @SVC AND d.DOCKEY IN (SELECT s.DOCKEY FROM SL_SO s WHERE s.CODE = @CUST) ROWS 1";
                         cmdPrev.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
                         cmdPrev.Parameters.Add(FirebirdDb.P("@CUST", customerCode, FbDbType.VarChar));
                         var v = cmdPrev.ExecuteScalar();
@@ -75,7 +75,7 @@ namespace YourApp.Controllers
                         cmdSo.Transaction = tx;
                         cmdSo.CommandText = @"
 UPDATE SL_SODTL d
-SET PREV_CLAIMED = COALESCE(PREV_CLAIMED,0) - @PREV
+SET UDF_PREV_CLAIMED = COALESCE(UDF_PREV_CLAIMED,0) - @PREV
 WHERE d.ITEMCODE = @SVC
   AND d.DOCKEY IN (
       SELECT s.DOCKEY FROM SL_SO s

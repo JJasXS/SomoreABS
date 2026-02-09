@@ -147,7 +147,7 @@ RETURNING APPT_ID";
                     cmdDtl.ExecuteNonQuery();
                 }
 
-                // Update CLAIMED and PREV_CLAIMED in SL_SODTL for each service in APPT_DTL
+                // Update UDF_CLAIMED and UDF_PREV_CLAIMED in SL_SODTL for each service in APPT_DTL
                 // Get customer code for this appointment
                 string customerCode = m.CustomerCode;
                 int totalAffected = 0;
@@ -166,7 +166,7 @@ RETURNING APPT_ID";
                     using (var cmdPrev = conn.CreateCommand())
                     {
                         cmdPrev.Transaction = tx;
-                        cmdPrev.CommandText = @"SELECT CLAIMED FROM SL_SODTL d WHERE d.ITEMCODE = @SVC AND d.DOCKEY IN (SELECT s.DOCKEY FROM SL_SO s WHERE s.CODE = @CUST) ROWS 1";
+                        cmdPrev.CommandText = @"SELECT UDF_CLAIMED FROM SL_SODTL d WHERE d.ITEMCODE = @SVC AND d.DOCKEY IN (SELECT s.DOCKEY FROM SL_SO s WHERE s.CODE = @CUST) ROWS 1";
                         cmdPrev.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
                         cmdPrev.Parameters.Add(FirebirdDb.P("@CUST", customerCode, FbDbType.VarChar));
                         var v = cmdPrev.ExecuteScalar();
@@ -177,8 +177,8 @@ RETURNING APPT_ID";
                         cmdSo.Transaction = tx;
                         cmdSo.CommandText = @"
 UPDATE SL_SODTL d
-SET PREV_CLAIMED = COALESCE(PREV_CLAIMED,0) + @PREV,
-    CLAIMED = @QTY
+SET UDF_PREV_CLAIMED = COALESCE(UDF_PREV_CLAIMED,0) + @PREV,
+    UDF_CLAIMED = @QTY
 WHERE d.ITEMCODE = @SVC
   AND d.DOCKEY IN (
       SELECT s.DOCKEY FROM SL_SO s

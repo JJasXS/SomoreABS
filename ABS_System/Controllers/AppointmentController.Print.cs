@@ -59,14 +59,14 @@ WHERE APPT_ID = @ID";
                 SetIfPropertyExists(appt, "CustomerName", custName);
                 SetIfPropertyExists(appt, "AgentName", agentName);
 
-                // Load services with CLAIMED and PREV_CLAIMED
+                // Load services with UDF_CLAIMED and UDF_PREV_CLAIMED
                 appt.Services = new List<ApptDtl>();
                 using (var cmd = conn.CreateCommand())
                 {
-                                        cmd.CommandText = @"
+                    cmd.CommandText = @"
                     SELECT d.APPT_DTL_ID, d.APPT_ID, d.SERVICE_CODE,
                            COALESCE(s.QTY,0) AS QTY,
-                           COALESCE(s.CLAIMED,0) AS CLAIMED, COALESCE(s.PREV_CLAIMED,0) AS PREV_CLAIMED
+                           COALESCE(s.UDF_CLAIMED,0) AS Claimed, COALESCE(s.UDF_PREV_CLAIMED,0) AS PrevClaimed
                     FROM APPT_DTL d
                     LEFT JOIN SL_SODTL s ON s.ITEMCODE = d.SERVICE_CODE
                         AND s.DOCKEY IN (SELECT DOCKEY FROM SL_SO WHERE CODE = @CUST)

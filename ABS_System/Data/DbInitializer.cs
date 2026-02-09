@@ -184,10 +184,10 @@ CREATE TABLE BRANCH (
             using var conn = _db.Open();
 
             // You asked: SL_SODTL, columns: CLAIMED, PREV_CLAIMED, default 0
-            Log("Checking SL_SODTL.CLAIMED + SL_SODTL.PREV_CLAIMED ...");
+            Log("Checking SL_SODTL.UDF_CLAIMED + SL_SODTL.UDF_PREV_CLAIMED ...");
 
-            EnsureDecimalColumnWithDefaultZero(conn, tableName: "SL_SODTL", columnName: "CLAIMED");
-            EnsureDecimalColumnWithDefaultZero(conn, tableName: "SL_SODTL", columnName: "PREV_CLAIMED");
+            EnsureDecimalColumnWithDefaultZero(conn, tableName: "SL_SODTL", columnName: "UDF_CLAIMED");
+            EnsureDecimalColumnWithDefaultZero(conn, tableName: "SL_SODTL", columnName: "UDF_PREV_CLAIMED");
 
             Log("SL_SODTL claim columns ensured OK.");
         }

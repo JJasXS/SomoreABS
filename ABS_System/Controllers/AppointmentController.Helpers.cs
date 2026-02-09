@@ -200,9 +200,9 @@ ORDER BY DESCRIPTION";
                 }
                 r.Close();
 
-                // Query CLAIMED, PREV_CLAIMED, QTY for each service
+                // Query UDF_CLAIMED, UDF_PREV_CLAIMED, QTY for each service
                 using var cmdDtl = conn.CreateCommand();
-                cmdDtl.CommandText = @"SELECT CODE, QTY, CLAIMED, PREV_CLAIMED FROM SL_SODTL WHERE CODE IN ('" + string.Join("','", allItems.Select(x => x.CODE)) + "')";
+                cmdDtl.CommandText = @"SELECT CODE, QTY, UDF_CLAIMED, UDF_PREV_CLAIMED FROM SL_SODTL WHERE CODE IN ('" + string.Join("','", allItems.Select(x => x.CODE)) + "')";
                 var claimedInfo = new Dictionary<string, (int qty, int claimed, int prevClaimed)>();
                 using var rDtl = cmdDtl.ExecuteReader();
                 while (rDtl.Read())
@@ -349,7 +349,7 @@ WHERE LOWER(EMAIL) = LOWER(@EMAIL)";
                 cmd.Parameters.Add(FirebirdDb.P("@EMAIL", email, FbDbType.VarChar));
 
                 var v = cmd.ExecuteScalar();
-                return (v == null || v == DBNull.Value) ? "" : v.ToString().Trim();
+                return (v == null || v == DBNull.Value) ? "" : (v?.ToString()?.Trim() ?? "");
             }
             catch
             {
