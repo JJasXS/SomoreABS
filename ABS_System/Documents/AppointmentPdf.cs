@@ -123,11 +123,32 @@ namespace YourApp.Documents
                                             : _appt.AgentName);
 
                                     Field(one, "Title", _appt.Title);
-
-                                    // ✅ Removed:
-                                    // Date/Time
-                                    // Status
                                 });
+
+                                // --- List services with CLAIMED info ---
+                                if (_appt.Services != null && _appt.Services.Count > 0)
+                                {
+                                    c.Item().PaddingTop(10).Text("Service Claims").Bold().FontSize(11);
+                                    c.Item().Table(table =>
+                                    {
+                                        table.ColumnsDefinition(cols =>
+                                        {
+                                            cols.ConstantColumn(120);
+                                            cols.ConstantColumn(120);
+                                        });
+                                        table.Header(header =>
+                                        {
+                                            header.Cell().Text("Service Code").FontSize(9).Bold();
+                                            header.Cell().Text("Claimed / Qty").FontSize(9).Bold();
+                                        });
+                                        foreach (var svc in _appt.Services)
+                                        {
+                                            var totalClaimed = svc.Claimed + svc.PrevClaimed;
+                                            table.Cell().Text(svc.ServiceCode);
+                                            table.Cell().Text($"{totalClaimed} / {svc.Qty}");
+                                        }
+                                    });
+                                }
                             });
                     });
 

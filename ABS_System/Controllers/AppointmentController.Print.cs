@@ -28,15 +28,14 @@ namespace YourApp.Controllers
             {
                 using var conn = _db.Open();
 
+                // Load appointment
                 using (var cmd = conn.CreateCommand())
                 {
                     cmd.CommandText = @"
 SELECT APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, TITLE, STATUS, NOTES
 FROM APPOINTMENT
 WHERE APPT_ID = @ID";
-
                     cmd.Parameters.Add(FirebirdDb.P("@ID", id, FbDbType.BigInt));
-
                     using var r = cmd.ExecuteReader();
                     if (r.Read())
                     {
@@ -60,15 +59,44 @@ WHERE APPT_ID = @ID";
                 SetIfPropertyExists(appt, "CustomerName", custName);
                 SetIfPropertyExists(appt, "AgentName", agentName);
 
+                // Load services with CLAIMED and PREV_CLAIMED
+                appt.Services = new List<ApptDtl>();
+                using (var cmd = conn.CreateCommand())
+                {
+                                        cmd.CommandText = @"
+                    SELECT d.APPT_DTL_ID, d.APPT_ID, d.SERVICE_CODE,
+                           COALESCE(s.QTY,0) AS QTY,
+                           COALESCE(s.CLAIMED,0) AS CLAIMED, COALESCE(s.PREV_CLAIMED,0) AS PREV_CLAIMED
+                    FROM APPT_DTL d
+                    LEFT JOIN SL_SODTL s ON s.ITEMCODE = d.SERVICE_CODE
+                        AND s.DOCKEY IN (SELECT DOCKEY FROM SL_SO WHERE CODE = @CUST)
+                    WHERE d.APPT_ID = @APPTID
+                    ORDER BY d.SERVICE_CODE";
+                    cmd.Parameters.Add(FirebirdDb.P("@APPTID", appt.ApptId, FbDbType.BigInt));
+                    cmd.Parameters.Add(FirebirdDb.P("@CUST", appt.CustomerCode, FbDbType.VarChar));
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read())
+                    {
+                        var dtl = new ApptDtl
+                        {
+                            Id = r.GetInt64(0),
+                            ApptId = r.GetInt64(1),
+                            ServiceCode = r.IsDBNull(2) ? "" : r.GetString(2).Trim(),
+                            Qty = r.IsDBNull(3) ? 0 : Convert.ToInt32(r.GetValue(3)),
+                            Claimed = r.IsDBNull(4) ? 0 : Convert.ToInt32(r.GetValue(4)),
+                            PrevClaimed = r.IsDBNull(5) ? 0 : Convert.ToInt32(r.GetValue(5))
+                        };
+                        appt.Services.Add(dtl);
+                    }
+                }
+
                 using (var cmdSig = conn.CreateCommand())
                 {
                     cmdSig.CommandText = @"
 SELECT SIGNATURE_PNG, REMARKS
 FROM APPT_SIGNATURE
 WHERE APPT_ID = @ID";
-
                     cmdSig.Parameters.Add(FirebirdDb.P("@ID", id, FbDbType.BigInt));
-
                     using var r2 = cmdSig.ExecuteReader();
                     if (r2.Read())
                     {
@@ -78,7 +106,6 @@ WHERE APPT_ID = @ID";
                             long read;
                             long offset = 0;
                             var buffer = new byte[8192];
-
                             while ((read = r2.GetBytes(0, offset, buffer, 0, buffer.Length)) > 0)
                             {
                                 ms.Write(buffer, 0, (int)read);
@@ -86,7 +113,6 @@ WHERE APPT_ID = @ID";
                             }
                             sigBytes = ms.ToArray();
                         }
-
                         if (!r2.IsDBNull(1))
                             statementText = r2.GetString(1);
                     }
