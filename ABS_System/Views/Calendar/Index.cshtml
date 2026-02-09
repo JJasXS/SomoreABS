@@ -590,10 +590,9 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
 
     var body = new URLSearchParams();
     body.append('id', apptId);
-    body.append('status', 'CANCELLED');
     body.append('__RequestVerificationToken', token);
 
-    var res = await fetch('/Appointment/SetStatus', {
+    var res = await fetch('/Appointment/DeleteAjax', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
       body: body.toString()
@@ -609,23 +608,8 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
   }
 
   function removeAppointmentFromUI(apptId) {
-    allAppointments = (allAppointments || []).filter(function (a) {
-      return String(a.ApptId) !== String(apptId);
-    });
-
-    document.querySelectorAll('.appt-card.modal-card[data-appt-id="' + cssEscape(apptId) + '"]').forEach(function (n) {
-      n.remove();
-    });
-
-    document.querySelectorAll('.appt-card.in-cell[data-appt-id="' + cssEscape(apptId) + '"]').forEach(function (n) {
-      n.remove();
-    });
-
-    var dayList = document.getElementById('day-appointments-list');
-    if (dayList && dayList.children.length === 0) dayList.innerHTML = '<div class="appt-empty">No appointments.</div>';
-
-    var monthList = document.getElementById('month-appointments-list');
-    if (monthList && monthList.children.length === 0) monthList.innerHTML = '<div class="appt-empty">No appointments.</div>';
+    // Do not remove cancelled/fulfilled appointments from UI. Instead, just update their style.
+    // Optionally, you could update the card's class or status here if needed.
   }
 
   function wireDeleteConfirm(containerEl) {

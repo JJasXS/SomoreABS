@@ -24,38 +24,81 @@ namespace YourApp.Controllers
                 using var conn = _db.Open();
                 using var tx = conn.BeginTransaction();
 
-                // 1) delete signature first (child)
-                using (var cmdSig = conn.CreateCommand())
-                {
-                    cmdSig.Transaction = tx;
-                    cmdSig.CommandText = "DELETE FROM APPT_SIGNATURE WHERE APPT_ID = @id";
-                    cmdSig.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
-                    cmdSig.ExecuteNonQuery();
-                }
-
-                // 2) delete details first (child)
-                using (var cmdDtl = conn.CreateCommand())
-                {
-                    cmdDtl.Transaction = tx;
-                    cmdDtl.CommandText = "DELETE FROM APPT_DTL WHERE APPT_ID = @id";
-                    cmdDtl.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
-                    cmdDtl.ExecuteNonQuery();
-                }
-
-                // 3) delete parent
-                int rows;
+                // Get customer code and service codes for this appointment
+                string customerCode = "";
+                var serviceCodes = new List<string>();
                 using (var cmd = conn.CreateCommand())
                 {
                     cmd.Transaction = tx;
-                    cmd.CommandText = "DELETE FROM APPOINTMENT WHERE APPT_ID = @id";
+                    cmd.CommandText = "SELECT CUSTOMER_CODE FROM APPOINTMENT WHERE APPT_ID = @id";
                     cmd.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
-                    rows = cmd.ExecuteNonQuery();
+                    var v = cmd.ExecuteScalar();
+                    customerCode = (v == null || v == DBNull.Value) ? "" : v.ToString().Trim();
+                }
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = "SELECT SERVICE_CODE FROM APPT_DTL WHERE APPT_ID = @id";
+                    cmd.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read())
+                    {
+                        if (!r.IsDBNull(0))
+                            serviceCodes.Add(r.GetString(0).Trim());
+                    }
                 }
 
-                if (rows <= 0)
+                // Undo CLAIMED/PREV_CLAIMED for each service
+                foreach (var svc in serviceCodes)
                 {
-                    tx.Rollback();
-                    return Json(new { ok = false, message = "Appointment not found or already deleted." });
+                    int qty = 0;
+                    using (var cmdQty = conn.CreateCommand())
+                    {
+                        cmdQty.Transaction = tx;
+                        cmdQty.CommandText = @"SELECT COUNT(*) FROM APPT_DTL WHERE APPT_ID = @APPTID AND SERVICE_CODE = @SVC";
+                        cmdQty.Parameters.Add(FirebirdDb.P("@APPTID", id, FbDbType.BigInt));
+                        cmdQty.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
+                        qty = Convert.ToInt32(cmdQty.ExecuteScalar());
+                    }
+                    int prevClaimed = 0;
+                    using (var cmdPrev = conn.CreateCommand())
+                    {
+                        cmdPrev.Transaction = tx;
+                        cmdPrev.CommandText = @"SELECT CLAIMED FROM SL_SODTL d WHERE d.ITEMCODE = @SVC AND d.DOCKEY IN (SELECT s.DOCKEY FROM SL_SO s WHERE s.CODE = @CUST) ROWS 1";
+                        cmdPrev.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
+                        cmdPrev.Parameters.Add(FirebirdDb.P("@CUST", customerCode, FbDbType.VarChar));
+                        var v = cmdPrev.ExecuteScalar();
+                        prevClaimed = (v == null || v == DBNull.Value) ? 0 : Convert.ToInt32(v);
+                    }
+                    using (var cmdSo = conn.CreateCommand())
+                    {
+                        cmdSo.Transaction = tx;
+                        cmdSo.CommandText = @"
+UPDATE SL_SODTL d
+SET PREV_CLAIMED = COALESCE(PREV_CLAIMED,0) - @PREV
+WHERE d.ITEMCODE = @SVC
+  AND d.DOCKEY IN (
+      SELECT s.DOCKEY FROM SL_SO s
+      WHERE s.CODE = @CUST
+  )";
+                        cmdSo.Parameters.Add(FirebirdDb.P("@PREV", prevClaimed, FbDbType.Integer));
+                        cmdSo.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
+                        cmdSo.Parameters.Add(FirebirdDb.P("@CUST", customerCode, FbDbType.VarChar));
+                        cmdSo.ExecuteNonQuery();
+                    }
+                }
+
+                // Instead of deleting, just update status to CANCELLED
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = @"
+UPDATE APPOINTMENT
+SET STATUS = 'CANCELLED', LAST_UPD_DT = CURRENT_TIMESTAMP, LAST_UPD_BY = @BY
+WHERE APPT_ID = @ID";
+                    cmd.Parameters.Add(FirebirdDb.P("@BY", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
+                    cmd.Parameters.Add(FirebirdDb.P("@ID", id, FbDbType.BigInt));
+                    cmd.ExecuteNonQuery();
                 }
 
                 tx.Commit();
@@ -63,7 +106,7 @@ namespace YourApp.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { ok = false, message = "Delete failed.", detail = ex.Message });
+                return StatusCode(500, new { ok = false, message = "Cancel failed.", detail = ex.Message });
             }
         }
 
