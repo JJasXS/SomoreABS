@@ -26,7 +26,15 @@ namespace ABS_System.Controllers
             var customers = LoadCustomers(conn);
             ViewBag.Customers = customers;
 
-            var selectedCode = (customerCode ?? "").Trim();
+
+            var selectedInput = (customerCode ?? "").Trim();
+            string selectedCode = "";
+            if (!string.IsNullOrWhiteSpace(selectedInput))
+            {
+                // Try to find code by name (case-insensitive)
+                var match = customers.FirstOrDefault(c => c.Name.Equals(selectedInput, StringComparison.OrdinalIgnoreCase));
+                selectedCode = match?.CustomerCode ?? selectedInput; // fallback to input if not found
+            }
 
             // 2) If nothing selected, return empty lists
             if (string.IsNullOrWhiteSpace(selectedCode))

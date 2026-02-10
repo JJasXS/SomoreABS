@@ -6,6 +6,6 @@
 <datalist id="customerNames">
     @foreach (var cust in Model ?? Enumerable.Empty<YourApp.Models.AR_CUSTOMER>())
     {
-        <option value="@cust.CustomerCode">@cust.Name (@cust.CustomerCode)</option>
+        <option value="@cust.Name">@cust.Name (@cust.CustomerCode)</option>
     }
 </datalist>
