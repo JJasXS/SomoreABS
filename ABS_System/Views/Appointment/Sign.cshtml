@@ -33,11 +33,21 @@
         &larr; Back
     </a>
 
-    <a class="btn btn-outline-primary"
-   target="_blank"
-   href="@Url.Action("PrintPdf", "Appointment", new { id = Model.ApptId })">
-    🖨️
-</a>
+
+    @if (ViewBag.LogId != null)
+    {
+        <a class="btn btn-outline-primary"
+           target="_blank"
+           href="@Url.Action("PrintPdfByLog", "Appointment", new { logId = ViewBag.LogId })">
+            🖨️
+        </a>
+    }
+    else
+    {
+        <a class="btn btn-outline-secondary disabled" tabindex="-1" aria-disabled="true">
+            🖨️
+        </a>
+    }
 
 
 </div>

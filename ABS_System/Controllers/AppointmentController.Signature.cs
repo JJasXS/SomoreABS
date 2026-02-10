@@ -65,6 +65,14 @@ WHERE APPT_ID = @ID";
                 "I hereby confirm and acknowledge that the appointment details shown are correct. " +
                 "I agree that this e-signature is valid and may be used as proof of acknowledgement.";
 
+            // Set ViewBag.LogId for print button (latest LOG_ID for this APPT_ID)
+            try
+            {
+                using var conn = _db.Open();
+                ViewBag.LogId = YourApp.Data.AppointmentLogHelper.GetLatestLogIdForAppointment(id, conn);
+            }
+            catch { ViewBag.LogId = null; }
+
             return View(appt);
         }
 
@@ -223,20 +231,21 @@ WHERE APPT_ID = @ID";
                                 currClaimed = claimed + prevClaimed;
                             }
                         }
-                        using (var cmdLog = conn.CreateCommand())
-                        {
-                            cmdLog.Transaction = tx;
-                            cmdLog.CommandText = @"INSERT INTO APPOINTMENT_LOG (APPT_ID, ACTION_TYPE, ACTION_TIME, USERNAME, DETAILS, SO_QTY, CLAIMED, PREV_CLAIMED, CURR_CLAIMED, SERVICE_CODE) VALUES (@APPTID, 'E_SIGNATURE_SUBMIT', CURRENT_TIMESTAMP, @USER, @DETAILS, @SOQTY, @CLAIMED, @PREV, @CURR, @SVC)";
-                            cmdLog.Parameters.Add(FirebirdDb.P("@APPTID", apptId, FbDbType.BigInt));
-                            cmdLog.Parameters.Add(FirebirdDb.P("@USER", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
-                            cmdLog.Parameters.Add(FirebirdDb.P("@DETAILS", "E-signature submitted.", FbDbType.VarChar));
-                            cmdLog.Parameters.Add(FirebirdDb.P("@SOQTY", soQty, FbDbType.Integer));
-                            cmdLog.Parameters.Add(FirebirdDb.P("@CLAIMED", claimed, FbDbType.Integer));
-                            cmdLog.Parameters.Add(FirebirdDb.P("@PREV", prevClaimed, FbDbType.Integer));
-                            cmdLog.Parameters.Add(FirebirdDb.P("@CURR", currClaimed, FbDbType.Integer));
-                            cmdLog.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
-                            cmdLog.ExecuteNonQuery();
-                        }
+                        // Disabled: Do not log e-signature to APPOINTMENT_LOG as per latest requirements.
+                        // using (var cmdLog = conn.CreateCommand())
+                        // {
+                        //     cmdLog.Transaction = tx;
+                        //     cmdLog.CommandText = @"INSERT INTO APPOINTMENT_LOG (APPT_ID, ACTION_TYPE, ACTION_TIME, USERNAME, DETAILS, SO_QTY, CLAIMED, PREV_CLAIMED, CURR_CLAIMED, SERVICE_CODE) VALUES (@APPTID, 'E_SIGNATURE_SUBMIT', CURRENT_TIMESTAMP, @USER, @DETAILS, @SOQTY, @CLAIMED, @PREV, @CURR, @SVC)";
+                        //     cmdLog.Parameters.Add(FirebirdDb.P("@APPTID", apptId, FbDbType.BigInt));
+                        //     cmdLog.Parameters.Add(FirebirdDb.P("@USER", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
+                        //     cmdLog.Parameters.Add(FirebirdDb.P("@DETAILS", "E-signature submitted.", FbDbType.VarChar));
+                        //     cmdLog.Parameters.Add(FirebirdDb.P("@SOQTY", soQty, FbDbType.Integer));
+                        //     cmdLog.Parameters.Add(FirebirdDb.P("@CLAIMED", claimed, FbDbType.Integer));
+                        //     cmdLog.Parameters.Add(FirebirdDb.P("@PREV", prevClaimed, FbDbType.Integer));
+                        //     cmdLog.Parameters.Add(FirebirdDb.P("@CURR", currClaimed, FbDbType.Integer));
+                        //     cmdLog.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
+                        //     cmdLog.ExecuteNonQuery();
+                        // }
                     }
                 }
 
