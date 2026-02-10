@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using FirebirdSql.Data.FirebirdClient;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -28,48 +29,113 @@ namespace YourApp.Documents
         {
             if (conn == null) throw new ArgumentNullException(nameof(conn));
 
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = @"
+            long apptId;
+            string? details;
+            int soQty, claimed, prevClaimed;
+            string serviceCode;
+
+            // 1) Read log row
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
 SELECT
     APPT_ID,
-    ACTION_TYPE,
-    ACTION_TIME,
-    USERNAME,
     DETAILS,
     SO_QTY,
     CLAIMED,
     PREV_CLAIMED,
-    CURR_CLAIMED,
     SERVICE_CODE
 FROM APPOINTMENT_LOG
 WHERE LOG_ID = @LOGID
   AND ACTION_TYPE = 'ADDED'
 ";
-            cmd.Parameters.Add(new FbParameter("@LOGID", logId));
+                cmd.Parameters.Add(new FbParameter("@LOGID", logId));
 
-            using var r = cmd.ExecuteReader();
-            if (!r.Read())
-                throw new Exception("Log entry not found.");
+                using var r = cmd.ExecuteReader();
+                if (!r.Read())
+                    throw new Exception("Log entry not found.");
 
-            var apptId = r.GetInt64(0);
+                apptId = r.GetInt64(0);
+                details = r.IsDBNull(1) ? null : r.GetString(1);
+                soQty = r.IsDBNull(2) ? 0 : r.GetInt32(2);
+                claimed = r.IsDBNull(3) ? 0 : r.GetInt32(3);
+                prevClaimed = r.IsDBNull(4) ? 0 : r.GetInt32(4);
+                serviceCode = r.IsDBNull(5) ? "" : r.GetString(5);
+            }
 
-            // These are available if you need them later
-            // var actionType = r.GetString(1);
-            // var actionTime = r.GetDateTime(2);
-            // var username = r.IsDBNull(3) ? null : r.GetString(3);
+            // 2) Fetch appointment info
+            string? customerCode = null, agentCode = null, title = null;
+            DateTime apptStart = default;
+            string? status = null;
 
-            var details = r.IsDBNull(4) ? null : r.GetString(4);
-            var soQty = r.IsDBNull(5) ? 0 : r.GetInt32(5);
-            var claimed = r.IsDBNull(6) ? 0 : r.GetInt32(6);
-            var prevClaimed = r.IsDBNull(7) ? 0 : r.GetInt32(7);
-            // var currClaimed = r.IsDBNull(8) ? 0 : r.GetInt32(8);
-            var serviceCode = r.IsDBNull(9) ? "" : r.GetString(9);
+            using (var cmd2 = conn.CreateCommand())
+            {
+                // Add/remove columns here based on your actual APPOINTMENT table
+                cmd2.CommandText = @"
+SELECT
+    CUSTOMER_CODE,
+    AGENT_CODE,
+    TITLE,
+    APPT_START,
+    STATUS
+FROM APPOINTMENT
+WHERE APPT_ID = @APPTID
+";
+                cmd2.Parameters.Add(new FbParameter("@APPTID", apptId));
 
-            // Minimal Appointment built from log
+                using var r2 = cmd2.ExecuteReader();
+                if (r2.Read())
+                {
+                    customerCode = r2.IsDBNull(0) ? null : r2.GetString(0);
+                    agentCode = r2.IsDBNull(1) ? null : r2.GetString(1);
+                    title = r2.IsDBNull(2) ? null : r2.GetString(2);
+                    apptStart = r2.IsDBNull(3) ? default : r2.GetDateTime(3);
+                    status = r2.IsDBNull(4) ? null : r2.GetString(4);
+                }
+            }
+
+            // 3) Load signature blob
+            byte[]? signatureBytes = null;
+            using (var cmdSig = conn.CreateCommand())
+            {
+                cmdSig.CommandText = @"
+SELECT SIGNATURE_PNG
+FROM APPT_SIGNATURE
+WHERE APPT_ID = @APPTID
+";
+                cmdSig.Parameters.Add(new FbParameter("@APPTID", apptId));
+
+                using var rSig = cmdSig.ExecuteReader();
+                if (rSig.Read() && !rSig.IsDBNull(0))
+                {
+                    using var ms = new MemoryStream();
+                    long offset = 0;
+                    var buffer = new byte[8192];
+                    long read;
+                    while ((read = rSig.GetBytes(0, offset, buffer, 0, buffer.Length)) > 0)
+                    {
+                        ms.Write(buffer, 0, (int)read);
+                        offset += read;
+                    }
+                    signatureBytes = ms.ToArray();
+                }
+            }
+
+            // 4) Build model for PDF
             var appt = new Appointment
             {
                 ApptId = apptId,
+                CustomerCode = customerCode ?? string.Empty,
+                AgentCode = agentCode ?? string.Empty,
+                Title = title,
                 Notes = details,
+                ApptStart = apptStart,
+                Status = status,
+
+                // If you later add lookup for names:
+                CustomerName = customerCode,
+                AgentName = agentCode,
+
                 Services = new List<ApptDtl>
                 {
                     new ApptDtl
@@ -83,8 +149,7 @@ WHERE LOG_ID = @LOGID
                 }
             };
 
-            // Log-based PDF = no signature
-            return new AppointmentPdf(appt, null);
+            return new AppointmentPdf(appt, signatureBytes);
         }
 
         public void Compose(IDocumentContainer container)
@@ -116,7 +181,7 @@ WHERE LOG_ID = @LOGID
                                     .FontColor(Colors.Grey.Darken2);
                             });
 
-                            // Appointment ID removed (keep blank)
+                            // Keep blank
                             row.ConstantItem(160).AlignRight().Text("");
                         });
 
@@ -131,7 +196,7 @@ WHERE LOG_ID = @LOGID
                 {
                     col.Spacing(16);
 
-                    // --- Status banner (KEEP Date/Time here) ---
+                    // --- Status banner (Date/Time ONLY here) ---
                     col.Item().Element(e =>
                     {
                         var status = (_appt.Status ?? "-").Trim();
@@ -149,22 +214,22 @@ WHERE LOG_ID = @LOGID
                                  c.Item().Text(status).Bold().FontSize(12);
                              });
 
-                             // Date/Time stays ONLY here
                              r.ConstantItem(220).AlignRight().Column(c =>
                              {
                                  c.Item().Text("Appointment Date/Time")
                                      .FontSize(9)
                                      .FontColor(Colors.Grey.Darken2);
 
-                                 // If ApptStart is default/unset, show '-'
-                                 var dt = _appt.ApptStart;
-                                 var dtText = (dt == default) ? "-" : dt.ToString("yyyy-MM-dd HH:mm");
+                                 var dtText = (_appt.ApptStart == default)
+                                     ? "-"
+                                     : _appt.ApptStart.ToString("yyyy-MM-dd HH:mm");
+
                                  c.Item().Text(dtText).Bold().FontSize(12);
                              });
                          });
                     });
 
-                    // --- Details card (NO Date/Time, NO Status) ---
+                    // --- Details card ---
                     col.Item().Element(card =>
                     {
                         card.Border(1)
@@ -194,7 +259,7 @@ WHERE LOG_ID = @LOGID
                                     Field(one, "Title", _appt.Title);
                                 });
 
-                                // --- List services with CLAIMED info ---
+                                // --- Service Claims ---
                                 if (_appt.Services != null && _appt.Services.Count > 0)
                                 {
                                     c.Item().PaddingTop(10).Text("Service Claims").Bold().FontSize(11);
@@ -203,21 +268,22 @@ WHERE LOG_ID = @LOGID
                                     {
                                         table.ColumnsDefinition(cols =>
                                         {
-                                            cols.ConstantColumn(120);
-                                            cols.ConstantColumn(120);
+                                            cols.RelativeColumn();
+                                            cols.ConstantColumn(140);
                                         });
 
                                         table.Header(header =>
                                         {
                                             header.Cell().Text("Service Code").FontSize(9).Bold();
-                                            header.Cell().Text("Claimed / Qty").FontSize(9).Bold();
+                                            header.Cell().AlignRight().Text("Claimed / Qty").FontSize(9).Bold();
                                         });
 
                                         foreach (var svc in _appt.Services)
                                         {
                                             var totalClaimed = svc.Claimed + svc.PrevClaimed;
-                                            table.Cell().Text(svc.ServiceCode ?? "-");
-                                            table.Cell().Text($"{totalClaimed} / {svc.Qty}");
+
+                                            table.Cell().Text(string.IsNullOrWhiteSpace(svc.ServiceCode) ? "-" : svc.ServiceCode);
+                                            table.Cell().AlignRight().Text($"{totalClaimed} / {svc.Qty}");
                                         }
                                     });
                                 }
@@ -241,7 +307,7 @@ WHERE LOG_ID = @LOGID
                                  });
                     });
 
-                    // --- Signature section (small, bottom-right) ---
+                    // --- Signature section (same style as your earlier version) ---
                     col.Item().Element(sig =>
                     {
                         bool hasSig = _signature != null && _signature.Length > 0;
@@ -275,8 +341,6 @@ WHERE LOG_ID = @LOGID
                                     .BorderColor(Colors.Grey.Lighten2)
                                     .Background(Colors.White)
                                     .Padding(6)
-                                    .AlignBottom()
-                                    .AlignRight()
                                     .Image(_signature!)
                                     .FitArea();
                                }
@@ -322,7 +386,6 @@ WHERE LOG_ID = @LOGID
             });
         }
 
-        // Helper: consistent field rows
         private static void Field(ColumnDescriptor col, string label, string? value)
         {
             col.Item().Row(r =>
