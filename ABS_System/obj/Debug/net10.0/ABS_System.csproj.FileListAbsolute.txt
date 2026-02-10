@@ -191,7 +191,6 @@ C:\Users\sd01\ABS_System\ABS_SYstem\obj\Debug\net10.0\rjsmcshtml.dswa.cache.json
 C:\Users\sd01\ABS_System\ABS_SYstem\obj\Debug\net10.0\scopedcss\Views\Shared\_Layout.cshtml.rz.scp.css
 C:\Users\sd01\ABS_System\ABS_SYstem\obj\Debug\net10.0\scopedcss\bundle\ABS_System.styles.css
 C:\Users\sd01\ABS_System\ABS_SYstem\obj\Debug\net10.0\scopedcss\projectbundle\ABS_System.bundle.scp.css
-C:\Users\sd01\ABS_System\ABS_SYstem\obj\Debug\net10.0\compressed\ily9vkstnh-{0}-lmwdmo5a3t-lmwdmo5a3t.gz
 C:\Users\sd01\ABS_System\ABS_SYstem\obj\Debug\net10.0\compressed\ghxam07ewy-{0}-yonpjgs4i3-yonpjgs4i3.gz
 C:\Users\sd01\ABS_System\ABS_SYstem\obj\Debug\net10.0\compressed\4txr5y0umt-{0}-b9sayid5wm-b9sayid5wm.gz
 C:\Users\sd01\ABS_System\ABS_SYstem\obj\Debug\net10.0\compressed\f3dc7ikqbw-{0}-61n19gt1b8-61n19gt1b8.gz
@@ -271,3 +270,4 @@ C:\Users\sd01\ABS_System\ABS_SYstem\obj\Debug\net10.0\ABS_System.genruntimeconfi
 C:\Users\sd01\ABS_System\ABS_SYstem\obj\Debug\net10.0\ref\ABS_System.dll
 C:\Users\sd01\ABS_System\ABS_System\bin\Debug\net10.0\ABS_System.IntegrationTests\obj\ABS_System.IntegrationTests.csproj.nuget.dgspec.json
 C:\Users\sd01\ABS_System\ABS_System\bin\Debug\net10.0\ABS_System.IntegrationTests\obj\project.assets.json
+C:\Users\sd01\ABS_System\ABS_System\obj\Debug\net10.0\compressed\ily9vkstnh-{0}-6gkzrixlxo-6gkzrixlxo.gz

@@ -80,6 +80,35 @@ namespace YourApp.Controllers
             ViewBag.AgentBranchNos = agentBranchNos;
             ViewBag.AgentColors = agentColors;
 
+            var birthdays = new List<CustomerBirthdayVm>();
+            try
+            {
+                using var scope = HttpContext.RequestServices.CreateScope();
+                var dbObj = scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                if (dbObj is YourApp.Data.FirebirdDb db)
+                {
+                    using var conn = db.Open();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"SELECT COMPANYNAME, UDF_DOB FROM AR_CUSTOMER WHERE UDF_DOB IS NOT NULL";
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read())
+                    {
+                        var name = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                        var dobStr = r.IsDBNull(1) ? null : r.GetString(1).Trim();
+                        if (DateTime.TryParse(dobStr, out var dob))
+                        {
+                            // Only show birthdays in the selected month
+                            if (dob.Month == month)
+                            {
+                                birthdays.Add(new CustomerBirthdayVm { Name = name, Birthday = dob });
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            ViewBag.CustomerBirthdays = birthdays;
+
             return View(monthEvents);
         }
 
@@ -97,44 +126,32 @@ namespace YourApp.Controllers
             try
             {
                 using var scope = HttpContext.RequestServices.CreateScope();
-                var db = (YourApp.Data.FirebirdDb)scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
-                using var conn = db.Open();
-                using var cmd = conn.CreateCommand();
-
-                cmd.CommandText = isOffice
-                    ? @"
-SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS
-FROM APPOINTMENT ap
-WHERE ap.APPT_START >= @START AND ap.APPT_START <= @END
-ORDER BY ap.APPT_START"
-                    : @"
-SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS
-FROM APPOINTMENT ap
-JOIN AGENT a ON a.CODE = ap.AGENT_CODE
-WHERE ap.APPT_START >= @START
-  AND ap.APPT_START <= @END
-  AND a.BRANCHNO = @BRANCHNO
-ORDER BY ap.APPT_START";
-
-                cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@START", start, FbDbType.TimeStamp));
-                cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@END", end, FbDbType.TimeStamp));
-
-                if (!isOffice)
-                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@BRANCHNO", userBranchNo, FbDbType.VarChar));
-
-                using var r = cmd.ExecuteReader();
-                while (r.Read())
+                var dbObj = scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                if (dbObj is YourApp.Data.FirebirdDb db)
                 {
-                    list.Add(new YourApp.Models.Appointment
+                    using var conn = db.Open();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = isOffice
+                        ? @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap WHERE ap.APPT_START >= @START AND ap.APPT_START <= @END ORDER BY ap.APPT_START"
+                        : @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap JOIN AGENT a ON a.CODE = ap.AGENT_CODE WHERE ap.APPT_START >= @START AND ap.APPT_START <= @END AND a.BRANCHNO = @BRANCHNO ORDER BY ap.APPT_START";
+                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@START", start, FbDbType.TimeStamp));
+                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@END", end, FbDbType.TimeStamp));
+                    if (!isOffice)
+                        cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@BRANCHNO", userBranchNo, FbDbType.VarChar));
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read())
                     {
-                        ApptId = r.GetInt64(0),
-                        CustomerCode = r.IsDBNull(1) ? "" : r.GetString(1).Trim(),
-                        AgentCode = r.IsDBNull(2) ? "" : r.GetString(2).Trim(),
-                        ApptStart = r.GetDateTime(3),
-                        Title = r.IsDBNull(4) ? "" : r.GetString(4).Trim(),
-                        Notes = r.IsDBNull(5) ? "" : r.GetString(5),
-                        Status = r.IsDBNull(6) ? "BOOKED" : r.GetString(6).Trim()
-                    });
+                        list.Add(new YourApp.Models.Appointment
+                        {
+                            ApptId = r.GetInt64(0),
+                            CustomerCode = r.IsDBNull(1) ? "" : r.GetString(1).Trim(),
+                            AgentCode = r.IsDBNull(2) ? "" : r.GetString(2).Trim(),
+                            ApptStart = r.GetDateTime(3),
+                            Title = r.IsDBNull(4) ? "" : r.GetString(4).Trim(),
+                            Notes = r.IsDBNull(5) ? "" : r.GetString(5),
+                            Status = r.IsDBNull(6) ? "BOOKED" : r.GetString(6).Trim()
+                        });
+                    }
                 }
             }
             catch
@@ -162,60 +179,48 @@ ORDER BY ap.APPT_START";
             try
             {
                 using var scope = HttpContext.RequestServices.CreateScope();
-                var db = (YourApp.Data.FirebirdDb)scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
-                using var conn = db.Open();
-
-                // 1) ApptId -> Service Codes (APPT_DTL)
-                using (var cmdSvc = conn.CreateCommand())
+                var dbObj = scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                if (dbObj is YourApp.Data.FirebirdDb db)
                 {
-                    var paramNames = new List<string>();
-                    for (int i = 0; i < apptIds.Count; i++)
+                    using var conn = db.Open();
+                    // 1) ApptId -> Service Codes (APPT_DTL)
+                    using (var cmdSvc = conn.CreateCommand())
                     {
-                        var p = "@p" + i;
-                        paramNames.Add(p);
-                        cmdSvc.Parameters.Add(YourApp.Data.FirebirdDb.P(p, apptIds[i], FbDbType.BigInt));
-                    }
-
-                    cmdSvc.CommandText = $@"
-SELECT APPT_ID, SERVICE_CODE
-FROM APPT_DTL
-WHERE APPT_ID IN ({string.Join(",", paramNames)})
-ORDER BY APPT_ID, SERVICE_CODE";
-
-                    using var rSvc = cmdSvc.ExecuteReader();
-                    while (rSvc.Read())
-                    {
-                        var apptId = rSvc.GetInt64(0);
-                        var code = rSvc.IsDBNull(1) ? "" : rSvc.GetString(1).Trim();
-                        if (string.IsNullOrWhiteSpace(code)) continue;
-
-                        if (!apptServices.TryGetValue(apptId, out var list))
+                        var paramNames = new List<string>();
+                        for (int i = 0; i < apptIds.Count; i++)
                         {
-                            list = new List<string>();
-                            apptServices[apptId] = list;
+                            var p = "@p" + i;
+                            paramNames.Add(p);
+                            cmdSvc.Parameters.Add(YourApp.Data.FirebirdDb.P(p, apptIds[i], FbDbType.BigInt));
                         }
-
-                        if (!list.Contains(code, StringComparer.OrdinalIgnoreCase))
-                            list.Add(code);
+                        cmdSvc.CommandText = $@"SELECT APPT_ID, SERVICE_CODE FROM APPT_DTL WHERE APPT_ID IN ({string.Join(",", paramNames)}) ORDER BY APPT_ID, SERVICE_CODE";
+                        using var rSvc = cmdSvc.ExecuteReader();
+                        while (rSvc.Read())
+                        {
+                            var apptId = rSvc.GetInt64(0);
+                            var code = rSvc.IsDBNull(1) ? "" : rSvc.GetString(1).Trim();
+                            if (string.IsNullOrWhiteSpace(code)) continue;
+                            if (!apptServices.TryGetValue(apptId, out var list))
+                            {
+                                list = new List<string>();
+                                apptServices[apptId] = list;
+                            }
+                            if (!list.Contains(code, StringComparer.OrdinalIgnoreCase))
+                                list.Add(code);
+                        }
                     }
-                }
-
-                // 2) Service Code -> Description (ST_ITEM)
-                using (var cmdNames = conn.CreateCommand())
-                {
-                    cmdNames.CommandText = @"
-SELECT CODE, DESCRIPTION
-FROM ST_ITEM
-WHERE STOCKGROUP = 'SERVICE'";
-
-                    using var rNames = cmdNames.ExecuteReader();
-                    while (rNames.Read())
+                    // 2) Service Code -> Description (ST_ITEM)
+                    using (var cmdNames = conn.CreateCommand())
                     {
-                        var code = rNames.IsDBNull(0) ? "" : rNames.GetString(0).Trim();
-                        var desc = rNames.IsDBNull(1) ? "" : rNames.GetString(1).Trim();
-
-                        if (!string.IsNullOrWhiteSpace(code))
-                            serviceNames[code] = desc;
+                        cmdNames.CommandText = @"SELECT CODE, DESCRIPTION FROM ST_ITEM WHERE STOCKGROUP = 'SERVICE'";
+                        using var rNames = cmdNames.ExecuteReader();
+                        while (rNames.Read())
+                        {
+                            var code = rNames.IsDBNull(0) ? "" : rNames.GetString(0).Trim();
+                            var desc = rNames.IsDBNull(1) ? "" : rNames.GetString(1).Trim();
+                            if (!string.IsNullOrWhiteSpace(code))
+                                serviceNames[code] = desc;
+                        }
                     }
                 }
             }
@@ -242,30 +247,27 @@ WHERE STOCKGROUP = 'SERVICE'";
             try
             {
                 using var scope = HttpContext.RequestServices.CreateScope();
-                var db = (YourApp.Data.FirebirdDb)scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
-                using var conn = db.Open();
-                using var cmd = conn.CreateCommand();
-
-                cmd.CommandText = isOffice
-                    ? "SELECT CODE, DESCRIPTION, BRANCHNO FROM AGENT"
-                    : "SELECT CODE, DESCRIPTION, BRANCHNO FROM AGENT WHERE BRANCHNO = @BRANCHNO";
-
-                if (!isOffice)
-                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@BRANCHNO", userBranchNo, FbDbType.VarChar));
-
-                using var r = cmd.ExecuteReader();
-                while (r.Read())
+                var dbObj = scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                if (dbObj is YourApp.Data.FirebirdDb db)
                 {
-                    var code = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
-                    var name = r.IsDBNull(1) ? "" : r.GetString(1).Trim();
-                    var branchNo = r.IsDBNull(2) ? "" : r.GetString(2).Trim();
-                    if (string.IsNullOrWhiteSpace(code)) continue;
-
-                    agentNames[code] = name;
-                    agentBranchNos[code] = branchNo;
-
-                    // ✅ default grey
-                    agentColors[code] = GetBranchColor(branchNo);
+                    using var conn = db.Open();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = isOffice
+                        ? "SELECT CODE, DESCRIPTION, BRANCHNO FROM AGENT"
+                        : "SELECT CODE, DESCRIPTION, BRANCHNO FROM AGENT WHERE BRANCHNO = @BRANCHNO";
+                    if (!isOffice)
+                        cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@BRANCHNO", userBranchNo, FbDbType.VarChar));
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read())
+                    {
+                        var code = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                        var name = r.IsDBNull(1) ? "" : r.GetString(1).Trim();
+                        var branchNo = r.IsDBNull(2) ? "" : r.GetString(2).Trim();
+                        if (string.IsNullOrWhiteSpace(code)) continue;
+                        agentNames[code] = name;
+                        agentBranchNos[code] = branchNo;
+                        agentColors[code] = GetBranchColor(branchNo);
+                    }
                 }
             }
             catch { }
@@ -294,19 +296,20 @@ WHERE STOCKGROUP = 'SERVICE'";
             try
             {
                 using var scope = HttpContext.RequestServices.CreateScope();
-                var db = (YourApp.Data.FirebirdDb)scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
-                using var conn = db.Open();
-                using var cmd = conn.CreateCommand();
-
-                cmd.CommandText = "SELECT CODE, COMPANYNAME FROM AR_CUSTOMER";
-
-                using var r = cmd.ExecuteReader();
-                while (r.Read())
+                var dbObj = scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                if (dbObj is YourApp.Data.FirebirdDb db)
                 {
-                    var code = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
-                    var name = r.IsDBNull(1) ? "" : r.GetString(1).Trim();
-                    if (!string.IsNullOrWhiteSpace(code))
-                        customerNames[code] = name;
+                    using var conn = db.Open();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "SELECT CODE, COMPANYNAME FROM AR_CUSTOMER";
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read())
+                    {
+                        var code = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                        var name = r.IsDBNull(1) ? "" : r.GetString(1).Trim();
+                        if (!string.IsNullOrWhiteSpace(code))
+                            customerNames[code] = name;
+                    }
                 }
             }
             catch { }
@@ -331,15 +334,16 @@ WHERE STOCKGROUP = 'SERVICE'";
             try
             {
                 using var scope = HttpContext.RequestServices.CreateScope();
-                var db = (YourApp.Data.FirebirdDb)scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
-                using var conn = db.Open();
-                using var cmd = conn.CreateCommand();
-
-                cmd.CommandText = @"SELECT DESCRIPTION FROM ST_ITEM WHERE STOCKGROUP = 'SERVICE' ORDER BY DESCRIPTION";
-
-                using var r = cmd.ExecuteReader();
-                while (r.Read())
-                    serviceDescriptions.Add(r.IsDBNull(0) ? "" : r.GetString(0).Trim());
+                var dbObj = scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                if (dbObj is YourApp.Data.FirebirdDb db)
+                {
+                    using var conn = db.Open();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"SELECT DESCRIPTION FROM ST_ITEM WHERE STOCKGROUP = 'SERVICE' ORDER BY DESCRIPTION";
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read())
+                        serviceDescriptions.Add(r.IsDBNull(0) ? "" : r.GetString(0).Trim());
+                }
             }
             catch { }
 
@@ -418,5 +422,11 @@ WHERE STOCKGROUP = 'SERVICE'";
 
         [System.ComponentModel.DataAnnotations.StringLength(500)]
         public string? Notes { get; set; }
+    }
+
+    public class CustomerBirthdayVm
+    {
+        public string? Name { get; set; }
+        public DateTime? Birthday { get; set; }
     }
 }

@@ -1,7 +1,7 @@
-
 @model List<YourApp.Controllers.CalendarEventVm>
 @using System.Linq
 @using System.Collections.Generic
+@using System.Text.Json
 
 @{
     ViewData["Title"] = "Calendar";
@@ -11,9 +11,9 @@
 
     DateTime firstDay = (DateTime)ViewBag.FirstDay;
     int daysInMonth = DateTime.DaysInMonth(year, month);
-
     int startOffset = (int)firstDay.DayOfWeek;
 
+    // pickDate flag (optional)
     bool pickDate = false;
     if (Context.Request.Query.ContainsKey("pickDate"))
     {
@@ -21,6 +21,7 @@
         pickDate = (v == "1" || v.Equals("true", StringComparison.OrdinalIgnoreCase) || v.Equals("y", StringComparison.OrdinalIgnoreCase));
     }
 
+    // Month dropdown list
     var monthItems = System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.MonthNames
         .Take(12)
         .Select((name, idx) => new { Text = name, Value = idx + 1 })
@@ -29,9 +30,11 @@
     int startYear = DateTime.Today.Year - 5;
     int endYear = DateTime.Today.Year + 5;
 
+    // Appointments
     var monthAppointments = ViewBag.MonthAppointments as List<YourApp.Models.Appointment>
                             ?? new List<YourApp.Models.Appointment>();
 
+    // Lookups
     var agentColors = ViewBag.AgentColors as Dictionary<string, string>
                       ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -40,380 +43,290 @@
 
     var customerNames = ViewBag.CustomerNames as Dictionary<string, string>
                         ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    // Birthdays list
+    var birthdays = ViewBag.CustomerBirthdays as List<YourApp.Controllers.CustomerBirthdayVm>
+                    ?? new List<YourApp.Controllers.CustomerBirthdayVm>();
+
+    // JSON options (keep property names as-is, do not camelCase)
+    var jsonOpt = new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = null
+    };
+}
+
+@functions{
+    private static string ToTitleCaseSafe(string? input)
+    {
+        var s = (input ?? "").Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(s)) return "";
+
+        // Uppercase first char of each word (space or dash separated)
+        return System.Text.RegularExpressions.Regex.Replace(
+            s,
+            @"(^|[\s-])([a-z])",
+            m => m.Groups[1].Value + m.Groups[2].Value.ToUpperInvariant()
+        );
+    }
+
+    private static bool IsFulfilledStatus(string? status)
+    {
+        var st = (status ?? "").Trim().ToUpperInvariant();
+        return st == "FULFILLED" || st == "DONE" || st == "COMPLETED" || st == "CANCELLED";
+    }
 }
 
 <link rel="stylesheet" href="~/css/calendar.css" />
+
 <div class="calendar-shell">
-<!-- ✅ Hamburger (top-right) -->
-<button type="button" id="hamburgerBtn" class="hamburger-btn" aria-label="Open menu">
-  ☰
-</button>
 
-<h2 class="calendar-title">
-    Calendar -
-    <span id="calendarMonthLabel"
-          class="calendar-month-click"
-          onclick="showMonthModal('@year', '@month')">
-        @firstDay.ToString("MMMM yyyy")
-    </span>
-</h2>
+    <!-- ✅ Hamburger (top-right) -->
+    <button type="button" id="hamburgerBtn" class="hamburger-btn" aria-label="Open menu">☰</button>
 
-<!-- ✅ Anti-forgery token for AJAX -->
-<form id="antiForgeryForm" style="display:none;">
-    @Html.AntiForgeryToken()
-</form>
+    <h2 class="calendar-title">
+        Calendar -
+        <span id="calendarMonthLabel"
+              class="calendar-month-click"
+              onclick="showMonthModal('@year', '@month')">
+            @firstDay.ToString("MMMM yyyy")
+        </span>
+    </h2>
 
-<div id="modalOverlay" class="modal-overlay" style="display:none;"></div>
+    <!-- ✅ Anti-forgery token for AJAX -->
+    <form id="antiForgeryForm" style="display:none;">
+        @Html.AntiForgeryToken()
+    </form>
 
-<div id="monthAppointmentsModal" class="custom-modal" style="display:none;">
-    <div class="custom-modal-content">
-        <div class="custom-modal-header">
-            <h5 id="monthAppointmentsModalLabel">
-                Appointments for <span id="modalMonthLabel"></span>
-            </h5>
-            <button type="button" id="closeMonthModal" class="modal-close">&times;</button>
-        </div>
-        <div class="custom-modal-body">
-            <div id="month-appointments-list" class="appt-card-list"></div>
-        </div>
-    </div>
-</div>
+    <!-- ✅ Shared overlay for modals -->
+    <div id="modalOverlay" class="modal-overlay" style="display:none;"></div>
 
-<div id="dayAppointmentsModal" class="custom-modal" style="display:none;">
-    <div class="custom-modal-content">
-        <div class="custom-modal-header">
-            <h5 id="dayAppointmentsModalLabel">
-                Appointments for <span id="modalDayLabel"></span>
-            </h5>
-            <button type="button" id="closeDayModal" class="modal-close">&times;</button>
-        </div>
-        <div class="custom-modal-body">
-            <a id="add-appointment-btn" class="custom-modal-btn" href="#">+ New Booking</a>
-            <div id="day-appointments-list" class="appt-card-list"></div>
-        </div>
-    </div>
-</div>
-
-<!-- ✅ Confirm Delete Modal (custom, no browser "xxx says") -->
-<div id="confirmDeleteModal" class="custom-modal" style="display:none;">
-    <div class="custom-modal-content" style="max-width:420px;">
-        <div class="custom-modal-header">
-            <h5>Confirm Delete</h5>
-            <button type="button" id="closeConfirmDeleteModal" class="modal-close">&times;</button>
-        </div>
-
-        <div class="custom-modal-body">
-            <div style="margin-bottom:12px;">
-                Are you sure you want to cancel this appointment?
+    <!-- =========================
+         ✅ MONTH MODAL
+         ========================= -->
+    <div id="monthAppointmentsModal" class="custom-modal" style="display:none;">
+        <div class="custom-modal-content">
+            <div class="custom-modal-header">
+                <h5 id="monthAppointmentsModalLabel">
+                    Appointments for <span id="modalMonthLabel"></span>
+                </h5>
+                <button type="button" id="closeMonthModal" class="modal-close">&times;</button>
             </div>
-
-            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:10px;">
-                <button type="button" id="btnDeleteCancel" class="btn btn-secondary">Close</button>
-                <button type="button" id="btnDeleteYes" class="btn btn-warning">Cancel Appointment</button>
+            <div class="custom-modal-body">
+                <div id="month-appointments-list" class="appt-card-list"></div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- ✅ Side Menu -->
-<div id="sideMenuOverlay" class="side-menu-overlay" style="display:none;"></div>
+    <!-- =========================
+         ✅ DAY MODAL
+         ========================= -->
+    <div id="dayAppointmentsModal" class="custom-modal" style="display:none;">
+        <div class="custom-modal-content">
+            <div class="custom-modal-header">
+                <h5 id="dayAppointmentsModalLabel">
+                    Appointments for <span id="modalDayLabel"></span>
+                </h5>
+                <button type="button" id="closeDayModal" class="modal-close">&times;</button>
+            </div>
 
-<div id="sideMenu" class="side-menu" style="display:none;">
-  <div class="side-menu-header">
-    <div class="side-menu-title">Menu</div>
-    <button type="button" id="sideMenuClose" class="side-menu-close" aria-label="Close menu">&times;</button>
-  </div>
-
-  <div class="side-menu-body">
-    <!-- add more links here later if you want -->
-    <a class="side-menu-link" href="@Url.Action("Index","Calendar", new { year = year, month = month })">
-      Calendar Home
-    </a>
-  </div>
-
-  <!-- ✅ Logout fixed at bottom -->
-  <div class="side-menu-footer">
-    <form method="post" action="@Url.Action("Logout","Account")" style="margin:0;">
-      @Html.AntiForgeryToken()
-      <button type="submit" class="side-menu-logout">
-        Log Out
-      </button>
-    </form>
-  </div>
-</div>
-
-
-<style>
-
-  /* ✅ Line-through ONLY for calendar cell cards (in-cell), NOT modal */
-.appt-card.in-cell.is-fulfilled .appt-title{
-  text-decoration: line-through !important;
-}
-
-/* =========================
-   Date + Time side-by-side row
-   ========================= */
-.dt-row{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.dt-col label{
-  margin-top: 0;
-}
-
-/* Mobile: stack */
-@@media (max-width: 520px){
-  .dt-row{
-    grid-template-columns: 1fr;
-  }
-}
-
-
-    /* ================================
-   ✅ Hamburger + Side Menu
-   ================================ */
-
-.calendar-shell{ position: relative; }
-
-/* Hamburger button */
-.hamburger-btn{
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  width: 42px;
-  height: 38px;
-  border: 1px solid rgba(0,0,0,0.12);
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-  z-index: 20;
-}
-
-.hamburger-btn:hover{ background: rgba(0,0,0,0.03); }
-
-/* Overlay */
-.side-menu-overlay{
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.45);
-  z-index: 1200;
-}
-
-/* Side panel */
-.side-menu{
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: 280px;
-  height: 100vh;
-  background: #fff;
-  z-index: 1201;
-  box-shadow: -6px 0 20px rgba(0,0,0,0.18);
-  display: flex;
-  flex-direction: column;
-}
-
-/* Header */
-.side-menu-header{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 14px;
-  border-bottom: 1px solid rgba(0,0,0,0.08);
-}
-
-.side-menu-title{
-  font-weight: 800;
-  font-size: 16px;
-}
-
-.side-menu-close{
-  width: 38px;
-  height: 34px;
-  border: 1px solid rgba(0,0,0,0.12);
-  border-radius: 10px;
-  background: #fff;
-  font-size: 22px;
-  cursor: pointer;
-}
-
-/* Body */
-.side-menu-body{
-  padding: 12px 14px;
-  flex: 1;
-  overflow: auto;
-}
-
-.side-menu-link{
-  display: block;
-  padding: 10px 10px;
-  border-radius: 10px;
-  color: #111;
-  text-decoration: none;
-  border: 1px solid rgba(0,0,0,0.08);
-  margin-bottom: 10px;
-}
-
-.side-menu-link:hover{
-  background: rgba(0,0,0,0.03);
-}
-
-/* Footer (Logout bottom) */
-.side-menu-footer{
-  padding: 12px 14px;
-  border-top: 1px solid rgba(0,0,0,0.08);
-}
-
-.side-menu-logout{
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(0,0,0,0.12);
-  background: #dc3545; /* bootstrap danger */
-  color: #fff;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.side-menu-logout:hover{
-  filter: brightness(0.95);
-}
-
-
-/* ================================
-   ✅ Full-width (stretch) calendar
-   ================================ */
-
-/* 1) Make the outer wrapper stretch the page */
-.calendar-shell{
-  width: 100% !important;     /* ✅ stretch */
-  max-width: none !important; /* ✅ remove limit */
-  margin: 0 !important;       /* ✅ no centering gap */
-  background: #fff;
-  border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 14px;
-  padding: 14px;
-  box-shadow: 0 2px 14px rgba(0,0,0,0.06);
-}
-
-/* 2) Make the toolbar stretch too */
-.calendar-shell .calendar-toolbar{
-  width: 100% !important;
-  max-width: none !important;
-  margin: 0 0 12px 0 !important;
-}
-
-/* 3) IMPORTANT: make the calendar table stretch */
-.calendar-shell .calendar-table{
-  width: 100% !important;     /* ✅ stretch full width */
-  margin: 0 !important;
-  table-layout: fixed;        /* ✅ equal width columns */
-}
-
-/* 4) Slightly tighter cells (optional) */
-.calendar-shell .calendar-table th,
-.calendar-shell .calendar-table td{
-  padding: 6px !important;
-  vertical-align: top;
-}
-
-/* 5) Prevent long titles from breaking layout */
-.calendar-shell .appt-card.in-cell .appt-title{
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* 6) Optional: reduce the appt list height so cells stay tidy */
-.calendar-shell .scrollable-appt-list{
-  max-height: 86px;
-}
-
-.modal-overlay{
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-
-  /* dark background */
-  background: rgba(0,0,0,0.55);
-
-  /* optional nicer look */
-  backdrop-filter: blur(1px);
-
-  /* must be BELOW modal (your modal is z-index:1000) */
-  z-index: 900;
-
-  /* must be clickable */
-  cursor: pointer;
-}
-
-
-/* Force fulfilled look everywhere (grid + modal) */
-.appt-card.is-fulfilled,
-.appt-card.modal-card.is-fulfilled,
-.appt-card.in-cell.is-fulfilled {
-  opacity: 0.45 !important;
-}
-
-</style>
-
-<div class="calendar-toolbar">
-    <form method="get" action="@Url.Action("Index")" class="calendar-search-form">
-        <select name="month" class="form-select calendar-month-select">
-            @foreach (var mm in monthItems)
-            {
-                <option value="@mm.Value" selected="@(mm.Value == month ? "selected" : null)">@mm.Text</option>
-            }
-        </select>
-
-        <select name="year" class="form-select calendar-year-select">
-            @for (int y = startYear; y <= endYear; y++)
-            {
-                <option value="@y" selected="@(y == year ? "selected" : null)">@y</option>
-            }
-        </select>
-
-        @if (pickDate)
-        {
-            <input type="hidden" name="pickDate" value="1" />
-        }
-
-        <button type="submit" class="btn btn-primary">Search</button>
-    </form>
-
-    <div class="calendar-nav-actions">
-        <a class="btn btn-secondary"
-           href="@Url.Action("Index", new { year = firstDay.AddMonths(-1).Year, month = firstDay.AddMonths(-1).Month, pickDate = pickDate ? 1 : (int?)null })">
-            &lt; Prev
-        </a>
-
-        <a class="btn btn-secondary"
-           href="@Url.Action("Index", new { year = DateTime.Today.Year, month = DateTime.Today.Month, pickDate = pickDate ? 1 : (int?)null })">
-            Today
-        </a>
-
-        <a class="btn btn-secondary"
-           href="@Url.Action("Index", new { year = firstDay.AddMonths(1).Year, month = firstDay.AddMonths(1).Month, pickDate = pickDate ? 1 : (int?)null })">
-            Next &gt;
-        </a>
+            <div class="custom-modal-body">
+                <a id="add-appointment-btn" class="custom-modal-btn" href="#">+ New Booking</a>
+                <div id="day-appointments-list" class="appt-card-list"></div>
+            </div>
+        </div>
     </div>
-</div>
 
-<table class="table table-bordered calendar-table">
-    <thead>
+    <!-- =========================
+         ✅ CONFIRM DELETE MODAL
+         ========================= -->
+    <div id="confirmDeleteModal"
+         class="custom-modal"
+         style="display:none; width:min(340px,90vw) !important; background:#f1f1f1 !important;">
+        <div class="custom-modal-content">
+            <div class="custom-modal-header">
+                <h5>Confirm Delete</h5>
+                <button type="button" id="closeConfirmDeleteModal" class="modal-close">&times;</button>
+            </div>
+
+            <div class="custom-modal-body">
+                <div style="margin-bottom:12px;">
+                    Are you sure you want to cancel this appointment?
+                </div>
+
+                <div class="confirm-modal-actions">
+                    <button type="button" id="btnDeleteCancel" class="btn btn-secondary">Close</button>
+                    <button type="button" id="btnDeleteYes" class="btn btn-warning">Cancel Appointment</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========================
+         ✅ SIDE MENU (Hamburger)
+         ========================= -->
+    <div id="sideMenuOverlay" class="side-menu-overlay" style="display:none;"></div>
+
+    <div id="sideMenu" class="side-menu" style="display:none;">
+        <div class="side-menu-header">
+            <div class="side-menu-title">Menu</div>
+            <button type="button" id="sideMenuClose" class="side-menu-close" aria-label="Close menu">&times;</button>
+        </div>
+
+        <div class="side-menu-body">
+            <div class="side-menu-birthdays" style="margin-bottom:18px;">
+                <div style="display:flex; align-items:center; justify-content:center; margin-bottom:6px;">
+                  <span style="font-weight:700; font-size:15px;">
+                    Birthdays - <span id="birthdayMonthLabel">@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(month) @year</span>
+                  </span>
+                </div>
+
+                @{
+                    var today = DateTime.Today;
+                    var filtered = birthdays
+                        .Where(b => b.Birthday.HasValue && b.Birthday.Value.Month == month)
+                        .ToList();
+
+                    var sorted = filtered
+                        .Select(b =>
+                        {
+                            int? daysToNext = null;
+                            bool isToday = false;
+                            bool isPassed = false;
+
+                            if (b.Birthday.HasValue)
+                            {
+                                var bday = b.Birthday.Value;
+                                var thisYearBirthday = new DateTime(today.Year, bday.Month, bday.Day);
+
+                                if (thisYearBirthday == today)
+                                {
+                                    daysToNext = 0;
+                                    isToday = true;
+                                }
+                                else if (thisYearBirthday < today)
+                                {
+                                    var nextBirthday = new DateTime(today.Year + 1, bday.Month, bday.Day);
+                                    daysToNext = (nextBirthday - today).Days;
+                                    isPassed = true;
+                                }
+                                else
+                                {
+                                    daysToNext = (thisYearBirthday - today).Days;
+                                }
+                            }
+
+                            return new { b.Name, b.Birthday, DaysToNext = daysToNext, IsToday = isToday, IsPassed = isPassed };
+                        })
+                        .OrderByDescending(x => x.IsToday)
+                        .ThenBy(x => x.DaysToNext ?? int.MaxValue)
+                        .ToList();
+                }
+
+                @if (sorted.Count > 0)
+                {
+                    <table style="width:100%; font-size:11px; border-collapse:collapse;">
+                        <thead>
+                        <tr style="background:#f8f8f8;">
+                            <th style="padding:4px 8px; text-align:left; font-weight:600;">Name</th>
+                            <th style="padding:4px 8px; text-align:left; font-weight:600;">Birthday</th>
+                            <th style="padding:4px 8px; text-align:left; font-weight:600;">Days</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var b in sorted)
+                        {
+                            <tr>
+                                <td style="padding:4px 8px; font-weight:500; font-size:10px;">@b.Name</td>
+                                <td style="padding:4px 8px; color:#888;">@b.Birthday?.ToString("dd/MM/yyyy")</td>
+                                <td style="padding:4px 8px;">
+                                    @if (b.IsToday)
+                                    {
+                                        <span style="color:#28a745; font-weight:700;">Today</span>
+                                    }
+                                    else if ((b.DaysToNext ?? 0) > 0)
+                                    {
+                                        <span style="color:@(b.IsPassed ? "#dc3545" : "#007bff"); font-weight:700;">
+                                            in @b.DaysToNext day@(b.DaysToNext == 1 ? "" : "s")
+                                        </span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div style="color:#888; font-size:13px;">No birthdays this month.</div>
+                }
+            </div>
+        </div>
+
+        <!-- ✅ Logout fixed at bottom -->
+        <div class="side-menu-footer">
+            <form method="post" action="@Url.Action("Logout","Account")" style="margin:0;">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="side-menu-logout">Log Out</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- =========================
+         ✅ TOOLBAR (month/year + nav)
+         ========================= -->
+    <div class="calendar-toolbar">
+        <form method="get" action="@Url.Action("Index")" class="calendar-search-form">
+            <select name="month" class="form-select calendar-month-select">
+                @foreach (var mm in monthItems)
+                {
+                    <option value="@mm.Value" selected="@(mm.Value == month ? "selected" : null)">@mm.Text</option>
+                }
+            </select>
+
+            <select name="year" class="form-select calendar-year-select">
+                @for (int y = startYear; y <= endYear; y++)
+                {
+                    <option value="@y" selected="@(y == year ? "selected" : null)">@y</option>
+                }
+            </select>
+
+            @if (pickDate)
+            {
+                <input type="hidden" name="pickDate" value="1" />
+            }
+
+            <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+
+        <div class="calendar-nav-actions">
+            <a class="btn btn-secondary"
+               href="@Url.Action("Index", new { year = firstDay.AddMonths(-1).Year, month = firstDay.AddMonths(-1).Month, pickDate = pickDate ? 1 : (int?)null })">
+                &lt; Prev
+            </a>
+
+            <a class="btn btn-secondary"
+               href="@Url.Action("Index", new { year = DateTime.Today.Year, month = DateTime.Today.Month, pickDate = pickDate ? 1 : (int?)null })">
+                Today
+            </a>
+
+            <a class="btn btn-secondary"
+               href="@Url.Action("Index", new { year = firstDay.AddMonths(1).Year, month = firstDay.AddMonths(1).Month, pickDate = pickDate ? 1 : (int?)null })">
+                Next &gt;
+            </a>
+        </div>
+    </div>
+
+    <!-- =========================
+         ✅ CALENDAR GRID
+         ========================= -->
+    <table class="table table-bordered calendar-table">
+        <thead>
         <tr>
             <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
         </tr>
-    </thead>
-    <tbody>
+        </thead>
+
+        <tbody>
         @{
             int day = 1;
             int cell = 0;
@@ -445,64 +358,44 @@
                                 @if (appts.Count > 0)
                                 {
                                     <div class="scrollable-appt-list appt-card-list in-cell">
-                                     
-                                     
-                                     @foreach (var appt in appts)
-{
-    var agentCode = (appt.AgentCode ?? "").Trim();
-    string cardColor = null;
+                                        @foreach (var appt in appts)
+                                        {
+                                            var agentCode = (appt.AgentCode ?? "").Trim();
+                                            string? cardColor = null;
+                                            if (!string.IsNullOrEmpty(agentCode) && agentColors.TryGetValue(agentCode, out var c))
+                                                cardColor = c;
 
-    if (!string.IsNullOrEmpty(agentCode) && agentColors.TryGetValue(agentCode, out var c))
-        cardColor = c;
-var style =
-  "display:flex !important; align-items:center !important; min-height:20px !important; padding:1px 8px !important; font-size:7px !important; line-height:1.2 !important;";
+                                            var statusUp = (appt.Status ?? "").Trim().ToUpperInvariant();
+                                            var isDone = IsFulfilledStatus(statusUp);
+                                            var doneClass = isDone ? " is-fulfilled" : "";
 
-   
-   if (!string.IsNullOrEmpty(cardColor))
-        style = $"background-color:{cardColor} !important; " + style;
+                                            var custCode = (appt.CustomerCode ?? "").Trim();
+                                            var custName = (!string.IsNullOrEmpty(custCode) && customerNames.TryGetValue(custCode, out var cn)) ? cn : "";
 
-    var statusUp = (appt.Status ?? "").Trim().ToUpperInvariant();
-    var isDone = (statusUp == "FULFILLED" || statusUp == "DONE" || statusUp == "COMPLETED" || statusUp == "CANCELLED");
-    var doneClass = isDone ? " is-fulfilled" : "";
+                                            var displayTitle =
+                                                !string.IsNullOrWhiteSpace(custName)
+                                                    ? ToTitleCaseSafe(custName)
+                                                    : (!string.IsNullOrWhiteSpace(custCode)
+                                                        ? custCode
+                                                        : ToTitleCaseSafe(appt.Title));
 
-    // ✅ Title = Customer Name (same mapping as modal)
-    var custCode = (appt.CustomerCode ?? "").Trim();
-    var custName = (!string.IsNullOrEmpty(custCode) && customerNames.TryGetValue(custCode, out var cn))
-        ? (cn ?? "").Trim()
-        : "";
+                                            var style =
+                                                "display:flex !important; align-items:center !important; min-height:20px !important; " +
+                                                "padding:1px 8px !important; font-size:7px !important; line-height:1.2 !important;" +
+                                                (string.IsNullOrWhiteSpace(cardColor) ? "" : $" background-color:{cardColor} !important;");
 
-   string ToTitleCaseSafe(string s)
-{
-    s = (s ?? "").Trim().ToLowerInvariant();
-    if (s == "") return s;
-    return System.Text.RegularExpressions.Regex.Replace(
-        s,
-        @"(^|[\s-])([a-z])",
-        m => m.Groups[1].Value + m.Groups[2].Value.ToUpperInvariant()
-    );
-}
-
-var displayTitle = !string.IsNullOrWhiteSpace(custName)
-    ? ToTitleCaseSafe(custName)
-    : (!string.IsNullOrWhiteSpace(custCode) ? custCode : ToTitleCaseSafe(appt.Title));
-
-
-    <text>
-        <div class="appt-card in-cell@doneClass"
-             data-appt-id="@appt.ApptId"
-             data-status="@statusUp"
-             style="@style">
-            <span class="appt-title" style="@(isDone ? "opacity:0.45; font-weight:480;" : "font-weight:500;")">
-
-                @displayTitle
-            </span>
-        </div>
-    </text>
-}
-
-                                     
-                                      </div>
+                                            <div class="appt-card in-cell@doneClass"
+                                                 data-appt-id="@appt.ApptId"
+                                                 data-status="@statusUp"
+                                                 style="@style">
+                                                <span class="appt-title" style="@(isDone ? "opacity:0.45; font-weight:480;" : "font-weight:500;")">
+                                                    @displayTitle
+                                                </span>
+                                            </div>
+                                        }
+                                    </div>
                                 }
+
                             </td>
 
                             day++;
@@ -513,22 +406,67 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
                 </tr>
             }
         }
-    </tbody>
-</table>
+        </tbody>
+    </table>
 </div>
 
+<!-- =========================
+     ✅ PAGE-LOCAL STYLE (kept, but cleaned)
+     ========================= -->
+<style>
+  /* ✅ Line-through ONLY for calendar cell cards, NOT modal */
+  .appt-card.in-cell.is-fulfilled .appt-title { text-decoration: line-through !important; }
+
+  /* Force fulfilled look everywhere (grid + modal) */
+  .appt-card.is-fulfilled,
+  .appt-card.modal-card.is-fulfilled,
+  .appt-card.in-cell.is-fulfilled { opacity: 0.45 !important; }
+
+  /* Hamburger + Side Menu */
+  .calendar-shell { position: relative; width: 100% !important; max-width: none !important; margin: 0 !important; background:#fff; border:1px solid rgba(0,0,0,0.08); border-radius:14px; padding:14px; box-shadow:0 2px 14px rgba(0,0,0,0.06); }
+  .hamburger-btn{ position:absolute; top:10px; right:12px; width:42px; height:38px; border:1px solid rgba(0,0,0,0.12); border-radius:10px; background:#fff; box-shadow:0 2px 10px rgba(0,0,0,0.06); font-size:20px; line-height:1; cursor:pointer; z-index:20; }
+  .hamburger-btn:hover{ background: rgba(0,0,0,0.03); }
+
+  .side-menu-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1200; }
+  .side-menu{ position:fixed; top:0; right:0; width:280px; height:100vh; background:#fff; z-index:1201; box-shadow:-6px 0 20px rgba(0,0,0,0.18); display:flex; flex-direction:column; }
+  .side-menu-header{ display:flex; align-items:center; justify-content:space-between; padding:14px; border-bottom:1px solid rgba(0,0,0,0.08); }
+  .side-menu-title{ font-weight:800; font-size:16px; }
+  .side-menu-close{ width:38px; height:34px; border:1px solid rgba(0,0,0,0.12); border-radius:10px; background:#fff; font-size:22px; cursor:pointer; }
+  .side-menu-body{ padding:12px 14px; flex:1; overflow:auto; }
+  .side-menu-footer{ padding:12px 14px; border-top:1px solid rgba(0,0,0,0.08); }
+  .side-menu-logout{ width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgba(0,0,0,0.12); background:#dc3545; color:#fff; font-weight:800; cursor:pointer; }
+  .side-menu-logout:hover{ filter:brightness(0.95); }
+
+  /* Full-width calendar table */
+  .calendar-shell .calendar-toolbar{ width:100% !important; max-width:none !important; margin:0 0 12px 0 !important; }
+  .calendar-shell .calendar-table{ width:100% !important; margin:0 !important; table-layout:fixed; }
+  .calendar-shell .calendar-table th,
+  .calendar-shell .calendar-table td{ padding:6px !important; vertical-align:top; }
+
+  .calendar-shell .appt-card.in-cell .appt-title{ display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .calendar-shell .scrollable-appt-list{ max-height:86px; }
+
+  .modal-overlay{
+    position:fixed; inset:0;
+    background:rgba(0,0,0,0.55);
+    backdrop-filter:blur(1px);
+    z-index:900;
+    cursor:pointer;
+  }
+</style>
 
 @section Scripts {
 <script>
-  // ===== Data injected from Razor =====
-  var allAppointments = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(monthAppointments));
-  window.agentNames = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.AgentNames ?? new Dictionary<string, string>()));
-  window.customerNames = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.CustomerNames ?? new Dictionary<string, string>()));
-  window.agentColors = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.AgentColors ?? new Dictionary<string, string>()));
+  // =========================
+  // ✅ Injected data from Razor
+  // =========================
+  var allAppointments = @Html.Raw(JsonSerializer.Serialize(monthAppointments, jsonOpt));
+  window.agentNames   = @Html.Raw(JsonSerializer.Serialize(agentNames, jsonOpt));
+  window.customerNames= @Html.Raw(JsonSerializer.Serialize(customerNames, jsonOpt));
+  window.agentColors  = @Html.Raw(JsonSerializer.Serialize(agentColors, jsonOpt));
 
-  // ✅ services per appointment + service names
-  window.apptServices = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.ApptServices ?? new Dictionary<long, List<string>>()));
-  window.serviceNames = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.ServiceNames ?? new Dictionary<string, string>()));
+  window.apptServices = @Html.Raw(JsonSerializer.Serialize(ViewBag.ApptServices ?? new Dictionary<long, List<string>>(), jsonOpt));
+  window.serviceNames = @Html.Raw(JsonSerializer.Serialize(ViewBag.ServiceNames ?? new Dictionary<string, string>(), jsonOpt));
 
   function getAntiForgeryToken() {
     var el = document.querySelector('#antiForgeryForm input[name="__RequestVerificationToken"]');
@@ -555,12 +493,9 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
     return status === 'FULFILLED' || status === 'DONE' || status === 'COMPLETED' || status === 'CANCELLED';
   }
 
-  function cssEscape(v) {
-    if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(String(v));
-    return String(v).replace(/"/g, '\\"');
-  }
-
-  // ====== AJAX DELETE CONFIRM ======
+  // =========================
+  // ✅ Confirm Delete Modal
+  // =========================
   var pendingDeleteId = null;
 
   function openConfirmDeleteModal(apptId) {
@@ -578,7 +513,6 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
 
     var dayOpen = document.getElementById('dayAppointmentsModal')?.style.display === 'block';
     var monthOpen = document.getElementById('monthAppointmentsModal')?.style.display === 'block';
-
     if (!dayOpen && !monthOpen) {
       var overlay = document.getElementById('modalOverlay');
       if (overlay) overlay.style.display = 'none';
@@ -607,14 +541,8 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
     return json;
   }
 
-  function removeAppointmentFromUI(apptId) {
-    // Do not remove cancelled/fulfilled appointments from UI. Instead, just update their style.
-    // Optionally, you could update the card's class or status here if needed.
-  }
-
   function wireDeleteConfirm(containerEl) {
     if (!containerEl) return;
-
     containerEl.querySelectorAll('a.appt-delete').forEach(function (a) {
       a.addEventListener('click', function (e) {
         e.preventDefault();
@@ -625,7 +553,9 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
     });
   }
 
-  // ====== STATUS UPDATE AJAX ======
+  // =========================
+  // ✅ Status Update AJAX
+  // =========================
   async function setAppointmentStatus(apptId, newStatus) {
     var token = getAntiForgeryToken();
 
@@ -669,7 +599,6 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
 
         try {
           await setAppointmentStatus(apptId, newStatus);
-
           var found = (allAppointments || []).find(function (a) { return String(a.ApptId) === String(apptId); });
           if (found) found.Status = newStatus;
 
@@ -685,7 +614,7 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
   }
 
   // =========================
-  // ✅ Title click dropdown (services list)
+  // ✅ Services dropdown (title click)
   // =========================
   function getServiceLinesHtml(apptId) {
     var list = (window.apptServices && window.apptServices[apptId]) ? window.apptServices[apptId] : null;
@@ -726,7 +655,9 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
     });
   }
 
-  // ====== Build appointment card for modal ======
+  // =========================
+  // ✅ Build modal appointment card
+  // =========================
   function buildApptCard(appt) {
     var when = '';
     var timeOnly = '';
@@ -752,21 +683,13 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
     var doneClass = done ? ' is-fulfilled' : '';
 
     // Status letter logic
-    var statusLetter = '';
     var statusUp = (appt.Status || '').trim().toUpperCase();
-    var statusColor = '';
-    if (statusUp === 'CANCELLED') {
-      statusLetter = 'C';
-      statusColor = '#d9534f'; // red
-    } else if (statusUp === 'FULFILLED' || statusUp === 'DONE' || statusUp === 'COMPLETED') {
-      statusLetter = 'F';
-      statusColor = '#5cb85c'; // green
-    } else {
-      statusLetter = 'B';
-      statusColor = '#0275d8'; // blue
-    }
+    var statusLetter = 'B';
+    var statusColor = '#0275d8';
+    if (statusUp === 'CANCELLED') { statusLetter = 'C'; statusColor = '#d9534f'; }
+    else if (statusUp === 'FULFILLED' || statusUp === 'DONE' || statusUp === 'COMPLETED') { statusLetter = 'F'; statusColor = '#5cb85c'; }
 
-    // ✅ services dropdown only if >1 service
+    // Services dropdown only if >1 service
     var servicesHtml = getServiceLinesHtml(appt.ApptId);
     var hasMultiServices = servicesHtml && servicesHtml.length > 0;
 
@@ -774,13 +697,10 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
       '<div class="appt-title appt-title-toggle" style="cursor:' + (hasMultiServices ? 'pointer' : 'default') + '; display:flex; align-items:center; gap:8px;">' +
         '<span>' + escHtml(toTitleCase(cust || appt.Title || '')) + '</span>' +
         '<span class="appt-status-letter" style="font-size:13px; font-weight:700; margin-left:4px; color:' + statusColor + ';">[' + statusLetter + ']</span>' +
-        (hasMultiServices
-          ? '<span class="appt-more" style="font-size:12px; font-weight:700; opacity:0.85;">(more)</span>'
-          : ''
-        ) +
+        (hasMultiServices ? '<span class="appt-more" style="font-size:12px; font-weight:700; opacity:0.85;">(more)</span>' : '') +
       '</div>';
 
-    // ✅ IMPORTANT: hide Edit / Submit E-Sign / Delete when fulfilled
+    // Hide actions when fulfilled/cancelled
     var actionsHtml = '';
     if (!done) {
       actionsHtml =
@@ -795,9 +715,7 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
       '<div class="appt-card modal-card' + doneClass + '" data-appt-id="' + appt.ApptId + '"' + style + '>' +
         '<div class="appt-top">' +
           '<div>' + titleHtml + '</div>' +
-          '<div class="appt-top-right">' +
-            '<div class="appt-time">' + escHtml(timeOnly || '') + '</div>' +
-          '</div>' +
+          '<div class="appt-top-right"><div class="appt-time">' + escHtml(timeOnly || '') + '</div></div>' +
         '</div>' +
         servicesHtml +
         '<div class="appt-meta" style="margin-top:6px;">' +
@@ -810,7 +728,9 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
     );
   }
 
-  // ====== show modals ======
+  // =========================
+  // ✅ Show modals
+  // =========================
   function showMonthModal(year, month) {
     var modalEl = document.getElementById('monthAppointmentsModal');
     var label = document.getElementById('modalMonthLabel');
@@ -852,11 +772,9 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
 
     try {
       var d = new Date(date);
-      if (!isNaN(d.getTime())) {
-        label.textContent = d.getDate() + ' ' + d.toLocaleString('default', { month: 'long' }) + ' ' + d.getFullYear();
-      } else {
-        label.textContent = date;
-      }
+      label.textContent = !isNaN(d.getTime())
+        ? (d.getDate() + ' ' + d.toLocaleString('default', { month: 'long' }) + ' ' + d.getFullYear())
+        : date;
     } catch (e) {
       label.textContent = date;
     }
@@ -886,10 +804,12 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
     modalEl.style.display = 'block';
   }
 
-  // ====== init ======
+  // =========================
+  // ✅ Init
+  // =========================
   document.addEventListener('DOMContentLoaded', function () {
 
-    // ✅ Day cell click opens day modal
+    // Day cell click opens day modal
     document.querySelectorAll('.calendar-cell-day').forEach(function (cell) {
       cell.addEventListener('click', function (e) {
         e.stopPropagation();
@@ -904,7 +824,6 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
       });
     });
 
-    // ✅ Close main modals
     function closeMainModals() {
       var d = document.getElementById('dayAppointmentsModal');
       var m = document.getElementById('monthAppointmentsModal');
@@ -920,18 +839,19 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
 
     if (closeDay) closeDay.addEventListener('click', closeMainModals);
     if (closeMonth) closeMonth.addEventListener('click', closeMainModals);
+
     if (overlay) {
       overlay.addEventListener('click', closeMainModals);
       overlay.addEventListener('touchstart', closeMainModals);
     }
 
-    // ✅ Prevent clicking inside modal from closing
+    // Prevent clicking inside modal from closing
     document.querySelectorAll('.custom-modal-content').forEach(function (modalContent) {
       modalContent.addEventListener('mousedown', function (e) { e.stopPropagation(); });
       modalContent.addEventListener('touchstart', function (e) { e.stopPropagation(); });
     });
 
-    // ✅ Confirm delete modal buttons
+    // Confirm delete modal buttons
     var btnCancel = document.getElementById('btnDeleteCancel');
     var btnYes = document.getElementById('btnDeleteYes');
     var btnCloseX = document.getElementById('closeConfirmDeleteModal');
@@ -958,21 +878,18 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
 
       try {
         await cancelAppointmentAjax(pendingDeleteId);
-
         closeConfirmDeleteModal();
-        closeMainModals(); // closes day/month + overlay
-        window.location.href = window.location.href;
+        closeMainModals();
+        window.location.href = window.location.href; // refresh to show new status
         return;
 
       } catch (err) {
         alert('Failed to cancel appointment: ' + (err && err.message ? err.message : err));
-        btnYes.disabled = false; // only re-enable if cancel failed
+        btnYes.disabled = false;
       }
     });
 
-    // =========================
-    // ✅ Hamburger menu logic (✅ MUST be inside DOMContentLoaded)
-    // =========================
+    // Hamburger menu logic
     var hb = document.getElementById('hamburgerBtn');
     var menu = document.getElementById('sideMenu');
     var menuOv = document.getElementById('sideMenuOverlay');
@@ -1006,8 +923,36 @@ var displayTitle = !string.IsNullOrWhiteSpace(custName)
       if (e.key === 'Escape') closeMenu();
     });
 
+    // expose functions globally (called from onclick in header)
+    window.showMonthModal = showMonthModal;
+    window.showDayModal = showDayModal;
   });
 </script>
 
+<script>
+  // =========================
+  // ✅ Birthday month navigation
+  // =========================
+  function wireBirthdayMonthNav() {
+    var prevBtn = document.getElementById('birthdayPrevMonth');
+    var nextBtn = document.getElementById('birthdayNextMonth');
 
+    var currentMonth = parseInt('@month');
+    var currentYear = parseInt('@year');
+
+    prevBtn && prevBtn.addEventListener('click', function () {
+      currentMonth--;
+      if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+      window.location.href = '@Url.Action("Index", "Calendar")' + '?year=' + currentYear + '&month=' + currentMonth;
+    });
+
+    nextBtn && nextBtn.addEventListener('click', function () {
+      currentMonth++;
+      if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+      window.location.href = '@Url.Action("Index", "Calendar")' + '?year=' + currentYear + '&month=' + currentMonth;
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', wireBirthdayMonthNav);
+</script>
 }

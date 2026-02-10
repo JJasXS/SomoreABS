@@ -1,3 +1,22 @@
+.custom-modal-content {
+  width: 100% !important;
+  max-width: 100% !important;
+  word-break: break-word !important;
+  white-space: normal !important;
+}
+/* Confirm modal button group: wrap and center */
+
+.confirm-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end !important;
+  margin-top: 12px;
+}
+
+.confirm-modal-actions button {
+  min-width: 120px;
+}
 /* ================================
    calendar.css (FULL) - nicer UI + cards
    ================================ */
@@ -37,10 +56,10 @@
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 1000;
-  background: #fff;
+  background: #c2c2c2 !important;
   border-radius: 14px;
   box-shadow: 0 10px 40px rgba(0,0,0,0.22);
-  width: min(520px, 95vw);
+  width: min(340px, 90vw) !important;
   border: 1px solid #ececec;
 }
 
