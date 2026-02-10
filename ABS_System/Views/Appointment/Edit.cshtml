@@ -285,7 +285,7 @@
 
     <div id="svcMsg" class="svc-msg"></div>
 
-    <small class="svc-hint">Tip: Pick 1 or more services. Title will auto-fill from first service.</small>
+    <small class="svc-hint">Tip: Select services purchased by this customer.</small>
   </div>
 
   <div class="form-actions">
@@ -346,10 +346,19 @@
 
       for (const it of serviceItems) {
         const code = (it.code || '').trim();
-        const desc = (it.desc || '').trim();
-        const text = `${code} - ${desc}`;
-        const sel = (selectedValue && selectedValue.toLowerCase() === code.toLowerCase()) ? 'selected' : '';
-        html += `<option value="${escHtml(code)}" ${sel}>${escHtml(text)}</option>`;
+        let desc = (it.desc || '').trim();
+        const balance = typeof it.balance === 'number' ? it.balance : null;
+        let balanceHtml = '';
+        if (balance !== null) {
+          const color = balance > 0 ? 'green' : 'red';
+          balanceHtml = `<span style='color:${color};font-weight:bold;'> (Balance: ${balance})</span>`;
+        }
+        let text = `${code} - ${escHtml(desc)}${balanceHtml}`;
+        const sel = (selectedValue && selectedValue === code) ? 'selected' : '';
+        if (desc.includes('(Last one!)')) {
+          text = `${code} - <span style='color:red;font-weight:bold;'>${escHtml(desc)}</span>${balanceHtml}`;
+        }
+        html += `<option value="${escHtml(code)}" ${sel}>${text}</option>`;
       }
 
       html += `</select>`;

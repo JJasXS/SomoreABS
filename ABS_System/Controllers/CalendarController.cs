@@ -35,7 +35,7 @@ namespace YourApp.Controllers
             int m = month ?? now.Month;
 
             var firstDay = new DateTime(y, m, 1);
-            var lastDay = firstDay.AddMonths(1).AddDays(-1);
+            var lastDay = new DateTime(y, m, DateTime.DaysInMonth(y, m), 23, 59, 59);
 
             // ✅ logged-in scope
             string userBranchNo = GetBranchNo();
@@ -277,12 +277,30 @@ namespace YourApp.Controllers
         {
             // ✅ NEVER NULL color (default grey)
             string branchColor = "#E8E8E8";
-
-            if (branchNo == "1") branchColor = "#ffb6c1";      // Light Pink (Office)
-            else if (branchNo == "2") branchColor = "#add8e6"; // Light Blue
-            else if (branchNo == "3") branchColor = "#90ee90"; // Light Green
-            else if (branchNo == "4") branchColor = "#ffd700"; // Gold
-
+            switch (branchNo)
+            {
+                case "1": branchColor = "#ffb6c1"; break;      // Light Pink
+                case "2": branchColor = "#add8e6"; break;      // Light Blue
+                case "3": branchColor = "#90ee90"; break;      // Light Green
+                case "4": branchColor = "#ffd700"; break;      // Gold
+                case "5": branchColor = "#ffa07a"; break;      // Light Salmon
+                case "6": branchColor = "#20b2aa"; break;      // Light Sea Green
+                case "7": branchColor = "#9370db"; break;      // Medium Purple
+                case "8": branchColor = "#f08080"; break;      // Light Coral
+                case "9": branchColor = "#b0e0e6"; break;      // Powder Blue
+                case "10": branchColor = "#ff69b4"; break;     // Hot Pink
+                case "11": branchColor = "#87cefa"; break;     // Light Sky Blue
+                case "12": branchColor = "#98fb98"; break;     // Pale Green
+                case "13": branchColor = "#ffe4b5"; break;     // Moccasin
+                case "14": branchColor = "#d8bfd8"; break;     // Thistle
+                case "15": branchColor = "#afeeee"; break;     // Pale Turquoise
+                case "16": branchColor = "#ffdead"; break;     // Navajo White
+                case "17": branchColor = "#e9967a"; break;     // Dark Salmon
+                case "18": branchColor = "#bdb76b"; break;     // Dark Khaki
+                case "19": branchColor = "#8fbc8f"; break;     // Dark Sea Green
+                case "20": branchColor = "#dda0dd"; break;     // Plum
+                default: branchColor = "#E8E8E8"; break;         // Default Grey
+            }
             return branchColor;
         }
 
