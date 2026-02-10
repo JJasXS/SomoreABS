@@ -180,6 +180,65 @@ WHERE APPT_ID = @ID";
                     cmdAppt.ExecuteNonQuery();
                 }
 
+                // Log SO_QTY, CLAIMED, PREV_CLAIMED, CURR_CLAIMED for each service in APPT_DTL
+                using (var cmdDtl = conn.CreateCommand())
+                {
+                    cmdDtl.Transaction = tx;
+                    cmdDtl.CommandText = @"SELECT SERVICE_CODE FROM APPT_DTL WHERE APPT_ID = @APPTID";
+                    cmdDtl.Parameters.Add(FirebirdDb.P("@APPTID", apptId, FbDbType.BigInt));
+                    using var rDtl = cmdDtl.ExecuteReader();
+                    var serviceCodes = new List<string>();
+                    while (rDtl.Read())
+                    {
+                        if (!rDtl.IsDBNull(0))
+                            serviceCodes.Add(rDtl.GetString(0).Trim());
+                    }
+                    rDtl.Close();
+
+                    foreach (var svc in serviceCodes)
+                    {
+                        int soQty = 0, claimed = 0, prevClaimed = 0, currClaimed = 0;
+                        using (var cmdSodtl = conn.CreateCommand())
+                        {
+                            cmdSodtl.Transaction = tx;
+                            cmdSodtl.CommandText = @"SELECT QTY, COALESCE(UDF_CLAIMED,0), COALESCE(UDF_PREV_CLAIMED,0) FROM SL_SODTL WHERE ITEMCODE = @SVC AND DOCKEY IN (SELECT DOCKEY FROM SL_SO WHERE CODE = @CUST) ROWS 1";
+                            cmdSodtl.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
+                            // Get customer code from APPOINTMENT
+                            string customerCode = "";
+                            using (var cmdGetCust = conn.CreateCommand())
+                            {
+                                cmdGetCust.Transaction = tx;
+                                cmdGetCust.CommandText = "SELECT CUSTOMER_CODE FROM APPOINTMENT WHERE APPT_ID = @ID";
+                                cmdGetCust.Parameters.Add(FirebirdDb.P("@ID", apptId, FbDbType.BigInt));
+                                var v = cmdGetCust.ExecuteScalar();
+                                customerCode = (v == null || v == DBNull.Value) ? "" : v.ToString()?.Trim() ?? "";
+                            }
+                            cmdSodtl.Parameters.Add(FirebirdDb.P("@CUST", customerCode, FbDbType.VarChar));
+                            using var rSodtl = cmdSodtl.ExecuteReader();
+                            if (rSodtl.Read())
+                            {
+                                soQty = rSodtl.IsDBNull(0) ? 0 : rSodtl.GetInt32(0);
+                                claimed = rSodtl.IsDBNull(1) ? 0 : rSodtl.GetInt32(1);
+                                prevClaimed = rSodtl.IsDBNull(2) ? 0 : rSodtl.GetInt32(2);
+                                currClaimed = claimed + prevClaimed;
+                            }
+                        }
+                        using (var cmdLog = conn.CreateCommand())
+                        {
+                            cmdLog.Transaction = tx;
+                            cmdLog.CommandText = @"INSERT INTO APPOINTMENT_LOG (APPT_ID, ACTION_TYPE, ACTION_TIME, USERNAME, DETAILS, SO_QTY, CLAIMED, PREV_CLAIMED, CURR_CLAIMED, SERVICE_CODE) VALUES (@APPTID, 'E_SIGNATURE_SUBMIT', CURRENT_TIMESTAMP, @USER, @DETAILS, @SOQTY, @CLAIMED, @PREV, @CURR, @SVC)";
+                            cmdLog.Parameters.Add(FirebirdDb.P("@APPTID", apptId, FbDbType.BigInt));
+                            cmdLog.Parameters.Add(FirebirdDb.P("@USER", User?.Identity?.Name ?? "SYSTEM", FbDbType.VarChar));
+                            cmdLog.Parameters.Add(FirebirdDb.P("@DETAILS", "E-signature submitted.", FbDbType.VarChar));
+                            cmdLog.Parameters.Add(FirebirdDb.P("@SOQTY", soQty, FbDbType.Integer));
+                            cmdLog.Parameters.Add(FirebirdDb.P("@CLAIMED", claimed, FbDbType.Integer));
+                            cmdLog.Parameters.Add(FirebirdDb.P("@PREV", prevClaimed, FbDbType.Integer));
+                            cmdLog.Parameters.Add(FirebirdDb.P("@CURR", currClaimed, FbDbType.Integer));
+                            cmdLog.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
+                            cmdLog.ExecuteNonQuery();
+                        }
+                    }
+                }
 
                 tx.Commit();
 

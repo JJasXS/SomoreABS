@@ -51,6 +51,7 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
+
         // Branding / company header-footer
         init.EnsureTenantSchema();
 
@@ -69,6 +70,9 @@ using (var scope = app.Services.CreateScope())
 
         // ✅ NEW: Sales Order Detail extra fields
         init.EnsureSalesOrderDetailClaimColumns();
+
+        // ✅ NEW: Appointment log table for audit/receipts
+        init.EnsureAppointmentLogTable();
 
         Console.WriteLine("====================================================");
         Console.WriteLine("[DBINIT] ✅ Firebird schema ensured successfully.");

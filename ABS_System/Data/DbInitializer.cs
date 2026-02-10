@@ -63,9 +63,7 @@ CREATE TABLE TENANT (
 
     CONSTRAINT PK_TENANT PRIMARY KEY (TENANT_ID)
 )",
-
                 @"CREATE SEQUENCE SEQ_TENANT",
-
                 @"
 CREATE TRIGGER BI_TENANT FOR TENANT
 ACTIVE BEFORE INSERT POSITION 0
@@ -74,12 +72,10 @@ BEGIN
     IF (NEW.TENANT_ID IS NULL) THEN
         NEW.TENANT_ID = NEXT VALUE FOR SEQ_TENANT;
 END",
-
                 @"CREATE UNIQUE INDEX UX_TENANT_CODE ON TENANT (TENANT_CODE)"
             };
 
-            foreach (var sql in statements)
-                ExecNonQuery(conn, sql);
+            ExecBatch(conn, statements);
 
             Log("TENANT created OK.");
 
@@ -177,13 +173,12 @@ CREATE TABLE BRANCH (
         }
 
         // =========================================================
-        // ✅ NEW) Ensure SL_SODTL has CLAIMED + PREV_CLAIMED (default 0)
+        // ✅ Ensure SL_SODTL has UDF_CLAIMED + UDF_PREV_CLAIMED (default 0)
         // =========================================================
         public void EnsureSalesOrderDetailClaimColumns()
         {
             using var conn = _db.Open();
 
-            // You asked: SL_SODTL, columns: CLAIMED, PREV_CLAIMED, default 0
             Log("Checking SL_SODTL.UDF_CLAIMED + SL_SODTL.UDF_PREV_CLAIMED ...");
 
             EnsureDecimalColumnWithDefaultZero(conn, tableName: "SL_SODTL", columnName: "UDF_CLAIMED");
@@ -205,13 +200,8 @@ CREATE TABLE BRANCH (
             }
 
             Log($"Adding column {t}.{c} (DECIMAL(18,2) DEFAULT 0) ...");
-
-            // 1) Add column with DEFAULT 0
             ExecNonQuery(conn, $"ALTER TABLE {t} ADD {c} DECIMAL(18,2) DEFAULT 0");
-
-            // 2) Backfill existing rows (just in case)
             ExecNonQuery(conn, $"UPDATE {t} SET {c} = 0 WHERE {c} IS NULL");
-
             Log($"{t}.{c} added + backfilled OK.");
         }
 
@@ -256,9 +246,7 @@ CREATE TABLE APPOINTMENT (
 
     CONSTRAINT PK_APPOINTMENT PRIMARY KEY (APPT_ID)
 )",
-
                 @"CREATE SEQUENCE SEQ_APPOINTMENT",
-
                 @"
 CREATE TRIGGER BI_APPOINTMENT FOR APPOINTMENT
 ACTIVE BEFORE INSERT POSITION 0
@@ -267,10 +255,9 @@ BEGIN
     IF (NEW.APPT_ID IS NULL) THEN
         NEW.APPT_ID = NEXT VALUE FOR SEQ_APPOINTMENT;
 END",
-
-                @"CREATE INDEX IX_APPT_START        ON APPOINTMENT (APPT_START)",
-                @"CREATE INDEX IX_APPT_AGENT_START  ON APPOINTMENT (AGENT_CODE, APPT_START)",
-                @"CREATE INDEX IX_APPT_CUST_START   ON APPOINTMENT (CUSTOMER_CODE, APPT_START)",
+                @"CREATE INDEX IX_APPT_START       ON APPOINTMENT (APPT_START)",
+                @"CREATE INDEX IX_APPT_AGENT_START ON APPOINTMENT (AGENT_CODE, APPT_START)",
+                @"CREATE INDEX IX_APPT_CUST_START  ON APPOINTMENT (CUSTOMER_CODE, APPT_START)",
 
                 @"ALTER TABLE APPOINTMENT ADD CONSTRAINT CK_APPT_TIME CHECK (APPT_END IS NULL OR APPT_END >= APPT_START)",
 
@@ -278,8 +265,7 @@ END",
                 @"ALTER TABLE APPOINTMENT ADD CONSTRAINT FK_APPT_AGENT FOREIGN KEY (AGENT_CODE)    REFERENCES AGENT (CODE)"
             };
 
-            foreach (var sql in statements)
-                ExecNonQuery(conn, sql);
+            ExecBatch(conn, statements);
 
             Log("APPOINTMENT created OK. Now ensuring APPT_DTL ...");
             EnsureApptDtlSchema(conn);
@@ -318,9 +304,7 @@ CREATE TABLE APPT_DTL (
     CONSTRAINT PK_APPT_DTL PRIMARY KEY (APPT_DTL_ID),
     CONSTRAINT FK_APPT_DTL_APPT FOREIGN KEY (APPT_ID) REFERENCES APPOINTMENT (APPT_ID)
 )",
-
                 @"CREATE SEQUENCE SEQ_APPT_DTL",
-
                 @"
 CREATE TRIGGER BI_APPT_DTL FOR APPT_DTL
 ACTIVE BEFORE INSERT POSITION 0
@@ -331,14 +315,13 @@ BEGIN
 END"
             };
 
-            foreach (var sql in statements)
-                ExecNonQuery(conn, sql);
+            ExecBatch(conn, statements);
 
             Log("APPT_DTL created OK.");
         }
 
         // =========================================================
-        // 4) Ensure APPT_SIGNATURE schema exists (Option B: 1 row per APPT, overwrite via UPDATE)
+        // 4) Ensure APPT_SIGNATURE schema exists (Option B: 1 row per APPT)
         // =========================================================
         public void EnsureApptSignatureSchema()
         {
@@ -360,21 +343,16 @@ CREATE TABLE APPT_SIGNATURE (
     SIGN_ID        BIGINT NOT NULL,
     APPT_ID        BIGINT NOT NULL,
 
-    -- datetime default now
     SIGNED_DT      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
     SIGNED_BY      VARCHAR(120) CHARACTER SET UTF8,
     REMARKS        VARCHAR(300) CHARACTER SET UTF8,
 
-    -- store PNG bytes
     SIGNATURE_PNG  BLOB SUB_TYPE 0,
 
     CONSTRAINT PK_APPT_SIGNATURE PRIMARY KEY (SIGN_ID),
     CONSTRAINT FK_APPT_SIGNATURE_APPT FOREIGN KEY (APPT_ID) REFERENCES APPOINTMENT (APPT_ID)
 )",
-
                 @"CREATE SEQUENCE SEQ_APPT_SIGNATURE",
-
                 @"
 CREATE TRIGGER BI_APPT_SIGNATURE FOR APPT_SIGNATURE
 ACTIVE BEFORE INSERT POSITION 0
@@ -383,22 +361,49 @@ BEGIN
     IF (NEW.SIGN_ID IS NULL) THEN
         NEW.SIGN_ID = NEXT VALUE FOR SEQ_APPT_SIGNATURE;
 END",
-
-                // Option B: 1 signature per appointment enforced by DB
                 @"CREATE UNIQUE INDEX UX_APPT_SIGNATURE_APPT ON APPT_SIGNATURE (APPT_ID)",
-
-                // Helpful read performance (latest read / join)
                 @"CREATE INDEX IX_APPT_SIGNATURE_APPT_DT ON APPT_SIGNATURE (APPT_ID, SIGNED_DT)"
             };
 
-            foreach (var sql in statements)
-                ExecNonQuery(conn, sql);
+            ExecBatch(conn, statements);
 
             Log("APPT_SIGNATURE created OK.");
         }
 
         // =========================================================
-        // Helpers
+        // ✅ Ensure APPOINTMENT_LOG table exists
+        // =========================================================
+        public void EnsureAppointmentLogTable()
+        {
+            using var conn = _db.Open();
+
+            Log("Checking table APPOINTMENT_LOG ...");
+            if (TableExists(conn, "APPOINTMENT_LOG"))
+            {
+                Log("Table APPOINTMENT_LOG already exists, skip.");
+                return;
+            }
+
+            Log("Creating table APPOINTMENT_LOG ...");
+            ExecNonQuery(conn, @"
+CREATE TABLE APPOINTMENT_LOG (
+    LOG_ID BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    APPT_ID BIGINT NOT NULL,
+    ACTION_TYPE VARCHAR(32) NOT NULL,
+    ACTION_TIME TIMESTAMP NOT NULL,
+    USERNAME VARCHAR(64),
+    DETAILS VARCHAR(1024),
+    SO_QTY INTEGER,
+    CLAIMED INTEGER,
+    PREV_CLAIMED INTEGER,
+    CURR_CLAIMED INTEGER,
+    SERVICE_CODE VARCHAR(160)
+)");
+            Log("APPOINTMENT_LOG table created OK.");
+        }
+
+        // =========================================================
+        // Helpers (exists + execute)
         // =========================================================
         private static bool TableExists(FbConnection conn, string tableName)
         {
@@ -438,13 +443,19 @@ WHERE rdb$constraint_type = 'FOREIGN KEY'
             var exists = Convert.ToInt32(cmd.ExecuteScalar()) > 0;
             if (exists)
             {
-                Console.WriteLine($"[DBINIT] FK {fkName} already exists, skip.");
+                Log($"FK {fkName} already exists, skip.");
                 return;
             }
 
-            Console.WriteLine($"[DBINIT] Adding FK {fkName} ...");
+            Log($"Adding FK {fkName} ...");
             ExecNonQuery(conn, alterSql);
-            Console.WriteLine($"[DBINIT] FK {fkName} added OK.");
+            Log($"FK {fkName} added OK.");
+        }
+
+        private static void ExecBatch(FbConnection conn, IEnumerable<string> statements)
+        {
+            foreach (var sql in statements)
+                ExecNonQuery(conn, sql);
         }
 
         private static void ExecNonQuery(FbConnection conn, string sql)

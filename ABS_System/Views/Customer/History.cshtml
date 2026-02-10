@@ -31,8 +31,8 @@
                     <b>Code:</b> @appt.ApptId<br />
                     <b>Title:</b> @appt.Title<br />
                     <b>Date/Time:</b> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")<br />
-                    <b>Customer:</b> @appt.CustomerName ?? @appt.CustomerCode<br />
-                    <b>Agent:</b> @appt.AgentName ?? @appt.AgentCode<br />
+                    <!-- Customer line removed as requested -->
+                    <b>Agent:</b> @(appt.AgentName?.Split("??")[0].Trim() ?? appt.AgentCode)<br />
                     @if (!string.IsNullOrWhiteSpace(appt.Notes)) { <div style="font-size:85%;color:#888;">@appt.Notes</div> }
                 </li>
             }
@@ -54,8 +54,8 @@
                     <b>Code:</b> @appt.ApptId<br />
                     <b>Title:</b> @appt.Title<br />
                     <b>Date/Time:</b> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")<br />
-                    <b>Customer:</b> @appt.CustomerName ?? @appt.CustomerCode<br />
-                    <b>Agent:</b> @appt.AgentName ?? @appt.AgentCode<br />
+                    <!-- Customer line removed as requested -->
+                    <b>Agent:</b> @(appt.AgentName?.Split("??")[0].Trim() ?? appt.AgentCode)<br />
                     @if (!string.IsNullOrWhiteSpace(appt.Notes)) { <div style="font-size:85%;color:#888;">@appt.Notes</div> }
                 </li>
             }
@@ -77,8 +77,8 @@
                     <b>Code:</b> @appt.ApptId<br />
                     <b>Title:</b> @appt.Title<br />
                     <b>Date/Time:</b> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")<br />
-                    <b>Customer:</b> @appt.CustomerName ?? @appt.CustomerCode<br />
-                    <b>Agent:</b> @appt.AgentName ?? @appt.AgentCode<br />
+                    <!-- Customer line removed as requested -->
+                    <b>Agent:</b> @(appt.AgentName?.Split("??")[0].Trim() ?? appt.AgentCode)<br />
                     @if (!string.IsNullOrWhiteSpace(appt.Notes)) { <div style="font-size:85%;color:#888;">@appt.Notes</div> }
                 </li>
             }
