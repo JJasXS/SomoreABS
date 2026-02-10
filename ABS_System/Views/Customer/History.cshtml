@@ -20,20 +20,28 @@
 
     <!-- 3-Column Appointment Status Layout -->
     <div style="display: flex; gap: 18px;">
-    <div style="flex:1; background:#f8fff8; border-radius:10px; padding:16px; min-width:220px;">
-        <h4 style="color:#28a745; text-align:center;">FULFILLED</h4>
+    <div style="flex:1; background:#f8fff8; border-radius:10px; padding:16px; min-width:220px; position:relative;">
+        <h4 style="color:#28a745; text-align:center; margin:0;">FULFILLED</h4>
         @if ((ViewBag.Fulfilled as List<YourApp.Models.Appointment>)?.Count > 0)
         {
             <ul style="padding-left:0; list-style:none;">
             @foreach (var appt in (List<YourApp.Models.Appointment>)ViewBag.Fulfilled)
             {
-                <li style="margin-bottom:10px; border-bottom:1px solid #e0e0e0; padding-bottom:8px;">
-                    <b>Code:</b> @appt.ApptId<br />
-                    <b>Title:</b> @appt.Title<br />
-                    <b>Date/Time:</b> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")<br />
-                    <!-- Customer line removed as requested -->
-                    <b>Agent:</b> @(appt.AgentName?.Split("??")[0].Trim() ?? appt.AgentCode)<br />
-                    @if (!string.IsNullOrWhiteSpace(appt.Notes)) { <div style="font-size:85%;color:#888;">@appt.Notes</div> }
+                <li style="margin-bottom:10px; border-bottom:1px solid #e0e0e0; padding-bottom:8px; display:flex; align-items:center; justify-content:space-between;">
+                    <div>
+                        <b>Code:</b> @appt.ApptId<br />
+                        <b>Title:</b> @appt.Title<br />
+                        <b>Date/Time:</b> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")<br />
+                        <!-- Customer line removed as requested -->
+                        <b>Agent:</b> @(appt.AgentName?.Split("??")[0].Trim() ?? appt.AgentCode)<br />
+                        @if (!string.IsNullOrWhiteSpace(appt.Notes)) { <div style="font-size:85%;color:#888;">@appt.Notes</div> }
+                    </div>
+                    <form method="post" action="/Customer/PrintHistory" target="_blank" style="margin-left:8px;">
+                        <input type="hidden" name="apptId" value="@appt.ApptId" />
+                        <button type="submit" class="btn btn-outline-success btn-sm" title="Print this appointment">
+                            <span class="bi bi-printer" style="margin-right:4px;"></span>Print
+                        </button>
+                    </form>
                 </li>
             }
             </ul>
