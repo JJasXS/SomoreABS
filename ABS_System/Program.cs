@@ -21,7 +21,9 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.SlidingExpiration = true;
     });
 
+
 builder.Services.AddAuthorization();
+builder.Services.AddSession();
 
 // ✅ SQL Server (EF Core)
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -94,7 +96,9 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
+
 app.UseRouting();
+app.UseSession();
 
 app.UseAuthentication();
 app.UseAuthorization();
