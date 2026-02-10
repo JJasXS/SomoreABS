@@ -63,23 +63,26 @@ WHERE LOG_ID = @LOGID
                 serviceCode = r.IsDBNull(5) ? "" : r.GetString(5);
             }
 
-            // 2) Fetch appointment info
-            string? customerCode = null, agentCode = null, title = null;
+            // 2) Fetch appointment info and names
+            string? customerCode = null, agentCode = null, title = null, customerName = null, agentName = null, serviceTitle = null;
             DateTime apptStart = default;
             string? status = null;
 
             using (var cmd2 = conn.CreateCommand())
             {
-                // Add/remove columns here based on your actual APPOINTMENT table
                 cmd2.CommandText = @"
 SELECT
-    CUSTOMER_CODE,
-    AGENT_CODE,
-    TITLE,
-    APPT_START,
-    STATUS
-FROM APPOINTMENT
-WHERE APPT_ID = @APPTID
+    a.CUSTOMER_CODE,
+    a.AGENT_CODE,
+    a.TITLE,
+    a.APPT_START,
+    a.STATUS,
+    c.COMPANYNAME,
+    ag.DESCRIPTION
+FROM APPOINTMENT a
+LEFT JOIN AR_CUSTOMER c ON a.CUSTOMER_CODE = c.CODE
+LEFT JOIN AGENT ag ON a.AGENT_CODE = ag.CODE
+WHERE a.APPT_ID = @APPTID
 ";
                 cmd2.Parameters.Add(new FbParameter("@APPTID", apptId));
 
@@ -91,6 +94,21 @@ WHERE APPT_ID = @APPTID
                     title = r2.IsDBNull(2) ? null : r2.GetString(2);
                     apptStart = r2.IsDBNull(3) ? default : r2.GetDateTime(3);
                     status = r2.IsDBNull(4) ? null : r2.GetString(4);
+                    customerName = r2.IsDBNull(5) ? null : r2.GetString(5);
+                    agentName = r2.IsDBNull(6) ? null : r2.GetString(6);
+                }
+            }
+
+            // 2b) Fetch service title from ST_ITEM.DESCRIPTION
+            if (!string.IsNullOrWhiteSpace(serviceCode))
+            {
+                using var cmdItem = conn.CreateCommand();
+                cmdItem.CommandText = @"SELECT DESCRIPTION FROM ST_ITEM WHERE CODE = @CODE";
+                cmdItem.Parameters.Add(new FbParameter("@CODE", serviceCode));
+                using var rItem = cmdItem.ExecuteReader();
+                if (rItem.Read() && !rItem.IsDBNull(0))
+                {
+                    serviceTitle = rItem.GetString(0);
                 }
             }
 
@@ -122,20 +140,18 @@ WHERE APPT_ID = @APPTID
             }
 
             // 4) Build model for PDF
+
             var appt = new Appointment
             {
                 ApptId = apptId,
                 CustomerCode = customerCode ?? string.Empty,
                 AgentCode = agentCode ?? string.Empty,
-                Title = title,
+                Title = !string.IsNullOrWhiteSpace(serviceTitle) ? serviceTitle : title,
                 Notes = details,
                 ApptStart = apptStart,
                 Status = status,
-
-                // If you later add lookup for names:
-                CustomerName = customerCode,
-                AgentName = agentCode,
-
+                CustomerName = string.IsNullOrWhiteSpace(customerName) ? customerCode : customerName,
+                AgentName = string.IsNullOrWhiteSpace(agentName) ? agentCode : agentName,
                 Services = new List<ApptDtl>
                 {
                     new ApptDtl

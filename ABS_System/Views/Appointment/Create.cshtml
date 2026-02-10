@@ -296,11 +296,17 @@
       for (const it of serviceItems) {
         const code = (it.code || '').trim();
         let desc = (it.desc || '').trim();
-        let text = `${code} - ${desc}`;
+        const balance = typeof it.balance === 'number' ? it.balance : null;
+        let balanceHtml = '';
+        if (balance !== null) {
+          const color = balance > 0 ? 'green' : 'red';
+          balanceHtml = `<span style='color:${color};font-weight:bold;'> (Balance: ${balance})</span>`;
+        }
+        let text = `${code} - ${escHtml(desc)}${balanceHtml}`;
         const sel = (selectedValue && selectedValue === code) ? 'selected' : '';
         // If description contains 'Last one!' flag, show warning
         if (desc.includes('(Last one!)')) {
-          text = `${code} - <span style='color:red;font-weight:bold;'>${escHtml(desc)}</span>`;
+          text = `${code} - <span style='color:red;font-weight:bold;'>${escHtml(desc)}</span>${balanceHtml}`;
         }
         html += `<option value="${escHtml(code)}" ${sel}>${text}</option>`;
       }

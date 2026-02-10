@@ -324,14 +324,17 @@ WHERE APPT_ID = @ID";
                 using var cmd = conn.CreateCommand();
 
                                 cmd.CommandText = @"
-SELECT DISTINCT
-        d.ITEMCODE,
-        TRIM(COALESCE(d.DESCRIPTION, d.ITEMCODE)) AS ITEMDESC
-FROM SL_SO s
-JOIN SL_SODTL d ON d.DOCKEY = s.DOCKEY
-WHERE s.CODE = @CUST
-    AND (COALESCE(d.UDF_CLAIMED,0) + COALESCE(d.UDF_PREV_CLAIMED,0)) < COALESCE(d.QTY,0)
-ORDER BY 2";
+                SELECT DISTINCT
+                    d.ITEMCODE,
+                    TRIM(COALESCE(d.DESCRIPTION, d.ITEMCODE)) AS ITEMDESC,
+                    COALESCE(d.QTY,0) AS QTY,
+                    COALESCE(d.UDF_CLAIMED,0) AS UDF_CLAIMED,
+                    COALESCE(d.UDF_PREV_CLAIMED,0) AS UDF_PREV_CLAIMED
+                FROM SL_SO s
+                JOIN SL_SODTL d ON d.DOCKEY = s.DOCKEY
+                WHERE s.CODE = @CUST
+                    AND (COALESCE(d.UDF_CLAIMED,0) + COALESCE(d.UDF_PREV_CLAIMED,0)) < COALESCE(d.QTY,0)
+                ORDER BY 2";
 
                 cmd.Parameters.Add(FirebirdDb.P("@CUST", customerCode, FbDbType.VarChar));
 
@@ -341,9 +344,13 @@ ORDER BY 2";
                 {
                     var code = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
                     var desc = r.IsDBNull(1) ? "" : r.GetString(1).Trim();
+                    var qty = r.IsDBNull(2) ? 0 : r.GetInt32(2);
+                    var claimed = r.IsDBNull(3) ? 0 : r.GetInt32(3);
+                    var prevClaimed = r.IsDBNull(4) ? 0 : r.GetInt32(4);
+                    var balance = qty - (claimed + prevClaimed);
 
                     if (!string.IsNullOrWhiteSpace(code))
-                        items.Add(new { code, desc });
+                        items.Add(new { code, desc, balance });
                 }
 
                 return Json(new { ok = true, items });
