@@ -173,6 +173,9 @@
         </div>
 
         <div class="side-menu-body">
+            <div class="side-menu-link" onclick="viewCustHistory()" style="width:100%; margin-bottom:16px; padding:12px; background:#e9f5ff; color:#007bff; border-radius:10px; font-weight:700; font-size:15px; text-align:center; cursor:pointer; transition:background 0.2s;">
+              View Customer History
+            </div>
             <div class="side-menu-birthdays" style="margin-bottom:18px;">
                 <div style="display:flex; align-items:center; justify-content:center; margin-bottom:6px;">
                   <span style="font-weight:700; font-size:15px;">
@@ -449,6 +452,30 @@
   .calendar-shell .appt-card.in-cell .appt-title{ display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .calendar-shell .scrollable-appt-list{ max-height:86px; }
 
+  /* ===== MODAL SIZING ===== */
+  .custom-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+    display: none;
+    width: 1000px;/* ADJUST WIDTH OF MODAL POP UP*/
+    max-width: 95vw;
+    max-height: 90vh;
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+    overflow: auto;
+    padding: 0;
+  }
+  .custom-modal-content {
+    padding: 28px 28px 18px 28px;
+    max-height: 80vh;
+    overflow-y: auto;
+    font-size: 1.08rem;
+  }
+
   .modal-overlay{
     position:fixed; inset:0;
     background:rgba(0,0,0,0.55);
@@ -460,6 +487,12 @@
 
 @section Scripts {
 <script>
+    // =========================
+    // ✅ View Customer History handler
+    // =========================
+    function viewCustHistory() {
+      window.location.href = '/Customer/History';
+    }
   // =========================
   // ✅ Injected data from Razor
   // =========================

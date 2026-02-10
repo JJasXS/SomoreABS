@@ -1,0 +1,93 @@
+@{
+    ViewData["Title"] = "Customer History";
+}
+
+
+<center><h2>Customer History</h2></center>
+
+<!-- DEBUG: Show posted customerCode -->
+<div style="color:red; text-align:center; font-size:14px; margin-bottom:8px;">
+    <b>DEBUG:</b> Posted customerCode = <span id="debug-customerCode">@Context.Request.Query["customerCode"]</span>
+</div>
+
+<div style="padding-left: 40px; padding-right: 40px;">
+    <!-- Filter Bar -->
+    <form method="get" asp-action="History" style="margin-bottom: 24px; display: flex; gap: 12px; align-items: center; justify-content: center;">
+        <label for="customerCode" style="font-weight:600;">Customer:</label>
+        @await Html.PartialAsync("_CustomerDropdownPartial", ViewBag.Customers as IEnumerable<YourApp.Models.AR_CUSTOMER>)
+        <button type="submit" class="btn btn-primary">Filter</button>
+    </form>
+
+    <!-- 3-Column Appointment Status Layout -->
+    <div style="display: flex; gap: 18px;">
+    <div style="flex:1; background:#f8fff8; border-radius:10px; padding:16px; min-width:220px;">
+        <h4 style="color:#28a745; text-align:center;">FULFILLED</h4>
+        @if ((ViewBag.Fulfilled as List<YourApp.Models.Appointment>)?.Count > 0)
+        {
+            <ul style="padding-left:0; list-style:none;">
+            @foreach (var appt in (List<YourApp.Models.Appointment>)ViewBag.Fulfilled)
+            {
+                <li style="margin-bottom:10px; border-bottom:1px solid #e0e0e0; padding-bottom:8px;">
+                    <b>Code:</b> @appt.ApptId<br />
+                    <b>Title:</b> @appt.Title<br />
+                    <b>Date/Time:</b> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")<br />
+                    <b>Customer:</b> @appt.CustomerName ?? @appt.CustomerCode<br />
+                    <b>Agent:</b> @appt.AgentName ?? @appt.AgentCode<br />
+                    @if (!string.IsNullOrWhiteSpace(appt.Notes)) { <div style="font-size:85%;color:#888;">@appt.Notes</div> }
+                </li>
+            }
+            </ul>
+        }
+        else
+        {
+            <div style="color:#888; text-align:center;">No data</div>
+        }
+    </div>
+    <div style="flex:1; background:#f8f9ff; border-radius:10px; padding:16px; min-width:220px;">
+        <h4 style="color:#007bff; text-align:center;">BOOKED</h4>
+        @if ((ViewBag.Booked as List<YourApp.Models.Appointment>)?.Count > 0)
+        {
+            <ul style="padding-left:0; list-style:none;">
+            @foreach (var appt in (List<YourApp.Models.Appointment>)ViewBag.Booked)
+            {
+                <li style="margin-bottom:10px; border-bottom:1px solid #e0e0e0; padding-bottom:8px;">
+                    <b>Code:</b> @appt.ApptId<br />
+                    <b>Title:</b> @appt.Title<br />
+                    <b>Date/Time:</b> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")<br />
+                    <b>Customer:</b> @appt.CustomerName ?? @appt.CustomerCode<br />
+                    <b>Agent:</b> @appt.AgentName ?? @appt.AgentCode<br />
+                    @if (!string.IsNullOrWhiteSpace(appt.Notes)) { <div style="font-size:85%;color:#888;">@appt.Notes</div> }
+                </li>
+            }
+            </ul>
+        }
+        else
+        {
+            <div style="color:#888; text-align:center;">No data</div>
+        }
+    </div>
+    <div style="flex:1; background:#fff8f8; border-radius:10px; padding:16px; min-width:220px;">
+        <h4 style="color:#dc3545; text-align:center;">CANCELLED</h4>
+        @if ((ViewBag.Cancelled as List<YourApp.Models.Appointment>)?.Count > 0)
+        {
+            <ul style="padding-left:0; list-style:none;">
+            @foreach (var appt in (List<YourApp.Models.Appointment>)ViewBag.Cancelled)
+            {
+                <li style="margin-bottom:10px; border-bottom:1px solid #e0e0e0; padding-bottom:8px;">
+                    <b>Code:</b> @appt.ApptId<br />
+                    <b>Title:</b> @appt.Title<br />
+                    <b>Date/Time:</b> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")<br />
+                    <b>Customer:</b> @appt.CustomerName ?? @appt.CustomerCode<br />
+                    <b>Agent:</b> @appt.AgentName ?? @appt.AgentCode<br />
+                    @if (!string.IsNullOrWhiteSpace(appt.Notes)) { <div style="font-size:85%;color:#888;">@appt.Notes</div> }
+                </li>
+            }
+            </ul>
+        }
+        else
+        {
+            <div style="color:#888; text-align:center;">No data</div>
+        }
+    </div>
+    </div>
+</div>
