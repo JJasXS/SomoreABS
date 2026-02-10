@@ -417,10 +417,13 @@
   /* ✅ Line-through ONLY for calendar cell cards, NOT modal */
   .appt-card.in-cell.is-fulfilled .appt-title { text-decoration: line-through !important; }
 
-  /* Force fulfilled look everywhere (grid + modal) */
+  /* Opacity for fulfilled and cancelled */
   .appt-card.is-fulfilled,
   .appt-card.modal-card.is-fulfilled,
-  .appt-card.in-cell.is-fulfilled { opacity: 0.45 !important; }
+  .appt-card.in-cell.is-fulfilled { opacity: 0.65 !important; }
+  .appt-card.is-cancelled,
+  .appt-card.modal-card.is-cancelled,
+  .appt-card.in-cell.is-cancelled { opacity: 0.45 !important; }
 
   /* Hamburger + Side Menu */
   .calendar-shell { position: relative; width: 100% !important; max-width: none !important; margin: 0 !important; background:#fff; border:1px solid rgba(0,0,0,0.08); border-radius:14px; padding:14px; box-shadow:0 2px 14px rgba(0,0,0,0.06); }
@@ -679,15 +682,16 @@
       : null;
 
     var style = cardColor ? ' style="background-color:' + escHtml(cardColor) + ' !important;"' : '';
-    var done = isFulfilled(appt);
-    var doneClass = done ? ' is-fulfilled' : '';
+    var statusUp = (appt.Status || '').trim().toUpperCase();
+    var done = statusUp === 'FULFILLED' || statusUp === 'DONE' || statusUp === 'COMPLETED';
+    var cancelled = statusUp === 'CANCELLED';
+    var doneClass = done ? ' is-fulfilled' : (cancelled ? ' is-cancelled' : '');
 
     // Status letter logic
-    var statusUp = (appt.Status || '').trim().toUpperCase();
     var statusLetter = 'B';
     var statusColor = '#0275d8';
-    if (statusUp === 'CANCELLED') { statusLetter = 'C'; statusColor = '#d9534f'; }
-    else if (statusUp === 'FULFILLED' || statusUp === 'DONE' || statusUp === 'COMPLETED') { statusLetter = 'F'; statusColor = '#5cb85c'; }
+    if (cancelled) { statusLetter = 'C'; statusColor = '#d9534f'; }
+    else if (done) { statusLetter = 'F'; statusColor = '#5cb85c'; }
 
     // Services dropdown only if >1 service
     var servicesHtml = getServiceLinesHtml(appt.ApptId);
@@ -700,16 +704,21 @@
         (hasMultiServices ? '<span class="appt-more" style="font-size:12px; font-weight:700; opacity:0.85;">(more)</span>' : '') +
       '</div>';
 
-    // Hide actions when fulfilled/cancelled
-    var actionsHtml = '';
-    if (!done) {
-      actionsHtml =
-        '<div class="appt-actions" style="margin-top:6px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">' +
-          '<a href="/Appointment/Edit/' + appt.ApptId + '" class="btn btn-sm btn-primary">Edit</a>' +
-          '<a href="/Appointment/Sign/' + appt.ApptId + '" class="btn btn-sm btn-secondary">Submit E-Sign</a>' +
-          '<a href="#" class="btn btn-sm btn-danger appt-delete" data-appt-id="' + appt.ApptId + '">Cancelled?</a>' +
-        '</div>';
-    }
+        // Actions: Print for fulfilled, nothing for cancelled, edit/sign/delete for others
+        var actionsHtml = '';
+        if (done) {
+          actionsHtml =
+            '<div class="appt-actions" style="margin-top:6px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">' +
+              '<a href="/Appointment/PrintPdf/' + appt.ApptId + '" class="btn btn-sm btn-success" target="_blank">Print</a>' +
+            '</div>';
+        } else if (!cancelled) {
+          actionsHtml =
+            '<div class="appt-actions" style="margin-top:6px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">' +
+              '<a href="/Appointment/Edit/' + appt.ApptId + '" class="btn btn-sm btn-primary">Edit</a>' +
+              '<a href="/Appointment/Sign/' + appt.ApptId + '" class="btn btn-sm btn-secondary">Submit E-Sign</a>' +
+              '<a href="#" class="btn btn-sm btn-danger appt-delete" data-appt-id="' + appt.ApptId + '">Cancelled?</a>' +
+            '</div>';
+        }
 
     return (
       '<div class="appt-card modal-card' + doneClass + '" data-appt-id="' + appt.ApptId + '"' + style + '>' +

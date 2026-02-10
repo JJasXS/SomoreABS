@@ -96,20 +96,31 @@ ORDER BY APPT_START DESC";
                 return View(m);
             }
 
+
             var start = m.ApptStart;
             var end = m.ApptStart.AddMinutes(DEFAULT_DURATION_MINUTES);
 
+            // =========================
+            // Prevent agent double-booking (no overlapping appointments for the same agent)
+            // =========================
+            /*
             if (HasAgentOverlap(m.AgentCode, start, end, excludeApptId: null))
             {
                 ModelState.AddModelError("", "Not allowed: this agent already has a booking that overlaps this time.");
                 return View(m);
             }
+            */
 
+            // =========================
+            // Prevent customer double-booking (no overlapping appointments for the same customer)
+            // =========================
+            /*
             if (HasCustomerOverlap(m.CustomerCode, start, end, excludeApptId: null))
             {
                 ModelState.AddModelError("", "Not allowed: this customer already has a booking that overlaps this time (even with a different agent).");
                 return View(m);
             }
+            */
 
 
             long newApptId;
