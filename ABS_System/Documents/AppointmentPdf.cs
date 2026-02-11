@@ -141,6 +141,33 @@ WHERE APPT_ID = @APPTID
 
             // 4) Build model for PDF
 
+            // Load all services for this appointment from APPT_DTL
+            var services = new List<ApptDtl>();
+            using (var cmdDtl = conn.CreateCommand())
+            {
+                cmdDtl.CommandText = @"
+SELECT d.APPT_ID, d.SERVICE_CODE, COALESCE(s.QTY, 0) AS QTY, COALESCE(s.UDF_CLAIMED, 0) AS CLAIMED, COALESCE(s.UDF_PREV_CLAIMED, 0) AS PREV_CLAIMED
+FROM APPT_DTL d
+LEFT JOIN SL_SODTL s ON s.ITEMCODE = d.SERVICE_CODE
+    AND s.DOCKEY IN (SELECT so.DOCKEY FROM SL_SO so WHERE so.CODE = @CUST)
+WHERE d.APPT_ID = @APPTID
+";
+                cmdDtl.Parameters.Add(new FbParameter("@APPTID", apptId));
+                cmdDtl.Parameters.Add(new FbParameter("@CUST", customerCode ?? string.Empty));
+                using var rDtl = cmdDtl.ExecuteReader();
+                while (rDtl.Read())
+                {
+                    services.Add(new ApptDtl
+                    {
+                        ApptId = rDtl.IsDBNull(0) ? 0 : rDtl.GetInt64(0),
+                        ServiceCode = rDtl.IsDBNull(1) ? "" : rDtl.GetString(1),
+                        Qty = rDtl.IsDBNull(2) ? 0 : rDtl.GetInt32(2),
+                        Claimed = rDtl.IsDBNull(3) ? 0 : rDtl.GetInt32(3),
+                        PrevClaimed = rDtl.IsDBNull(4) ? 0 : rDtl.GetInt32(4)
+                    });
+                }
+            }
+
             var appt = new Appointment
             {
                 ApptId = apptId,
@@ -152,17 +179,7 @@ WHERE APPT_ID = @APPTID
                 Status = status,
                 CustomerName = string.IsNullOrWhiteSpace(customerName) ? customerCode : customerName,
                 AgentName = string.IsNullOrWhiteSpace(agentName) ? agentCode : agentName,
-                Services = new List<ApptDtl>
-                {
-                    new ApptDtl
-                    {
-                        ApptId = apptId,
-                        ServiceCode = serviceCode,
-                        Qty = soQty,
-                        Claimed = claimed,
-                        PrevClaimed = prevClaimed
-                    }
-                }
+                Services = services
             };
 
             return new AppointmentPdf(appt, signatureBytes);

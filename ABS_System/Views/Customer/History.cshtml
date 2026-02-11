@@ -36,12 +36,20 @@
                         <b>Agent:</b> @(appt.AgentName?.Split("??")[0].Trim() ?? appt.AgentCode)<br />
                         @if (!string.IsNullOrWhiteSpace(appt.Notes)) { <div style="font-size:85%;color:#888;">@appt.Notes</div> }
                     </div>
-                    <form method="post" action="/Customer/PrintHistory" target="_blank" style="margin-left:8px;">
-                        <input type="hidden" name="apptId" value="@appt.ApptId" />
-                        <button type="submit" class="btn btn-outline-success btn-sm" title="Print this appointment">
+                    @{
+                        var logIdMap = ViewBag.AppointmentLogIds as Dictionary<long, long>;
+                        long logId = 0;
+                        if (logIdMap != null && logIdMap.ContainsKey(appt.ApptId))
+                        {
+                            logId = logIdMap[appt.ApptId];
+                        }
+                    }
+                    @if (logId > 0)
+                    {
+                        <a href="@Url.Action("PrintPdfByLog", "Appointment", new { logId = logId })" target="_blank" class="btn btn-outline-success btn-sm" title="Print this appointment">
                             <span class="bi bi-printer" style="margin-right:4px;"></span>Print
-                        </button>
-                    </form>
+                        </a>
+                    }
                 </li>
             }
             </ul>

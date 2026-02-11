@@ -146,7 +146,7 @@ WHERE CODE = @CODE";
             cmd.CommandText = @"
 SELECT CODE, DESCRIPTION
 FROM AGENT
-WHERE (@UDF_BRANCH = '1' OR UDF_BRANCH = @UDF_BRANCH)
+WHERE UDF_BRANCH = @UDF_BRANCH
 ORDER BY DESCRIPTION";
 
             cmd.Parameters.Add(FirebirdDb.P("@UDF_BRANCH", branchNo, FbDbType.VarChar));
