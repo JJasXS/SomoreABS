@@ -143,13 +143,18 @@ WHERE CODE = @CODE";
             using var conn = _db.Open();
             using var cmd = conn.CreateCommand();
 
-            cmd.CommandText = @"
-SELECT CODE, DESCRIPTION
-FROM AGENT
-WHERE UDF_BRANCH = @UDF_BRANCH
-ORDER BY DESCRIPTION";
 
-            cmd.Parameters.Add(FirebirdDb.P("@UDF_BRANCH", branchNo, FbDbType.VarChar));
+            if (branchNo == "0")
+            {
+                // Office/superuser: see all agents
+                cmd.CommandText = @"SELECT CODE, DESCRIPTION FROM AGENT ORDER BY DESCRIPTION";
+            }
+            else
+            {
+                // Normal: see only agents in own branch
+                cmd.CommandText = @"SELECT CODE, DESCRIPTION FROM AGENT WHERE UDF_BRANCH = @UDF_BRANCH ORDER BY DESCRIPTION";
+                cmd.Parameters.Add(FirebirdDb.P("@UDF_BRANCH", branchNo, FbDbType.VarChar));
+            }
 
             using (var r = cmd.ExecuteReader())
             {

@@ -59,7 +59,7 @@
   background: #c2c2c2 !important;
   border-radius: 14px;
   box-shadow: 0 10px 40px rgba(0,0,0,0.22);
-  width: min(340px, 90vw) !important;
+  width: min(1400px, 99vw) !important;
   border: 1px solid #ececec;
 }
 
