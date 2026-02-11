@@ -208,7 +208,7 @@ namespace YourApp.Controllers
                 new Claim(ClaimTypes.Name, email),
                 new Claim(ClaimTypes.Email, email),
                 new Claim("AgentCode", agentCodeIn),
-                new Claim("BranchNo", branchNo),
+                new Claim("UDF_BRANCH", branchNo),
                 new Claim("IsOffice", isOffice ? "1" : "0")
             };
 

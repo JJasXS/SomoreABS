@@ -39,10 +39,10 @@ namespace YourApp.Controllers
 
             // ✅ logged-in scope
             string userBranchNo = GetBranchNo();
-            bool isOffice = IsOffice();
+            bool canSeeAllBranches = userBranchNo == "0";
 
             ViewBag.UserBranchNo = userBranchNo;
-            ViewBag.IsOffice = isOffice;
+            ViewBag.CanSeeAllBranches = canSeeAllBranches;
 
             // ===== In-memory events (your VM list) =====
             var monthEvents = _events
@@ -52,7 +52,7 @@ namespace YourApp.Controllers
                 .ToList();
 
             // ===== DB: appointments in month =====
-            var monthAppointments = LoadMonthAppointments(firstDay, lastDay, isOffice, userBranchNo);
+            var monthAppointments = LoadMonthAppointments(firstDay, lastDay, canSeeAllBranches, userBranchNo);
 
             // ===== DB: appt services for month + service names =====
             BuildApptServicesAndNames(monthAppointments, out var apptServices, out var serviceNames);
@@ -60,7 +60,7 @@ namespace YourApp.Controllers
             ViewBag.ServiceNames = serviceNames;
 
             // ===== DB: agent dictionaries + colors =====
-            BuildAgentDictionaries(isOffice, userBranchNo,
+            BuildAgentDictionaries(canSeeAllBranches, userBranchNo,
                 out var agentNames,
                 out var agentBranchNos,
                 out var agentColors);
@@ -118,7 +118,7 @@ namespace YourApp.Controllers
         private List<YourApp.Models.Appointment> LoadMonthAppointments(
             DateTime start,
             DateTime end,
-            bool isOffice,
+            bool canSeeAllBranches,
             string userBranchNo)
         {
             var list = new List<YourApp.Models.Appointment>();
@@ -131,13 +131,15 @@ namespace YourApp.Controllers
                 {
                     using var conn = db.Open();
                     using var cmd = conn.CreateCommand();
-                    cmd.CommandText = isOffice
-                        ? @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap WHERE ap.APPT_START >= @START AND ap.APPT_START <= @END ORDER BY ap.APPT_START"
-                        : @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap JOIN AGENT a ON a.CODE = ap.AGENT_CODE WHERE ap.APPT_START >= @START AND ap.APPT_START <= @END AND a.UDF_BRANCH = @UDF_BRANCH ORDER BY ap.APPT_START";
-                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@START", start, FbDbType.TimeStamp));
-                    cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@END", end, FbDbType.TimeStamp));
-                    if (!isOffice)
+                    if (userBranchNo == "0")
+                    {
+                        cmd.CommandText = @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap ORDER BY ap.APPT_START";
+                    }
+                    else
+                    {
+                        cmd.CommandText = @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap JOIN AGENT a ON a.CODE = ap.AGENT_CODE WHERE a.UDF_BRANCH = @UDF_BRANCH ORDER BY ap.APPT_START";
                         cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@UDF_BRANCH", userBranchNo, FbDbType.VarChar));
+                    }
                     using var r = cmd.ExecuteReader();
                     while (r.Read())
                     {
@@ -234,7 +236,7 @@ namespace YourApp.Controllers
         // DB: Agent names + branch numbers + colors
         // =========================================================
         private void BuildAgentDictionaries(
-            bool isOffice,
+            bool canSeeAllBranches,
             string userBranchNo,
             out Dictionary<string, string> agentNames,
             out Dictionary<string, string> agentBranchNos,
@@ -252,10 +254,10 @@ namespace YourApp.Controllers
                 {
                     using var conn = db.Open();
                     using var cmd = conn.CreateCommand();
-                    cmd.CommandText = isOffice
+                    cmd.CommandText = canSeeAllBranches
                         ? "SELECT CODE, DESCRIPTION, BRANCHNO FROM AGENT"
                         : "SELECT CODE, DESCRIPTION, BRANCHNO FROM AGENT WHERE BRANCHNO = @BRANCHNO";
-                    if (!isOffice)
+                    if (!canSeeAllBranches)
                         cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@BRANCHNO", userBranchNo, FbDbType.VarChar));
                     using var r = cmd.ExecuteReader();
                     while (r.Read())
