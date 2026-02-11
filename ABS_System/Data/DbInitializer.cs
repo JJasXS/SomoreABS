@@ -110,21 +110,22 @@ VALUES ('DEFAULT', 'Default Company', 'Welcome', 'Thank you', 1)
         // =========================================================
         // 1b) Ensure AGENT.BRANCHNO column exists
         // =========================================================
-        public void EnsureAgentBranchNoColumn()
+        // 1b) Ensure AGENT.UDF_BRANCH column exists (for branch filtering)
+        public void EnsureAgentUdfBranchColumn()
         {
             using var conn = _db.Open();
-            Log("Checking AGENT.BRANCHNO ...");
+            Log("Checking AGENT.UDF_BRANCH ...");
 
-            if (ColumnExists(conn, "AGENT", "BRANCHNO"))
+            if (ColumnExists(conn, "AGENT", "UDF_BRANCH"))
             {
-                Log("AGENT.BRANCHNO already exists, skip.");
+                Log("AGENT.UDF_BRANCH already exists, skip.");
                 return;
             }
 
-            Log("Adding column AGENT.BRANCHNO ...");
-            ExecNonQuery(conn, "ALTER TABLE AGENT ADD BRANCHNO VARCHAR(10) CHARACTER SET UTF8");
-            ExecNonQuery(conn, "UPDATE AGENT SET BRANCHNO = '' WHERE BRANCHNO IS NULL");
-            Log("AGENT.BRANCHNO added OK.");
+            Log("Adding column AGENT.UDF_BRANCH ...");
+            ExecNonQuery(conn, "ALTER TABLE AGENT ADD UDF_BRANCH VARCHAR(10) CHARACTER SET UTF8");
+            ExecNonQuery(conn, "UPDATE AGENT SET UDF_BRANCH = '' WHERE UDF_BRANCH IS NULL");
+            Log("AGENT.UDF_BRANCH added OK.");
         }
 
         // ...existing code...

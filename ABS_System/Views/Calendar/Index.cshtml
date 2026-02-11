@@ -101,6 +101,27 @@
     <div id="modalOverlay" class="modal-overlay" style="display:none;"></div>
 
     <!-- =========================
+       ✅ BRANCH FILTER MODAL
+       ========================= -->
+    <div id="branchFilterModal" class="custom-modal" style="display:none; max-width:400px;">
+      <div class="custom-modal-content">
+        <div class="custom-modal-header">
+          <h5>Filter by Branch</h5>
+          <button type="button" id="closeBranchFilterModal" class="modal-close">&times;</button>
+        </div>
+        <div class="custom-modal-body">
+          <form id="branchFilterForm">
+            <div id="branchCheckboxList" style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;"></div>
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+              <button type="button" class="btn btn-secondary" id="cancelBranchFilterBtn">Cancel</button>
+              <button type="submit" class="btn btn-primary">Apply Filter</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================
          ✅ MONTH MODAL
          ========================= -->
     <div id="monthAppointmentsModal" class="custom-modal" style="display:none;">
@@ -278,28 +299,127 @@
          ✅ TOOLBAR (month/year + nav)
          ========================= -->
     <div class="calendar-toolbar">
-        <form method="get" action="@Url.Action("Index")" class="calendar-search-form">
-            <select name="month" class="form-select calendar-month-select">
-                @foreach (var mm in monthItems)
-                {
-                    <option value="@mm.Value" selected="@(mm.Value == month ? "selected" : null)">@mm.Text</option>
-                }
-            </select>
 
-            <select name="year" class="form-select calendar-year-select">
-                @for (int y = startYear; y <= endYear; y++)
-                {
-                    <option value="@y" selected="@(y == year ? "selected" : null)">@y</option>
-                }
-            </select>
+        <div class="calendar-toolbar-flex" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+              @* Branch filter context vars for toolbar *@
+              @{
+                var selectedBranches = ViewBag.SelectedBranches as List<string>;
+                var agentBranchNos = ViewBag.AgentBranchNos as Dictionary<string, string>;
+                var allBranches = agentBranchNos != null ? agentBranchNos.Values.Distinct().ToList() : new List<string>();
+              }
+            <form method="get" action="@Url.Action("Index")" class="calendar-search-form" style="margin-bottom:0;">
+                <select name="month" class="form-select calendar-month-select">
+                    @foreach (var mm in monthItems)
+                    {
+                        <option value="@mm.Value" selected="@(mm.Value == month ? "selected" : null)">@mm.Text</option>
+                    }
+                </select>
 
-            @if (pickDate)
+                <select name="year" class="form-select calendar-year-select">
+                    @for (int y = startYear; y <= endYear; y++)
+                    {
+                        <option value="@y" selected="@(y == year ? "selected" : null)">@y</option>
+                    }
+                </select>
+
+                @if (pickDate)
+                {
+                    <input type="hidden" name="pickDate" value="1" />
+                }
+
+                <button type="submit" class="btn btn-primary">Search</button>
+            </form>
+
+            @if ((ViewBag.UserBranchNo as string) == "0")
             {
-                <input type="hidden" name="pickDate" value="1" />
+              <button class="btn btn-secondary" id="filterAppointmentsBtn">Filter Appointments</button>
+              if (selectedBranches != null && selectedBranches.Count > 0 && allBranches.Count > 0 && selectedBranches.Count != allBranches.Count)
+              {
+                <span style="margin-left: 8px; font-size: 0.95em; color: #555;">
+                  Showing branches: @string.Join(", ", selectedBranches)
+                </span>
+              }
             }
+            <script>
+            // Branch filter modal logic
+            document.addEventListener('DOMContentLoaded', function () {
+              var filterBtn = document.getElementById('filterAppointmentsBtn');
+              var branchModal = document.getElementById('branchFilterModal');
+              var overlay = document.getElementById('modalOverlay');
+              var closeBtn = document.getElementById('closeBranchFilterModal');
+              var cancelBtn = document.getElementById('cancelBranchFilterBtn');
+              var form = document.getElementById('branchFilterForm');
+              var checkboxList = document.getElementById('branchCheckboxList');
 
-            <button type="submit" class="btn btn-primary">Search</button>
-        </form>
+              // Get all branches from agentBranchNos
+              var agentBranchNos = @Html.Raw(JsonSerializer.Serialize(ViewBag.AgentBranchNos ?? new Dictionary<string, string>(), jsonOpt));
+              // Build a set of unique UDF_BRANCH values (not agent codes)
+              var branchSet = new Set();
+              Object.values(agentBranchNos).forEach(function (branchNo) {
+                if (branchNo && branchNo !== '') branchSet.add(branchNo);
+              });
+              var branchList = Array.from(branchSet).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+
+              if (filterBtn) filterBtn.addEventListener('click', function () {
+                // Build checkboxes
+                checkboxList.innerHTML = '';
+                var selectedBranches = @Html.Raw(JsonSerializer.Serialize(ViewBag.SelectedBranches ?? new List<string>(), jsonOpt));
+                if (branchList.length === 0) {
+                  var msg = document.createElement('div');
+                  msg.textContent = 'No branches found.';
+                  msg.style.color = '#c00';
+                  checkboxList.appendChild(msg);
+                } else {
+                  branchList.forEach(function (branchNo) {
+                    var label = 'Branch ' + branchNo;
+                    var id = 'branch_cb_' + branchNo;
+                    var cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.id = id;
+                    cb.name = 'branches';
+                    cb.value = branchNo;
+                    cb.checked = selectedBranches.length === 0 || selectedBranches.includes(branchNo);
+                    var lbl = document.createElement('label');
+                    lbl.htmlFor = id;
+                    lbl.style.marginLeft = '6px';
+                    lbl.textContent = label;
+                    var div = document.createElement('div');
+                    div.appendChild(cb);
+                    div.appendChild(lbl);
+                    checkboxList.appendChild(div);
+                  });
+                }
+                overlay.style.display = 'block';
+                branchModal.style.display = 'block';
+              });
+
+              function closeBranchModal() {
+                branchModal.style.display = 'none';
+                overlay.style.display = 'none';
+              }
+              if (closeBtn) closeBtn.addEventListener('click', closeBranchModal);
+              if (cancelBtn) cancelBtn.addEventListener('click', function(e){e.preventDefault();closeBranchModal();});
+              if (overlay) overlay.addEventListener('click', function(){
+                if (branchModal.style.display === 'block') closeBranchModal();
+              });
+
+              // Submit selected branches to server
+              form.addEventListener('submit', function(e){
+                e.preventDefault();
+                var checked = Array.from(form.elements['branches']).filter(function(cb){return cb.checked;}).map(function(cb){return cb.value;});
+                if (checked.length === 0) {
+                  alert('Please select at least one branch.');
+                  return;
+                }
+                // Build query string for GET
+                var url = new URL(window.location.href);
+                url.searchParams.delete('branches');
+                checked.forEach(function(b){ url.searchParams.append('branches', b); });
+                window.location.href = url.toString();
+              });
+            });
+            </script>
+        </div>
 
         <div class="calendar-nav-actions">
             <a class="btn btn-secondary"

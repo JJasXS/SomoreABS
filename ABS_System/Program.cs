@@ -57,7 +57,6 @@ using (var scope = app.Services.CreateScope())
 
         // Columns / master tables
         init.EnsureAgentEmailColumn();
-        init.EnsureAgentBranchNoColumn();
 
         // Appointment + detail table
         init.EnsureAppointmentSchema();

@@ -41,6 +41,11 @@ namespace YourApp.Controllers
             string userBranchNo = GetBranchNo();
             bool canSeeAllBranches = userBranchNo == "0";
 
+            // Get selected branches from query string (for server-side filter)
+            var selectedBranches = Request.Query["branches"].ToArray();
+            List<string> selectedBranchList = selectedBranches.Length > 0 ? selectedBranches.ToList() : null;
+            ViewBag.SelectedBranches = selectedBranchList;
+
             ViewBag.UserBranchNo = userBranchNo;
             ViewBag.CanSeeAllBranches = canSeeAllBranches;
 
@@ -52,7 +57,7 @@ namespace YourApp.Controllers
                 .ToList();
 
             // ===== DB: appointments in month =====
-            var monthAppointments = LoadMonthAppointments(firstDay, lastDay, canSeeAllBranches, userBranchNo);
+            var monthAppointments = LoadMonthAppointmentsFiltered(firstDay, lastDay, canSeeAllBranches, userBranchNo, selectedBranchList);
 
             // ===== DB: appt services for month + service names =====
             BuildApptServicesAndNames(monthAppointments, out var apptServices, out var serviceNames);
@@ -110,6 +115,68 @@ namespace YourApp.Controllers
             ViewBag.CustomerBirthdays = birthdays;
 
             return View(monthEvents);
+        }
+        // New: LoadMonthAppointmentsFiltered for multi-branch filter
+        private List<YourApp.Models.Appointment> LoadMonthAppointmentsFiltered(
+            DateTime start,
+            DateTime end,
+            bool canSeeAllBranches,
+            string userBranchNo,
+            List<string> selectedBranches)
+        {
+            var list = new List<YourApp.Models.Appointment>();
+            try
+            {
+                using var scope = HttpContext.RequestServices.CreateScope();
+                var dbObj = scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                if (dbObj is YourApp.Data.FirebirdDb db)
+                {
+                    using var conn = db.Open();
+                    using var cmd = conn.CreateCommand();
+                    if (canSeeAllBranches && selectedBranches != null && selectedBranches.Count > 0)
+                    {
+                        // Filter by selected branches (for office)
+                        var branchParams = new List<string>();
+                        for (int i = 0; i < selectedBranches.Count; i++)
+                        {
+                            var pname = "@branch" + i;
+                            branchParams.Add(pname);
+                            cmd.Parameters.Add(YourApp.Data.FirebirdDb.P(pname, selectedBranches[i], FbDbType.VarChar));
+                        }
+                        cmd.CommandText = $@"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap JOIN AGENT a ON a.CODE = ap.AGENT_CODE WHERE a.BRANCHNO IN ({string.Join(",", branchParams)}) ORDER BY ap.APPT_START";
+                    }
+                    else if (userBranchNo == "0")
+                    {
+                        // Office, no filter
+                        cmd.CommandText = @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap ORDER BY ap.APPT_START";
+                    }
+                    else
+                    {
+                        // Normal user, single branch
+                        cmd.CommandText = @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap JOIN AGENT a ON a.CODE = ap.AGENT_CODE WHERE a.UDF_BRANCH = @UDF_BRANCH ORDER BY ap.APPT_START";
+                        cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@UDF_BRANCH", userBranchNo, FbDbType.VarChar));
+                    }
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read())
+                    {
+                        list.Add(new YourApp.Models.Appointment
+                        {
+                            ApptId = r.GetInt64(0),
+                            CustomerCode = r.IsDBNull(1) ? "" : r.GetString(1).Trim(),
+                            AgentCode = r.IsDBNull(2) ? "" : r.GetString(2).Trim(),
+                            ApptStart = r.GetDateTime(3),
+                            Title = r.IsDBNull(4) ? "" : r.GetString(4).Trim(),
+                            Notes = r.IsDBNull(5) ? "" : r.GetString(5),
+                            Status = r.IsDBNull(6) ? "BOOKED" : r.GetString(6).Trim()
+                        });
+                    }
+                }
+            }
+            catch
+            {
+                // keep page working even if DB fails
+            }
+            return list;
         }
 
         // =========================================================
@@ -255,10 +322,10 @@ namespace YourApp.Controllers
                     using var conn = db.Open();
                     using var cmd = conn.CreateCommand();
                     cmd.CommandText = canSeeAllBranches
-                        ? "SELECT CODE, DESCRIPTION, BRANCHNO FROM AGENT"
-                        : "SELECT CODE, DESCRIPTION, BRANCHNO FROM AGENT WHERE BRANCHNO = @BRANCHNO";
+                        ? "SELECT CODE, DESCRIPTION, UDF_BRANCH FROM AGENT"
+                        : "SELECT CODE, DESCRIPTION, UDF_BRANCH FROM AGENT WHERE UDF_BRANCH = @UDF_BRANCH";
                     if (!canSeeAllBranches)
-                        cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@BRANCHNO", userBranchNo, FbDbType.VarChar));
+                        cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@UDF_BRANCH", userBranchNo, FbDbType.VarChar));
                     using var r = cmd.ExecuteReader();
                     while (r.Read())
                     {
