@@ -143,7 +143,7 @@ namespace YourApp.Controllers
                             branchParams.Add(pname);
                             cmd.Parameters.Add(YourApp.Data.FirebirdDb.P(pname, selectedBranches[i], FbDbType.VarChar));
                         }
-                        cmd.CommandText = $@"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap JOIN AGENT a ON a.CODE = ap.AGENT_CODE WHERE a.BRANCHNO IN ({string.Join(",", branchParams)}) ORDER BY ap.APPT_START";
+                        cmd.CommandText = $@"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap JOIN AGENT a ON a.CODE = ap.AGENT_CODE WHERE a.UDF_BRANCH IN ({string.Join(",", branchParams)}) ORDER BY ap.APPT_START";
                     }
                     else if (userBranchNo == "0")
                     {
