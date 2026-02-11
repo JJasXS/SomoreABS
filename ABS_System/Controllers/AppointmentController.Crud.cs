@@ -105,7 +105,7 @@ ORDER BY ACTION_TIME DESC";
         public IActionResult Create(DateTime? apptStart)
         {
             var email = (User?.Identity?.Name ?? "").Trim();
-            var branchNo = GetBranchNoByEmail(email);
+            var branchNo = GetBranchNoByEmail(email); // GetBranchNoByEmail already uses UDF_EMAIL/UDF_BRANCH
 
             var start = apptStart ?? DateTime.Now;
 
@@ -131,7 +131,7 @@ ORDER BY ACTION_TIME DESC";
         {
             // ✅ Always reload dropdown data so page can re-render on validation error
             var email = (User?.Identity?.Name ?? "").Trim();
-            var branchNo = GetBranchNoByEmail(email);
+            var branchNo = GetBranchNoByEmail(email); // GetBranchNoByEmail already uses UDF_EMAIL/UDF_BRANCH
             LoadAgentsAndCustomers(branchNo, out var agents, out var customers);
 
             ViewBag.Agents = agents;

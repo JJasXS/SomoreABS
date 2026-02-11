@@ -19,7 +19,7 @@ namespace YourApp.Controllers
         // Login Claim Helpers
         // =========================
         private string GetBranchNo()
-            => User?.Claims?.FirstOrDefault(c => c.Type == "BranchNo")?.Value?.Trim() ?? "";
+            => User?.Claims?.FirstOrDefault(c => c.Type == "UDF_BRANCH")?.Value?.Trim() ?? "";
 
         private bool IsOffice()
             => (User?.Claims?.FirstOrDefault(c => c.Type == "IsOffice")?.Value?.Trim() == "1");
@@ -133,11 +133,11 @@ namespace YourApp.Controllers
                     using var cmd = conn.CreateCommand();
                     cmd.CommandText = isOffice
                         ? @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap WHERE ap.APPT_START >= @START AND ap.APPT_START <= @END ORDER BY ap.APPT_START"
-                        : @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap JOIN AGENT a ON a.CODE = ap.AGENT_CODE WHERE ap.APPT_START >= @START AND ap.APPT_START <= @END AND a.BRANCHNO = @BRANCHNO ORDER BY ap.APPT_START";
+                        : @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap JOIN AGENT a ON a.CODE = ap.AGENT_CODE WHERE ap.APPT_START >= @START AND ap.APPT_START <= @END AND a.UDF_BRANCH = @UDF_BRANCH ORDER BY ap.APPT_START";
                     cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@START", start, FbDbType.TimeStamp));
                     cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@END", end, FbDbType.TimeStamp));
                     if (!isOffice)
-                        cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@BRANCHNO", userBranchNo, FbDbType.VarChar));
+                        cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@UDF_BRANCH", userBranchNo, FbDbType.VarChar));
                     using var r = cmd.ExecuteReader();
                     while (r.Read())
                     {

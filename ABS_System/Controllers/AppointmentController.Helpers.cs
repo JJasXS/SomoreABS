@@ -146,10 +146,10 @@ WHERE CODE = @CODE";
             cmd.CommandText = @"
 SELECT CODE, DESCRIPTION
 FROM AGENT
-WHERE (@BRANCHNO = '1' OR BRANCHNO = @BRANCHNO)
+WHERE (@UDF_BRANCH = '1' OR UDF_BRANCH = @UDF_BRANCH)
 ORDER BY DESCRIPTION";
 
-            cmd.Parameters.Add(FirebirdDb.P("@BRANCHNO", branchNo, FbDbType.VarChar));
+            cmd.Parameters.Add(FirebirdDb.P("@UDF_BRANCH", branchNo, FbDbType.VarChar));
 
             using (var r = cmd.ExecuteReader())
             {
@@ -342,11 +342,11 @@ WHERE {columnName} = @CODE
                 using var cmd = conn.CreateCommand();
 
                 cmd.CommandText = @"
-SELECT FIRST 1 BRANCHNO
+SELECT FIRST 1 UDF_BRANCH
 FROM AGENT
-WHERE LOWER(EMAIL) = LOWER(@EMAIL)";
+WHERE LOWER(UDF_EMAIL) = LOWER(@UDF_EMAIL)";
 
-                cmd.Parameters.Add(FirebirdDb.P("@EMAIL", email, FbDbType.VarChar));
+                cmd.Parameters.Add(FirebirdDb.P("@UDF_EMAIL", email, FbDbType.VarChar));
 
                 var v = cmd.ExecuteScalar();
                 return (v == null || v == DBNull.Value) ? "" : (v?.ToString()?.Trim() ?? "");

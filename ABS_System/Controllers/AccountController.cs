@@ -49,7 +49,7 @@ namespace YourApp.Controllers
             if (!ModelState.IsValid)
                 return View(model);
 
-            var emailIn = (model.Email ?? "").Trim();
+            var emailIn = (model?.Email ?? "").Trim();
 
             if (string.IsNullOrWhiteSpace(emailIn))
             {
@@ -67,8 +67,8 @@ namespace YourApp.Controllers
                 using (var conn = _db.Open())
                 using (var cmd = conn.CreateCommand())
                 {
-                    cmd.CommandText = "SELECT CODE FROM AGENT WHERE EMAIL = @EMAIL";
-                    cmd.Parameters.Add(FirebirdDb.P("@EMAIL", emailIn,
+                    cmd.CommandText = "SELECT CODE FROM AGENT WHERE UDF_EMAIL = @UDF_EMAIL";
+                    cmd.Parameters.Add(FirebirdDb.P("@UDF_EMAIL", emailIn,
                         FirebirdSql.Data.FirebirdClient.FbDbType.VarChar));
 
                     using var r = cmd.ExecuteReader();
@@ -178,7 +178,7 @@ namespace YourApp.Controllers
                 using (var conn = _db.Open())
                 using (var cmd = conn.CreateCommand())
                 {
-                    cmd.CommandText = "SELECT EMAIL, BRANCHNO FROM AGENT WHERE CODE = @CODE";
+                    cmd.CommandText = "SELECT UDF_EMAIL, UDF_BRANCH FROM AGENT WHERE CODE = @CODE";
                     cmd.Parameters.Add(FirebirdDb.P("@CODE", agentCodeIn,
                         FirebirdSql.Data.FirebirdClient.FbDbType.VarChar));
 
@@ -256,7 +256,8 @@ namespace YourApp.Controllers
             var enableSslStr = _config["Smtp:EnableSsl"];
             var user = _config["Smtp:User"];
             var pass = _config["Smtp:Pass"];
-            var fromEmail = _config["Smtp:FromEmail"] ?? user; // fallback to user if not provided
+            var fromEmail = _config["Smtp:FromEmail"];
+            if (string.IsNullOrWhiteSpace(fromEmail)) fromEmail = user; // fallback to user if not provided
             var fromName = _config["Smtp:FromName"] ?? "OTP";
 
             if (string.IsNullOrWhiteSpace(host)) throw new Exception("Missing Smtp:Host in appsettings.json");
@@ -278,6 +279,8 @@ namespace YourApp.Controllers
                 DeliveryMethod = SmtpDeliveryMethod.Network
             };
 
+            if (string.IsNullOrWhiteSpace(fromEmail))
+                throw new Exception("fromEmail cannot be null or empty for MailAddress");
             using var msg = new MailMessage
             {
                 From = new MailAddress(fromEmail, fromName),

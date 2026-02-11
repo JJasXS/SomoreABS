@@ -127,50 +127,7 @@ VALUES ('DEFAULT', 'Default Company', 'Welcome', 'Thank you', 1)
             Log("AGENT.BRANCHNO added OK.");
         }
 
-        // =========================================================
-        // 1c) Ensure BRANCH table exists + FK from AGENT(BRANCHNO)
-        // =========================================================
-        public void EnsureBranchSchema()
-        {
-            using var conn = _db.Open();
-
-            Log("Checking table BRANCH ...");
-            if (!TableExists(conn, "BRANCH"))
-            {
-                Log("Creating table BRANCH ...");
-                ExecNonQuery(conn, @"
-CREATE TABLE BRANCH (
-    BRANCHNO    VARCHAR(10) CHARACTER SET UTF8 NOT NULL,
-    BRANCHNAME  VARCHAR(120) CHARACTER SET UTF8,
-    CONSTRAINT PK_BRANCH PRIMARY KEY (BRANCHNO)
-)");
-                Log("Table BRANCH created OK.");
-            }
-            else
-            {
-                Log("Table BRANCH already exists, skip.");
-            }
-
-            Log("Checking column AGENT.BRANCHNO ...");
-            if (!ColumnExists(conn, "AGENT", "BRANCHNO"))
-            {
-                Log("Adding column AGENT.BRANCHNO ...");
-                ExecNonQuery(conn, "ALTER TABLE AGENT ADD BRANCHNO VARCHAR(10) CHARACTER SET UTF8");
-                ExecNonQuery(conn, "UPDATE AGENT SET BRANCHNO = '' WHERE BRANCHNO IS NULL");
-                Log("AGENT.BRANCHNO added OK.");
-            }
-            else
-            {
-                Log("AGENT.BRANCHNO already exists, skip.");
-            }
-
-            Log("Checking FK FK_AGENT_BRANCH ...");
-            EnsureForeignKey(
-                conn,
-                fkName: "FK_AGENT_BRANCH",
-                alterSql: "ALTER TABLE AGENT ADD CONSTRAINT FK_AGENT_BRANCH FOREIGN KEY (BRANCHNO) REFERENCES BRANCH(BRANCHNO)"
-            );
-        }
+        // ...existing code...
 
         // =========================================================
         // ✅ Ensure SL_SODTL has UDF_CLAIMED + UDF_PREV_CLAIMED (default 0)
