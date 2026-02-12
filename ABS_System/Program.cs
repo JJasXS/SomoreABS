@@ -7,10 +7,15 @@ using QuestPDF.Infrastructure;
 var builder = WebApplication.CreateBuilder(args);
 QuestPDF.Settings.License = LicenseType.Community; // Set QuestPDF license type
 
+
 // =========================
 // Services
 // =========================
-builder.Services.AddControllersWithViews();
+builder.Services.AddScoped<YourApp.Filters.TenantBrandingFilter>();
+builder.Services.AddControllersWithViews(options =>
+{
+    options.Filters.AddService<YourApp.Filters.TenantBrandingFilter>();
+});
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>

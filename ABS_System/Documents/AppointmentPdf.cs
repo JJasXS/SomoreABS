@@ -153,7 +153,7 @@ WHERE APPT_ID = @APPTID
             using (var cmdDtl = conn.CreateCommand())
             {
                 cmdDtl.CommandText = @"
-SELECT d.APPT_ID, d.SERVICE_CODE, COALESCE(s.QTY, 0) AS QTY, COALESCE(s.UDF_CLAIMED, 0) AS CLAIMED, COALESCE(s.UDF_PREV_CLAIMED, 0) AS PREV_CLAIMED
+SELECT d.APPT_ID, d.SERVICE_CODE, COALESCE(s.QTY, 0) AS QTY, COALESCE(s.UDF_CLAIMED, 0) AS CLAIMED, COALESCE(s.UDF_PREV_CLAIMED, 0) AS PREV_CLAIMED, s.DESCRIPTION
 FROM APPT_DTL d
 LEFT JOIN SL_SODTL s ON s.ITEMCODE = d.SERVICE_CODE
     AND s.DOCKEY IN (SELECT so.DOCKEY FROM SL_SO so WHERE so.CODE = @CUST)
@@ -170,7 +170,8 @@ WHERE d.APPT_ID = @APPTID
                         ServiceCode = rDtl.IsDBNull(1) ? "" : rDtl.GetString(1),
                         Qty = rDtl.IsDBNull(2) ? 0 : rDtl.GetInt32(2),
                         Claimed = rDtl.IsDBNull(3) ? 0 : rDtl.GetInt32(3),
-                        PrevClaimed = rDtl.IsDBNull(4) ? 0 : rDtl.GetInt32(4)
+                        PrevClaimed = rDtl.IsDBNull(4) ? 0 : rDtl.GetInt32(4),
+                        Description = rDtl.IsDBNull(5) ? "" : rDtl.GetString(5)
                     });
                 }
             }
@@ -314,7 +315,7 @@ WHERE d.APPT_ID = @APPTID
 
                                         table.Header(header =>
                                         {
-                                            header.Cell().Text("Service Code").FontSize(9).Bold();
+                                            header.Cell().Text("Service Name").FontSize(9).Bold();
                                             header.Cell().AlignRight().Text("Claimed / Qty").FontSize(9).Bold();
                                         });
 
@@ -322,7 +323,7 @@ WHERE d.APPT_ID = @APPTID
                                         {
                                             var totalClaimed = svc.Claimed + svc.PrevClaimed;
 
-                                            table.Cell().Text(string.IsNullOrWhiteSpace(svc.ServiceCode) ? "-" : svc.ServiceCode);
+                                            table.Cell().Text(string.IsNullOrWhiteSpace(svc.Description) ? "-" : svc.Description);
                                             table.Cell().AlignRight().Text($"{totalClaimed} / {svc.Qty}");
                                         }
                                     });

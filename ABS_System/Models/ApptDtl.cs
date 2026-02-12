@@ -14,5 +14,8 @@ namespace YourApp.Models
         // Added for UDF_CLAIMED info
         public int Claimed { get; set; } // UDF_CLAIMED
         public int PrevClaimed { get; set; } // UDF_PREV_CLAIMED
+
+        // Service description (name)
+        public string Description { get; set; } = "";
     }
 }

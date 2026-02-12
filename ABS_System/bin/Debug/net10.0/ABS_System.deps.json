@@ -11,7 +11,8 @@
           "FirebirdSql.Data.FirebirdClient": "10.3.4",
           "Microsoft.EntityFrameworkCore.SqlServer": "10.0.2",
           "Microsoft.EntityFrameworkCore.Tools": "10.0.2",
-          "QuestPDF": "2025.12.3"
+          "QuestPDF": "2025.12.3",
+          "SixLabors.ImageSharp": "3.1.12"
         },
         "runtime": {
           "ABS_System.dll": {}
@@ -763,6 +764,14 @@
           }
         }
       },
+      "SixLabors.ImageSharp/3.1.12": {
+        "runtime": {
+          "lib/net6.0/SixLabors.ImageSharp.dll": {
+            "assemblyVersion": "3.0.0.0",
+            "fileVersion": "3.1.12.0"
+          }
+        }
+      },
       "System.ClientModel/1.5.1": {
         "dependencies": {
           "System.Memory.Data": "8.0.1"
@@ -1126,6 +1135,13 @@
       "sha512": "sha512-cJ1Kvm3wFjs8uLOMze0wjOCAkicraLmUhhHYF2v33S2c7syA5RL+Mp5ty0HnsvFwqF8FaDmn2elndklms4SnwA==",
       "path": "questpdf/2025.12.3",
       "hashPath": "questpdf.2025.12.3.nupkg.sha512"
+    },
+    "SixLabors.ImageSharp/3.1.12": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-iAg6zifihXEFS/t7fiHhZBGAdCp3FavsF4i2ZIDp0JfeYeDVzvmlbY1CNhhIKimaIzrzSi5M/NBFcWvZT2rB/A==",
+      "path": "sixlabors.imagesharp/3.1.12",
+      "hashPath": "sixlabors.imagesharp.3.1.12.nupkg.sha512"
     },
     "System.ClientModel/1.5.1": {
       "type": "package",

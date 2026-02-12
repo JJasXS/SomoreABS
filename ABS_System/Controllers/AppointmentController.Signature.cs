@@ -1,3 +1,6 @@
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.Formats.Png;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -111,7 +114,24 @@ WHERE APPT_ID = @ID";
             try
             {
                 pngBytes = Convert.FromBase64String(m.Groups[1].Value);
-            }
+
+                using (var inputStream = new MemoryStream(pngBytes))
+                using (var image = SixLabors.ImageSharp.Image.Load(inputStream)) // ✅ correct overload
+{
+                {
+                    if (image.Width > 600)
+                    {
+                        int newWidth = 600;
+                        int newHeight = (int)(image.Height * (600.0 / image.Width));
+                        image.Mutate(x => x.Resize(newWidth, newHeight));
+                    }
+                    using (var outputStream = new MemoryStream())
+                    {
+                        image.Save(outputStream, new PngEncoder());
+                        pngBytes = outputStream.ToArray();
+                    }
+                }
+            }}
             catch
             {
                 TempData["Err"] = "Invalid signature data.";
