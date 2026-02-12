@@ -2,12 +2,14 @@
     ViewData["Title"] = "Customer History";
 }
 
-
-<center><h2>Customer History</h2></center>
-
-<!-- DEBUG: Show posted customerCode -->
-<div style="color:red; text-align:center; font-size:14px; margin-bottom:8px;">
-    <b>DEBUG:</b> Posted customerCode = <span id="debug-customerCode">@Context.Request.Query["customerCode"]</span>
+<!-- Back Button beside heading -->
+<div style="position:relative;margin-top:32px;margin-bottom:16px;">
+    <a href="/Calendar/Index" style="position:absolute;left:18px;top:50%;transform:translateY(-50%);display:flex;align-items:center;background:#007bff;border-radius:8px;padding:0 12px;height:36px;color:#fff;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,0.12);text-decoration:none;font-weight:600;">
+        <span style="font-size:22px;margin-right:8px;">&#8592;</span> Back
+    </a>
+    <div style="text-align:center;">
+        <h2 style="margin:0;">Customer History</h2>
+    </div>
 </div>
 
 <div style="padding-left: 40px; padding-right: 40px;">
