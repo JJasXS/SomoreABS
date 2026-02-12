@@ -508,10 +508,10 @@
                                                 "padding:1px 8px !important; font-size:7px !important; line-height:1.2 !important;" +
                                                 (string.IsNullOrWhiteSpace(cardColor) ? "" : $" background-color:{cardColor} !important;");
 
-                                            <div class="appt-card in-cell@doneClass"
-                                                 data-appt-id="@appt.ApptId"
-                                                 data-status="@statusUp"
-                                                 style="@style">
+                                                <div class="appt-card in-cell@doneClass"
+                                                  data-appt-id="@appt.ApptId"
+                                                  data-status="@statusUp"
+                                                  style="@style; min-height:auto !important;">
                                                 <span class="appt-title" style="@(isDone ? "opacity:0.45; font-weight:480;" : "font-weight:500;")">
                                                     @displayTitle
                                                 </span>

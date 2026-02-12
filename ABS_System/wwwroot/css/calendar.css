@@ -302,7 +302,7 @@
   font-size: 0.80rem;
   padding: 8px 10px;
   margin-bottom: 6px;
-  min-height: 28px;
+  min-height: auto !important;
   display: block;
   align-items: stretch;
   justify-content: flex-start;
