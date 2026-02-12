@@ -34,13 +34,12 @@ namespace YourApp.Documents
             int soQty, claimed, prevClaimed;
             string serviceCode;
 
-            // 1) Read log row
+            // 1) Read log row (except DETAILS)
             using (var cmd = conn.CreateCommand())
             {
                 cmd.CommandText = @"
 SELECT
     APPT_ID,
-    DETAILS,
     SO_QTY,
     CLAIMED,
     PREV_CLAIMED,
@@ -56,11 +55,19 @@ WHERE LOG_ID = @LOGID
                     throw new Exception("Log entry not found.");
 
                 apptId = r.GetInt64(0);
-                details = r.IsDBNull(1) ? null : r.GetString(1);
-                soQty = r.IsDBNull(2) ? 0 : r.GetInt32(2);
-                claimed = r.IsDBNull(3) ? 0 : r.GetInt32(3);
-                prevClaimed = r.IsDBNull(4) ? 0 : r.GetInt32(4);
-                serviceCode = r.IsDBNull(5) ? "" : r.GetString(5);
+                soQty = r.IsDBNull(1) ? 0 : r.GetInt32(1);
+                claimed = r.IsDBNull(2) ? 0 : r.GetInt32(2);
+                prevClaimed = r.IsDBNull(3) ? 0 : r.GetInt32(3);
+                serviceCode = r.IsDBNull(4) ? "" : r.GetString(4);
+            }
+
+            // 1b) Fetch DETAILS from APPT_SIGNATURE.REMARKS
+            using (var cmdRemarks = conn.CreateCommand())
+            {
+                cmdRemarks.CommandText = @"SELECT REMARKS FROM APPT_SIGNATURE WHERE APPT_ID = @APPTID";
+                cmdRemarks.Parameters.Add(new FbParameter("@APPTID", apptId));
+                using var rRemarks = cmdRemarks.ExecuteReader();
+                details = (rRemarks.Read() && !rRemarks.IsDBNull(0)) ? rRemarks.GetString(0) : null;
             }
 
             // 2) Fetch appointment info and names

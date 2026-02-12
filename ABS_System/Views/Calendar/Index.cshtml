@@ -495,12 +495,13 @@
                                             var custCode = (appt.CustomerCode ?? "").Trim();
                                             var custName = (!string.IsNullOrEmpty(custCode) && customerNames.TryGetValue(custCode, out var cn)) ? cn : "";
 
+                                            var agentName = (!string.IsNullOrEmpty(agentCode) && agentNames.TryGetValue(agentCode, out var an)) ? an : agentCode;
                                             var displayTitle =
-                                                !string.IsNullOrWhiteSpace(custName)
-                                                    ? ToTitleCaseSafe(custName)
-                                                    : (!string.IsNullOrWhiteSpace(custCode)
-                                                        ? custCode
-                                                        : ToTitleCaseSafe(appt.Title));
+                                              !string.IsNullOrWhiteSpace(custName)
+                                                ? (ToTitleCaseSafe(custName) + (string.IsNullOrWhiteSpace(agentName) ? "" : " / " + ToTitleCaseSafe(agentName)))
+                                                : (!string.IsNullOrWhiteSpace(custCode)
+                                                  ? custCode
+                                                  : ToTitleCaseSafe(appt.Title));
 
                                             var style =
                                                 "display:flex !important; align-items:center !important; min-height:20px !important; " +
