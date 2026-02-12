@@ -458,7 +458,10 @@
       if (loading) loading.style.display = 'block';
 
       try {
-        const url = `/Appointment/GetCustomerServices?customerCode=${encodeURIComponent(customerCode)}`;
+        // Pass apptId for virtual calculation
+        const apptId = document.getElementById('ApptId')?.value || '';
+        let url = `/Appointment/GetCustomerServices?customerCode=${encodeURIComponent(customerCode)}`;
+        if (apptId) url += `&apptId=${encodeURIComponent(apptId)}`;
         const res = await fetch(url, { method: 'GET' });
         const data = await res.json();
 

@@ -348,6 +348,7 @@ namespace YourApp.Controllers
             string branchColor = "#E8E8E8";
             switch (branchNo)
             {
+                case "0": branchColor = "#aafcff"; break;      // Light Pink
                 case "1": branchColor = "#ffb6c1"; break;      // Light Pink
                 case "2": branchColor = "#add8e6"; break;      // Light Blue
                 case "3": branchColor = "#90ee90"; break;      // Light Green
@@ -368,7 +369,7 @@ namespace YourApp.Controllers
                 case "18": branchColor = "#bdb76b"; break;     // Dark Khaki
                 case "19": branchColor = "#8fbc8f"; break;     // Dark Sea Green
                 case "20": branchColor = "#dda0dd"; break;     // Plum
-                default: branchColor = "#E8E8E8"; break;         // Default Grey
+                default: branchColor = "#ff9c9c"; break;         // Default Grey
             }
             return branchColor;
         }

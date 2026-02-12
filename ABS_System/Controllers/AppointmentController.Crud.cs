@@ -284,16 +284,13 @@ WHERE d.ITEMCODE = @SVC
 
             ViewBag.Agents = agents;
             ViewBag.Customers = customers;
-            ViewBag.ServiceItems = LoadServiceItems();
 
             Appointment? model = null;
-
             using (var conn = _db.Open())
             using (var cmd = conn.CreateCommand())
             {
                 cmd.CommandText = SQL_APPT_GET;
                 cmd.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
-
                 using var r = cmd.ExecuteReader();
                 if (r.Read())
                 {
@@ -313,27 +310,72 @@ WHERE d.ITEMCODE = @SVC
             if (model == null)
                 return NotFound();
 
-            var originalServiceCodes = LoadSelectedServiceCodes(id);
-            // Decrement claim for original services so they appear in dropdown
+            // Get all selected service codes and their QTY for this appointment
+            var apptDtlDict = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             using (var conn = _db.Open())
-            using (var tx = conn.BeginTransaction())
+            using (var cmd = conn.CreateCommand())
             {
-                foreach (var code in originalServiceCodes)
+                cmd.CommandText = "SELECT SERVICE_CODE, QTY FROM APPT_DTL WHERE APPT_ID = @id";
+                cmd.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
                 {
-                    using var cmdDec = conn.CreateCommand();
-                    cmdDec.Transaction = tx;
-                    cmdDec.CommandText = @"UPDATE SL_SODTL d SET UDF_CLAIMED = COALESCE(UDF_CLAIMED,0) - 1 WHERE d.ITEMCODE = @SVC AND d.DOCKEY IN (SELECT s.DOCKEY FROM SL_SO s WHERE s.CODE = @CUST)";
-                    cmdDec.Parameters.Add(FirebirdDb.P("@SVC", code, FbDbType.VarChar));
-                    cmdDec.Parameters.Add(FirebirdDb.P("@CUST", model.CustomerCode, FbDbType.VarChar));
-                    cmdDec.ExecuteNonQuery();
+                    var code = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                    var qty = r.IsDBNull(1) ? 0 : r.GetInt32(1);
+                    if (!string.IsNullOrEmpty(code))
+                        apptDtlDict[code] = qty;
                 }
-                tx.Commit();
             }
-            TempData[$"EditClaim_{id}"] = string.Join(",", originalServiceCodes);
-            TempData[$"EditCustomer_{id}"] = model.CustomerCode;
+            var originalServiceCodes = apptDtlDict.Keys.ToList();
             ViewBag.SelectedServiceCodes = originalServiceCodes;
             ViewBag.HasSignature = HasSignature(id);
             ViewBag.SignatureUrl = Url.Action("SignatureImage", "Appointment", new { id, v = DateTime.UtcNow.Ticks });
+
+            // Load all service items and claimed info for dropdown calculation
+            var serviceItems = LoadServiceItems();
+            var claimedInfo = new Dictionary<string, (int qty, int claimed, int prevClaimed)>();
+            using (var conn = _db.Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = $"SELECT ITEMCODE, QTY, UDF_CLAIMED, UDF_PREV_CLAIMED FROM SL_SODTL WHERE ITEMCODE IN ('{string.Join("','", serviceItems.Select(x => x.CODE))}')";
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    var code = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                    var qty = r.IsDBNull(1) ? 0 : r.GetInt32(1);
+                    var claimed = r.IsDBNull(2) ? 0 : r.GetInt32(2);
+                    var prevClaimed = r.IsDBNull(3) ? 0 : r.GetInt32(3);
+                    claimedInfo[code] = (qty, claimed, prevClaimed);
+                }
+            }
+
+            // Calculate virtual availability for dropdown using actual QTY from APPT_DTL
+            var serviceDropdown = new List<dynamic>();
+            foreach (var item in serviceItems)
+            {
+                int apptQty = apptDtlDict.TryGetValue(item.CODE, out var q) ? q : 0;
+                if (claimedInfo.TryGetValue(item.CODE, out var info))
+                {
+                    int available = (info.qty - info.claimed) + apptQty;
+                    if (available > 0 || apptQty > 0)
+                    {
+                        serviceDropdown.Add(new {
+                            Code = item.CODE,
+                            Description = item.DESCRIPTION + (available == 1 ? " <span style=\"color:red\">(Last one!)</span>" : ""),
+                            Available = available
+                        });
+                    }
+                }
+                else
+                {
+                    serviceDropdown.Add(new {
+                        Code = item.CODE,
+                        Description = item.DESCRIPTION,
+                        Available = 99
+                    });
+                }
+            }
+            ViewBag.ServiceItems = serviceDropdown;
             return View(model);
         }
 
@@ -356,6 +398,37 @@ WHERE d.ITEMCODE = @SVC
 
             // selected services from form
             var selectedServiceCodes = ParseCsv(Request.Form["ServiceCodes"].ToString());
+
+            // Load original services for this appointment
+            var origServiceDict = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            using (var conn = _db.Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT SERVICE_CODE, QTY FROM APPT_DTL WHERE APPT_ID = @id";
+                cmd.Parameters.Add(FirebirdDb.P("@id", m.ApptId, FbDbType.BigInt));
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    var code = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                    var qty = r.IsDBNull(1) ? 0 : r.GetInt32(1);
+                    if (!string.IsNullOrEmpty(code))
+                        origServiceDict[code] = qty;
+                }
+            }
+
+            // Compare selected vs original (both codes and QTYs)
+            var selectedDict = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var code in selectedServiceCodes)
+            {
+                selectedDict[code] = 1; // If you support QTY, set actual QTY here
+            }
+            bool same = origServiceDict.Count == selectedDict.Count &&
+                        origServiceDict.All(kv => selectedDict.TryGetValue(kv.Key, out var v) && v == kv.Value);
+            if (same)
+            {
+                // No changes, treat as cancel
+                return RedirectToAction("Index", "Calendar", new { year = m.ApptStart.Year, month = m.ApptStart.Month });
+            }
             ViewBag.SelectedServiceCodes = selectedServiceCodes;
 
             // sanitize
@@ -427,7 +500,6 @@ WHERE d.ITEMCODE = @SVC
                 {
                     cmd.Transaction = tx;
                     cmd.CommandText = SQL_APPT_UPDATE;
-
                     cmd.Parameters.Add(FirebirdDb.P("@CUSTOMER_CODE", m.CustomerCode, FbDbType.VarChar));
                     cmd.Parameters.Add(FirebirdDb.P("@AGENT_CODE", m.AgentCode, FbDbType.VarChar));
                     cmd.Parameters.Add(FirebirdDb.P("@APPT_START", m.ApptStart, FbDbType.TimeStamp));
@@ -436,47 +508,63 @@ WHERE d.ITEMCODE = @SVC
                     cmd.Parameters.Add(FirebirdDb.P("@STATUS", m.Status, FbDbType.VarChar));
                     cmd.Parameters.Add(FirebirdDb.P("@BY", (User?.Identity?.Name ?? "SYSTEM").Trim(), FbDbType.VarChar));
                     cmd.Parameters.Add(FirebirdDb.P("@APPT_ID", m.ApptId, FbDbType.BigInt));
-
                     cmd.ExecuteNonQuery();
                 }
 
-                // 2) claims: removed (-1)
-                foreach (var code in removedServices)
+                // 2) For each service in origCodes and selectedServiceCodes, update SL_SODTL PREV_CLAIMED and CLAIMED
+                var allServiceCodes = origCodes.Union(selectedServiceCodes).Distinct(StringComparer.OrdinalIgnoreCase);
+                foreach (var code in allServiceCodes)
                 {
-                    var svc = (code ?? "").Trim();
-                    if (string.IsNullOrWhiteSpace(svc)) continue;
+                    int oldQty = origCodes.Contains(code, StringComparer.OrdinalIgnoreCase) ? 1 : 0;
+                    int newQty = selectedServiceCodes.Contains(code, StringComparer.OrdinalIgnoreCase) ? 1 : 0;
+                    if (oldQty == 0 && newQty == 0) continue;
 
-                    using var cmdDec = conn.CreateCommand();
-                    cmdDec.Transaction = tx;
-                    cmdDec.CommandText = @"
-UPDATE SL_SODTL d
-SET UDF_CLAIMED = CASE WHEN COALESCE(UDF_CLAIMED,0) > 0 THEN COALESCE(UDF_CLAIMED,0) - 1 ELSE 0 END
-WHERE d.ITEMCODE = @SVC
-  AND d.DOCKEY IN (SELECT s.DOCKEY FROM SL_SO s WHERE s.CODE = @CUST)";
-                    cmdDec.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
-                    cmdDec.Parameters.Add(FirebirdDb.P("@CUST", m.CustomerCode, FbDbType.VarChar));
-                    cmdDec.ExecuteNonQuery();
+                    int currClaimed = 0, currPrevClaimed = 0, soQty = 0;
+                    using (var cmdGet = conn.CreateCommand())
+                    {
+                        cmdGet.Transaction = tx;
+                        cmdGet.CommandText = SQL_SODTL_FIRST;
+                        cmdGet.Parameters.Add(FirebirdDb.P("@SVC", code, FbDbType.VarChar));
+                        cmdGet.Parameters.Add(FirebirdDb.P("@CUST", m.CustomerCode, FbDbType.VarChar));
+                        using var r = cmdGet.ExecuteReader();
+                        if (r.Read())
+                        {
+                            soQty = r.IsDBNull(0) ? 0 : r.GetInt32(0);
+                            currClaimed = r.IsDBNull(1) ? 0 : r.GetInt32(1);
+                            currPrevClaimed = r.IsDBNull(2) ? 0 : r.GetInt32(2);
+                        }
+                    }
+
+                    // Always accumulate PREV_CLAIMED, then set CLAIMED
+                    using (var cmdUpd = conn.CreateCommand())
+                    {
+                        cmdUpd.Transaction = tx;
+                        cmdUpd.CommandText = @"UPDATE SL_SODTL SET UDF_PREV_CLAIMED = COALESCE(UDF_PREV_CLAIMED,0) + COALESCE(UDF_CLAIMED,0), UDF_CLAIMED = @NEWQTY WHERE ITEMCODE = @SVC AND DOCKEY IN (SELECT DOCKEY FROM SL_SO WHERE CODE = @CUST)";
+                        cmdUpd.Parameters.Add(FirebirdDb.P("@NEWQTY", newQty, FbDbType.Integer));
+                        cmdUpd.Parameters.Add(FirebirdDb.P("@SVC", code, FbDbType.VarChar));
+                        cmdUpd.Parameters.Add(FirebirdDb.P("@CUST", m.CustomerCode, FbDbType.VarChar));
+                        cmdUpd.ExecuteNonQuery();
+                    }
+
+                    // Log the change
+                    using (var cmdLog = conn.CreateCommand())
+                    {
+                        cmdLog.Transaction = tx;
+                        cmdLog.CommandText = SQL_LOG_INSERT;
+                        cmdLog.Parameters.Add(FirebirdDb.P("@APPTID", m.ApptId, FbDbType.BigInt));
+                        cmdLog.Parameters.Add(FirebirdDb.P("@ACTION", "EDIT", FbDbType.VarChar));
+                        cmdLog.Parameters.Add(FirebirdDb.P("@USER", (User?.Identity?.Name ?? "SYSTEM").Trim(), FbDbType.VarChar));
+                        cmdLog.Parameters.Add(FirebirdDb.P("@DETAILS", $"Service {code}: {oldQty} -> {newQty}", FbDbType.VarChar));
+                        cmdLog.Parameters.Add(FirebirdDb.P("@SOQTY", soQty, FbDbType.Integer));
+                        cmdLog.Parameters.Add(FirebirdDb.P("@CLAIMED", currClaimed, FbDbType.Integer));
+                        cmdLog.Parameters.Add(FirebirdDb.P("@PREV", currPrevClaimed, FbDbType.Integer));
+                        cmdLog.Parameters.Add(FirebirdDb.P("@CURR", newQty, FbDbType.Integer));
+                        cmdLog.Parameters.Add(FirebirdDb.P("@SVC", code, FbDbType.VarChar));
+                        cmdLog.ExecuteNonQuery();
+                    }
                 }
 
-                // 3) claims: added (+1)
-                foreach (var code in addedServices)
-                {
-                    var svc = (code ?? "").Trim();
-                    if (string.IsNullOrWhiteSpace(svc)) continue;
-
-                    using var cmdInc = conn.CreateCommand();
-                    cmdInc.Transaction = tx;
-                    cmdInc.CommandText = @"
-UPDATE SL_SODTL d
-SET UDF_CLAIMED = COALESCE(UDF_CLAIMED,0) + 1
-WHERE d.ITEMCODE = @SVC
-  AND d.DOCKEY IN (SELECT s.DOCKEY FROM SL_SO s WHERE s.CODE = @CUST)";
-                    cmdInc.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
-                    cmdInc.Parameters.Add(FirebirdDb.P("@CUST", m.CustomerCode, FbDbType.VarChar));
-                    cmdInc.ExecuteNonQuery();
-                }
-
-                // 4) replace APPT_DTL rows
+                // 3) replace APPT_DTL rows
                 using (var cmdDel = conn.CreateCommand())
                 {
                     cmdDel.Transaction = tx;
@@ -484,12 +572,10 @@ WHERE d.ITEMCODE = @SVC
                     cmdDel.Parameters.Add(FirebirdDb.P("@id", m.ApptId, FbDbType.BigInt));
                     cmdDel.ExecuteNonQuery();
                 }
-
                 foreach (var rawCode in selectedServiceCodes)
                 {
                     var code = (rawCode ?? "").Trim();
                     if (string.IsNullOrWhiteSpace(code)) continue;
-
                     using var cmdIns = conn.CreateCommand();
                     cmdIns.Transaction = tx;
                     cmdIns.CommandText = SQL_APPTDTL_INSERT;
@@ -497,67 +583,8 @@ WHERE d.ITEMCODE = @SVC
                     cmdIns.Parameters.Add(FirebirdDb.P("@SERVICE_CODE", code, FbDbType.VarChar));
                     cmdIns.ExecuteNonQuery();
                 }
-
-                // 5) logs (added/removed/general)
-                foreach (var code in addedServices)
-                {
-                    using var cmdLog = conn.CreateCommand();
-                    cmdLog.Transaction = tx;
-                    cmdLog.CommandText = SQL_LOG_INSERT;
-
-                    cmdLog.Parameters.Add(FirebirdDb.P("@APPTID", m.ApptId, FbDbType.BigInt));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@ACTION", "EDITED", FbDbType.VarChar));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@USER", (User?.Identity?.Name ?? "SYSTEM").Trim(), FbDbType.VarChar));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@DETAILS", $"Service added: {code}", FbDbType.VarChar));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@SOQTY", 0, FbDbType.Integer));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@CLAIMED", 0, FbDbType.Integer));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@PREV", 0, FbDbType.Integer));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@CURR", 0, FbDbType.Integer));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@SVC", code, FbDbType.VarChar));
-
-                    cmdLog.ExecuteNonQuery();
-                }
-
-                foreach (var code in removedServices)
-                {
-                    using var cmdLog = conn.CreateCommand();
-                    cmdLog.Transaction = tx;
-                    cmdLog.CommandText = SQL_LOG_INSERT;
-
-                    cmdLog.Parameters.Add(FirebirdDb.P("@APPTID", m.ApptId, FbDbType.BigInt));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@ACTION", "EDITED", FbDbType.VarChar));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@USER", (User?.Identity?.Name ?? "SYSTEM").Trim(), FbDbType.VarChar));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@DETAILS", $"Service removed: {code}", FbDbType.VarChar));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@SOQTY", 0, FbDbType.Integer));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@CLAIMED", 0, FbDbType.Integer));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@PREV", 0, FbDbType.Integer));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@CURR", 0, FbDbType.Integer));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@SVC", code, FbDbType.VarChar));
-
-                    cmdLog.ExecuteNonQuery();
-                }
-
-                using (var cmdLog = conn.CreateCommand())
-                {
-                    cmdLog.Transaction = tx;
-                    cmdLog.CommandText = SQL_LOG_INSERT;
-
-                    cmdLog.Parameters.Add(FirebirdDb.P("@APPTID", m.ApptId, FbDbType.BigInt));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@ACTION", "EDITED", FbDbType.VarChar));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@USER", (User?.Identity?.Name ?? "SYSTEM").Trim(), FbDbType.VarChar));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@DETAILS", "Appointment edited.", FbDbType.VarChar));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@SOQTY", 0, FbDbType.Integer));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@CLAIMED", 0, FbDbType.Integer));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@PREV", 0, FbDbType.Integer));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@CURR", 0, FbDbType.Integer));
-                    cmdLog.Parameters.Add(FirebirdDb.P("@SVC", "", FbDbType.VarChar));
-
-                    cmdLog.ExecuteNonQuery();
-                }
-
                 tx.Commit();
             }
-
             return RedirectToAction("Index", "Calendar", new { year = m.ApptStart.Year, month = m.ApptStart.Month });
         }
 

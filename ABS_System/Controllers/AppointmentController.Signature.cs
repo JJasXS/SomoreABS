@@ -315,6 +315,11 @@ WHERE APPT_ID = @ID";
         public IActionResult GetCustomerServices(string customerCode)
         {
             customerCode = (customerCode ?? "").Trim();
+            // Accept optional apptId for virtual calculation
+            string? apptIdStr = Request.Query["apptId"]; // nullable
+            long apptId = 0;
+            if (!string.IsNullOrWhiteSpace(apptIdStr ?? "")) long.TryParse(apptIdStr, out apptId);
+
             if (string.IsNullOrWhiteSpace(customerCode))
                 return Json(new { ok = true, items = new List<object>() });
 
@@ -322,8 +327,7 @@ WHERE APPT_ID = @ID";
             {
                 using var conn = _db.Open();
                 using var cmd = conn.CreateCommand();
-
-                                cmd.CommandText = @"
+                cmd.CommandText = @"
                 SELECT DISTINCT
                     d.ITEMCODE,
                     TRIM(COALESCE(d.DESCRIPTION, d.ITEMCODE)) AS ITEMDESC,
@@ -333,10 +337,26 @@ WHERE APPT_ID = @ID";
                 FROM SL_SO s
                 JOIN SL_SODTL d ON d.DOCKEY = s.DOCKEY
                 WHERE s.CODE = @CUST
-                    AND (COALESCE(d.UDF_CLAIMED,0) + COALESCE(d.UDF_PREV_CLAIMED,0)) < COALESCE(d.QTY,0)
                 ORDER BY 2";
 
                 cmd.Parameters.Add(FirebirdDb.P("@CUST", customerCode, FbDbType.VarChar));
+
+                // Build a dictionary of APPT_DTL QTY for this apptId (if provided)
+                var apptDtlDict = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                if (apptId > 0)
+                {
+                    using var cmdDtl = conn.CreateCommand();
+                    cmdDtl.CommandText = "SELECT SERVICE_CODE, QTY FROM APPT_DTL WHERE APPT_ID = @id";
+                    cmdDtl.Parameters.Add(FirebirdDb.P("@id", apptId, FbDbType.BigInt));
+                    using var rDtl = cmdDtl.ExecuteReader();
+                    while (rDtl.Read())
+                    {
+                        var code = rDtl.IsDBNull(0) ? "" : rDtl.GetString(0).Trim();
+                        var qty = rDtl.IsDBNull(1) ? 0 : rDtl.GetInt32(1);
+                        if (!string.IsNullOrEmpty(code))
+                            apptDtlDict[code] = qty;
+                    }
+                }
 
                 var items = new List<object>();
                 using var r = cmd.ExecuteReader();
@@ -347,10 +367,13 @@ WHERE APPT_ID = @ID";
                     var qty = r.IsDBNull(2) ? 0 : r.GetInt32(2);
                     var claimed = r.IsDBNull(3) ? 0 : r.GetInt32(3);
                     var prevClaimed = r.IsDBNull(4) ? 0 : r.GetInt32(4);
-                    var balance = qty - (claimed + prevClaimed);
-
-                    if (!string.IsNullOrWhiteSpace(code))
+                    int apptQty = apptDtlDict.TryGetValue(code, out var q) ? q : 0;
+                    // Virtual balance: (qty - claimed - prevClaimed) + apptQty
+                    var balance = (qty - (claimed + prevClaimed)) + apptQty;
+                    if (balance > 0 || apptQty > 0)
+                    {
                         items.Add(new { code, desc, balance });
+                    }
                 }
 
                 return Json(new { ok = true, items });
