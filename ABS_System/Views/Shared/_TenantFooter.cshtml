@@ -7,11 +7,7 @@
     <div class="container">
         <div class="d-flex flex-column align-items-center text-center">
 
-            <span>
-                &copy; @DateTime.Now.Year -
-                @(string.IsNullOrWhiteSpace(m.TenantName) ? "Mys Company" : m.TenantName)
-            </span>
-
+           
             @if (!string.IsNullOrWhiteSpace(m.FooterText1)
                || !string.IsNullOrWhiteSpace(m.FooterText2)
                || !string.IsNullOrWhiteSpace(m.FooterText3))
@@ -24,7 +20,7 @@
                     }
                     @if (!string.IsNullOrWhiteSpace(m.FooterText3))
                     {
-                        <span> · @m.FooterText3</span>
+                        <br />@m.FooterText3
                     }
                 </small>
             }

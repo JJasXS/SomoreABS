@@ -7,7 +7,7 @@
 <style>
   /* Page wrapper: center inside main content area */
   .login-wrap {
-    padding: 32px 16px;
+    padding: 0 4px;
   }
 
   /* Card styling */
@@ -22,17 +22,18 @@
   }
 
   .login-card .card-body {
-    padding: 28px 26px;
+    padding: 10px 8px;
   }
 
   .login-title {
     font-weight: 800;
     letter-spacing: .2px;
+    margin-bottom: 8px;
   }
 
   .login-subtitle {
     color: #6c757d;
-    margin-bottom: 18px;
+    margin-bottom: 8px;
   }
 
   /* Input: nicer + centered */
@@ -62,35 +63,33 @@
   }
 </style>
 
-<div class="login-wrap">
-  <div class="d-flex justify-content-center align-items-center" style="min-height: calc(100vh - 220px);">
-    <div class="login-card">
-      <div class="card-body">
+<div class="login-wrap d-flex justify-content-center align-items-center min-vh-80" style="min-height:70vh;">
+  <div class="login-card">
+    <div class="card-body">
 
-        <h2 class="h4 mb-2 text-center login-title">Agent Login</h2>
-        <p class="text-center login-subtitle">
-          Enter your email to receive a one-time password.
-        </p>
+      <h2 class="h4 mb-2 text-center login-title">Agent Login</h2>
+      <p class="text-center login-subtitle">
+        Enter your email to receive a one-time password.
+      </p>
 
-        <form asp-action="Login" method="post" novalidate>
-          @Html.AntiForgeryToken()
+      <form asp-action="Login" method="post" novalidate>
+        @Html.AntiForgeryToken()
 
-          <div class="mb-3">
-            <label asp-for="Email" class="form-label fw-bold"></label>
-            <input asp-for="Email" class="form-control login-input" autocomplete="email" />
-            <span asp-validation-for="Email" class="text-danger small"></span>
-          </div>
+        <div class="mb-3">
+          <label asp-for="Email" class="form-label fw-bold"></label>
+          <input asp-for="Email" class="form-control login-input" autocomplete="email" />
+          <span asp-validation-for="Email" class="text-danger small"></span>
+        </div>
 
-          <button type="submit" class="btn btn-primary w-100 login-btn">
-            Send OTP
-          </button>
+        <button type="submit" class="btn btn-primary w-100 login-btn">
+          Send OTP
+        </button>
 
-          <div class="login-note text-center">
-            Check your inbox (and spam/junk) for the OTP.
-          </div>
-        </form>
+        <div class="login-note text-center">
+          Check your inbox (and spam/junk) for the OTP.
+        </div>
+      </form>
 
-      </div>
     </div>
   </div>
 </div>

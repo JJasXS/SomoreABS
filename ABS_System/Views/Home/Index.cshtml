@@ -8,40 +8,37 @@
         : Model!.HeaderText1;
 
     var subText = string.IsNullOrWhiteSpace(Model?.HeaderText2)
-        ? "This is your appointment booking system."
+        ? "Appointment Booking System"
         : Model!.HeaderText2;
 
     var companyName = string.IsNullOrWhiteSpace(Model?.TenantName)
-        ? "My Company"
+        ? "Managed by ProAcc System Consulting. "
         : Model!.TenantName;
 }
 
-<div class="container" style="max-width: 980px; margin-top: 22px; margin-bottom: 28px;">
-    <div class="card shadow-sm" style="border-radius: 14px;">
-        <div class="card-body p-4 p-md-5 text-center">
+<div class="container" style="max-width: 980px; margin-top: 8px; margin-bottom: 8px;">
+    <div class="card shadow-sm" style="border-radius: 10px;">
+        <div class="card-body p-2 p-md-3 text-center">
 
-            <h1 class="display-5 mb-3" style="font-weight: 800;">
+            <h1 class="display-6 mb-2" style="font-weight: 700;">
                 @titleText
             </h1>
 
-            <p class="lead mb-4" style="opacity: .85;">
+            <p class="lead mb-2" style="opacity: .85;">
                 @subText
             </p>
 
             <div class="d-flex justify-content-center gap-2 flex-wrap">
-                <a class="btn btn-primary px-4" href="@Url.Action("Login", "Account")">
+                <a class="btn btn-primary px-3" href="@Url.Action("Login", "Account")">
                     Login with OTP
                 </a>
-
-              
             </div>
 
-            <hr class="my-4" />
+            <hr class="my-3" />
 
-            <div class="text-muted" style="font-size: 13px;">
+            <div class="text-muted" style="font-size: 12px;">
                 <div><b>@companyName</b></div>
-               <!-- <div style="opacity:.8;">Secure access via one-time password (OTP).</div> -->
-                <div style="opacity:.8;">Service managed by ProAcc System Consulting.</div>
+                <div style="opacity:.8;">V 1.0</div>
             </div>
 
         </div>
