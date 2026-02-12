@@ -819,8 +819,13 @@
     var when = '';
     var timeOnly = '';
     if (appt.ApptStart) {
-      when = appt.ApptStart.replace('T', ' ').substring(0, 16);
       timeOnly = appt.ApptStart.replace('T', ' ').substring(11, 16);
+      var hour = parseInt(timeOnly.substring(0, 2), 10);
+      var minute = timeOnly.substring(3, 5);
+      var ampm = hour >= 12 ? 'PM' : 'AM';
+      var displayHour = hour % 12;
+      if (displayHour === 0) displayHour = 12;
+      when = displayHour + ':' + minute + ' ' + ampm;
     }
 
     var cust = (window.customerNames && window.customerNames[appt.CustomerCode])
@@ -853,7 +858,7 @@
 
     var titleHtml =
       '<div class="appt-title appt-title-toggle" style="cursor:' + (hasMultiServices ? 'pointer' : 'default') + '; display:flex; align-items:center; gap:8px;">' +
-        '<span>' + escHtml(toTitleCase(cust || appt.Title || '')) + '</span>' +
+        '<span>' + escHtml(toTitleCase(appt.Title || cust || '')) + '</span>' +
         '<span class="appt-status-letter" style="font-size:13px; font-weight:700; margin-left:4px; color:' + statusColor + ';">[' + statusLetter + ']</span>' +
         (hasMultiServices ? '<span class="appt-more" style="font-size:12px; font-weight:700; opacity:0.85;">(more)</span>' : '') +
       '</div>';
@@ -862,10 +867,14 @@
     var actionsHtml = '';
     if (!done && !cancelled) {
       actionsHtml =
-        '<div class="appt-actions" style="margin-top:6px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">' +
-          '<a href="/Appointment/Edit/' + appt.ApptId + '" class="btn btn-sm btn-primary">Edit</a>' +
-          '<a href="/Appointment/Sign/' + appt.ApptId + '" class="btn btn-sm btn-secondary">Submit E-Sign</a>' +
-          '<a href="#" class="btn btn-sm btn-danger appt-delete" data-appt-id="' + appt.ApptId + '">Cancelled?</a>' +
+        '<div class="appt-actions" style="margin-top:6px; display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between;">' +
+          '<div style="display:flex;gap:6px;margin-right:auto;">' +
+            '<a href="/Appointment/Edit/' + appt.ApptId + '" class="btn btn-sm btn-primary">Edit</a>' +
+            '<a href="#" class="btn btn-sm btn-danger appt-delete" data-appt-id="' + appt.ApptId + '">Cancelled?</a>' +
+          '</div>' +
+          '<div>' +
+            '<a href="/Appointment/Sign/' + appt.ApptId + '" class="btn btn-sm btn-success" style="background:#28a745;border-color:#28a745;">Submit E-Sign</a>' +
+          '</div>' +
         '</div>';
     }
 

@@ -513,16 +513,13 @@
   left: 0;
   width: 100vw;
   height: 100vh;
-
-  /* dark background */
   background: rgba(0,0,0,0.55);
-
-  /* optional nicer look */
   backdrop-filter: blur(1px);
-
-  /* must be BELOW modal (your modal is z-index:1000) */
   z-index: 900;
-
-  /* must be clickable */
   cursor: pointer;
+  pointer-events: auto;
+}
+
+.modal-overlay[style*="display:none"] {
+  pointer-events: none !important;
 }
