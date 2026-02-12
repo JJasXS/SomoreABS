@@ -35,53 +35,40 @@ namespace YourApp.Controllers
                     var v = cmd.ExecuteScalar();
                     customerCode = (v == null || v == DBNull.Value) ? "" : (v?.ToString()?.Trim() ?? "");
                 }
+                // Get service codes and QTYs for this appointment
+                var serviceQtys = new List<(string svc, int qty)>();
                 using (var cmd = conn.CreateCommand())
                 {
                     cmd.Transaction = tx;
-                    cmd.CommandText = "SELECT SERVICE_CODE FROM APPT_DTL WHERE APPT_ID = @id";
+                    cmd.CommandText = "SELECT SERVICE_CODE, QTY FROM APPT_DTL WHERE APPT_ID = @id";
                     cmd.Parameters.Add(FirebirdDb.P("@id", id, FbDbType.BigInt));
                     using var r = cmd.ExecuteReader();
                     while (r.Read())
                     {
                         if (!r.IsDBNull(0))
-                            serviceCodes.Add(r.GetString(0).Trim());
+                        {
+                            var svc = r.GetString(0).Trim();
+                            var qty = r.IsDBNull(1) ? 1 : r.GetInt32(1);
+                            serviceQtys.Add((svc, qty));
+                        }
                     }
                 }
 
-                // Undo CLAIMED/UDF_PREV_CLAIMED for each service
-                foreach (var svc in serviceCodes)
+                // Restore CLAIMED for each service by QTY
+                foreach (var (svc, qty) in serviceQtys)
                 {
-                    int qty = 0;
-                    using (var cmdQty = conn.CreateCommand())
-                    {
-                        cmdQty.Transaction = tx;
-                        cmdQty.CommandText = @"SELECT COUNT(*) FROM APPT_DTL WHERE APPT_ID = @APPTID AND SERVICE_CODE = @SVC";
-                        cmdQty.Parameters.Add(FirebirdDb.P("@APPTID", id, FbDbType.BigInt));
-                        cmdQty.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
-                        qty = Convert.ToInt32(cmdQty.ExecuteScalar());
-                    }
-                    int prevClaimed = 0;
-                    using (var cmdPrev = conn.CreateCommand())
-                    {
-                        cmdPrev.Transaction = tx;
-                        cmdPrev.CommandText = @"SELECT UDF_CLAIMED FROM SL_SODTL d WHERE d.ITEMCODE = @SVC AND d.DOCKEY IN (SELECT s.DOCKEY FROM SL_SO s WHERE s.CODE = @CUST) ROWS 1";
-                        cmdPrev.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
-                        cmdPrev.Parameters.Add(FirebirdDb.P("@CUST", customerCode, FbDbType.VarChar));
-                        var v = cmdPrev.ExecuteScalar();
-                        prevClaimed = (v == null || v == DBNull.Value) ? 0 : Convert.ToInt32(v);
-                    }
                     using (var cmdSo = conn.CreateCommand())
                     {
                         cmdSo.Transaction = tx;
                         cmdSo.CommandText = @"
 UPDATE SL_SODTL d
-SET UDF_PREV_CLAIMED = COALESCE(UDF_PREV_CLAIMED,0) - @PREV
+SET UDF_CLAIMED = COALESCE(UDF_CLAIMED,0) - @QTY
 WHERE d.ITEMCODE = @SVC
   AND d.DOCKEY IN (
       SELECT s.DOCKEY FROM SL_SO s
       WHERE s.CODE = @CUST
   )";
-                        cmdSo.Parameters.Add(FirebirdDb.P("@PREV", prevClaimed, FbDbType.Integer));
+                        cmdSo.Parameters.Add(FirebirdDb.P("@QTY", qty, FbDbType.Integer));
                         cmdSo.Parameters.Add(FirebirdDb.P("@SVC", svc, FbDbType.VarChar));
                         cmdSo.Parameters.Add(FirebirdDb.P("@CUST", customerCode, FbDbType.VarChar));
                         cmdSo.ExecuteNonQuery();
