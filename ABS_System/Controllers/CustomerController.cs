@@ -145,6 +145,10 @@ namespace ABS_System.Controllers
         {
             var list = new List<Appointment>();
 
+            // Validate customerCode length (max 10 chars for Firebird VARCHAR(10))
+            if (string.IsNullOrWhiteSpace(customerCode) || customerCode.Length > 10)
+                return list; // or optionally add a user-friendly error message
+
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
 SELECT 

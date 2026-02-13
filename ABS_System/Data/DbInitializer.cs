@@ -128,6 +128,25 @@ VALUES ('DEFAULT', 'Default Company', 'Welcome', 'Thank you', 1)
             Log("AGENT.UDF_BRANCH added OK.");
         }
 
+        // =========================================================
+        // 1c) Ensure AGENT.UDF_BRANCH_NO column exists (BIGINT)
+        // =========================================================
+        public void EnsureAgentUdfBranchNoColumn()
+        {
+            using var conn = _db.Open();
+            Log("Checking AGENT.UDF_BRANCH_NO ...");
+
+            if (ColumnExists(conn, "AGENT", "UDF_BRANCH_NO"))
+            {
+                Log("AGENT.UDF_BRANCH_NO already exists, skip.");
+                return;
+            }
+
+            Log("Adding column AGENT.UDF_BRANCH_NO ...");
+            ExecNonQuery(conn, "ALTER TABLE AGENT ADD UDF_BRANCH_NO BIGINT");
+            ExecNonQuery(conn, "UPDATE AGENT SET UDF_BRANCH_NO = 0 WHERE UDF_BRANCH_NO IS NULL");
+            Log("AGENT.UDF_BRANCH_NO added OK.");
+        }
         // ...existing code...
 
         // =========================================================
