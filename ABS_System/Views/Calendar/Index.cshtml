@@ -468,6 +468,12 @@
                             var date = new DateTime(year, month, day);
                             var appts = monthAppointments.Where(a => a.ApptStart.Date == date.Date).ToList();
 
+                            int visibleCount = 2; // ✅ set how many cards you want to show in the cell
+                            int hiddenCount = appts.Count - visibleCount;
+
+
+
+
                             <td class="calendar-cell calendar-cell-day"
                                 data-date="@date.ToString("yyyy-MM-dd")"
                                 tabindex="0"
@@ -475,17 +481,20 @@
                                 aria-label="Show appointments for @date.ToString("yyyy-MM-dd")">
 
                                 <div class="calendar-cell-header">
-                                    <strong class="day-number">@day</strong>
-                                </div>
+    <strong class="day-number">@day</strong>
+
+    @if (hiddenCount > 0)
+    {
+        <span class="appt-more-badge">+@hiddenCount more</span>
+    }
+</div>
+
 
                                 @if (appts.Count > 0)
                                 {
                                     <div class="scrollable-appt-list appt-card-list in-cell">
-                                      @{
-                                        int visibleCount = 5000; // Number of cards visible before scroll
-                                        int hiddenCount = appts.Count - visibleCount;
-                                      }
                                       @for (int apptIdx = 0; apptIdx < Math.Min(visibleCount, appts.Count); apptIdx++)
+
                                       {
                                         var appt = appts[apptIdx];
                                         var agentCode = (appt.AgentCode ?? "").Trim();
@@ -520,12 +529,6 @@
                                           <span class="appt-title" style="@(isDone ? "opacity:0.45; font-weight:480;" : "font-weight:500;")">
                                             @displayTitle
                                           </span>
-                                        </div>
-                                      }
-                                      @if (hiddenCount > 0)
-                                      {
-                                        <div class="appt-more-indicator" style="text-align:center;color:#1976d2;font-size:0.85rem;margin-top:4px;">
-                                          +@hiddenCount more
                                         </div>
                                       }
                                     </div>
@@ -615,6 +618,19 @@
     z-index:900;
     cursor:pointer;
   }
+
+  .appt-more-badge{
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #dc3545;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
 </style>
 
 @section Scripts {

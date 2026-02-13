@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\sd01\\ABS_System\\ABS_System\\ABS_System.csproj": {}
+    "C:\\Users\\sd01\\ABS_System\\ABS_SYStem\\ABS_System.csproj": {}
   },
   "projects": {
-    "C:\\Users\\sd01\\ABS_System\\ABS_System\\ABS_System.csproj": {
+    "C:\\Users\\sd01\\ABS_System\\ABS_SYStem\\ABS_System.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\sd01\\ABS_System\\ABS_System\\ABS_System.csproj",
+        "projectUniqueName": "C:\\Users\\sd01\\ABS_System\\ABS_SYStem\\ABS_System.csproj",
         "projectName": "ABS_System",
-        "projectPath": "C:\\Users\\sd01\\ABS_System\\ABS_System\\ABS_System.csproj",
+        "projectPath": "C:\\Users\\sd01\\ABS_System\\ABS_SYStem\\ABS_System.csproj",
         "packagesPath": "C:\\Users\\sd01\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\sd01\\ABS_System\\ABS_System\\obj\\",
+        "outputPath": "C:\\Users\\sd01\\ABS_System\\ABS_SYStem\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\sd01\\AppData\\Roaming\\NuGet\\NuGet.Config"
