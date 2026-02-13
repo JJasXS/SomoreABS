@@ -7,8 +7,9 @@ namespace YourApp.Controllers
     {
         public IActionResult Index()
         {
-            // You can add logic here to load branding or other info if needed
-            return View();
+            // Pass TenantBrandingVm from ViewBag to the view model
+            var branding = ViewBag.TenantBranding as YourApp.Models.TenantBrandingVm;
+            return View(branding);
         }
 
         public IActionResult Error()
