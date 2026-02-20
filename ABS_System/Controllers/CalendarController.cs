@@ -39,7 +39,7 @@ namespace YourApp.Controllers
 
             // ✅ logged-in scope
             string userBranchNo = GetBranchNo();
-            bool canSeeAllBranches = userBranchNo == "0";
+            bool canSeeAllBranches = userBranchNo == "1";
 
             // Get selected branches from query string (for server-side filter)
             var selectedBranches = Request.Query["branches"].ToArray();
@@ -174,7 +174,7 @@ namespace YourApp.Controllers
                         }
                         cmd.CommandText = $@"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap JOIN AGENT a ON a.CODE = ap.AGENT_CODE WHERE a.UDF_BRANCH IN ({string.Join(",", branchParams)}) ORDER BY ap.APPT_START";
                     }
-                    else if (userBranchNo == "0")
+                    else if (userBranchNo == "1")
                     {
                         // Office, no filter
                         cmd.CommandText = @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap ORDER BY ap.APPT_START";
@@ -227,7 +227,7 @@ namespace YourApp.Controllers
                 {
                     using var conn = db.Open();
                     using var cmd = conn.CreateCommand();
-                    if (userBranchNo == "0")
+                    if (userBranchNo == "1")
                     {
                         cmd.CommandText = @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap ORDER BY ap.APPT_START";
                     }
