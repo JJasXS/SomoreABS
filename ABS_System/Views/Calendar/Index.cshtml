@@ -342,6 +342,7 @@
             }
             <script>
             // Branch filter modal logic
+
             document.addEventListener('DOMContentLoaded', function () {
               var filterBtn = document.getElementById('filterAppointmentsBtn');
               var branchModal = document.getElementById('branchFilterModal');
@@ -353,6 +354,7 @@
 
               // Get all branches from agentBranchNos
               var agentBranchNos = @Html.Raw(JsonSerializer.Serialize(ViewBag.AgentBranchNos ?? new Dictionary<string, string>(), jsonOpt));
+              var branchNames = @Html.Raw(JsonSerializer.Serialize(ViewBag.BranchNames ?? new Dictionary<string, string>(), jsonOpt));
               // Build a set of unique UDF_BRANCH values (not agent codes)
               var branchSet = new Set();
               Object.values(agentBranchNos).forEach(function (branchNo) {
@@ -371,14 +373,14 @@
                   checkboxList.appendChild(msg);
                 } else {
                   branchList.forEach(function (branchNo) {
-                    var label = 'Branch ' + branchNo;
+                    var label = branchNames[branchNo] || branchNo;
                     var id = 'branch_cb_' + branchNo;
                     var cb = document.createElement('input');
                     cb.type = 'checkbox';
                     cb.id = id;
                     cb.name = 'branches';
                     cb.value = branchNo;
-                    cb.checked = selectedBranches.length === 0 || selectedBranches.includes(branchNo);
+                    cb.checked = selectedBranches.length === 1 || selectedBranches.includes(branchNo);
                     var lbl = document.createElement('label');
                     lbl.htmlFor = id;
                     lbl.style.marginLeft = '6px';

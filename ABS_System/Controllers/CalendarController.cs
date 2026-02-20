@@ -64,11 +64,36 @@ namespace YourApp.Controllers
             ViewBag.ApptServices = apptServices;
             ViewBag.ServiceNames = serviceNames;
 
+
             // ===== DB: agent dictionaries + colors =====
             BuildAgentDictionaries(canSeeAllBranches, userBranchNo,
                 out var agentNames,
                 out var agentBranchNos,
                 out var agentColors);
+
+            // ===== DB: branch number to branch name (SY_USER.NAME) =====
+            var branchNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                using var scope = HttpContext.RequestServices.CreateScope();
+                var dbObj = scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                if (dbObj is YourApp.Data.FirebirdDb db)
+                {
+                    using var conn = db.Open();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "SELECT AUTOKEY, NAME FROM SY_USER";
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read())
+                    {
+                        var autokey = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                        var name = r.IsDBNull(1) ? "" : r.GetString(1).Trim();
+                        if (!string.IsNullOrWhiteSpace(autokey) && !string.IsNullOrWhiteSpace(name))
+                            branchNames[autokey] = name;
+                    }
+                }
+            }
+            catch { }
+            ViewBag.BranchNames = branchNames;
 
             // ===== DB: customer dictionary =====
             // ===== DB: customer info dictionary (name + phones) =====
