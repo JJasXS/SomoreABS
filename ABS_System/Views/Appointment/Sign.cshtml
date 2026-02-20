@@ -1,5 +1,3 @@
-
-
 @model YourApp.Models.Appointment
 @{
     ViewData["Title"] = "E-Sign Appointment";
@@ -250,7 +248,20 @@
                 </div>
 
             </form>
-</div><!-- /#printArea -->
+
+            <!-- Signature Modal Popup -->
+            <div id="signatureModal" class="modal" tabindex="-1" style="display:none; position:fixed; z-index:2000; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.45); align-items:center; justify-content:center;">
+              <div style="background:#fff; border-radius:16px; padding:24px; box-shadow:0 8px 40px rgba(0,0,0,0.18); max-width:98vw; max-height:95vh; display:flex; flex-direction:column; align-items:center;">
+                <div style="font-weight:800; font-size:1.2em; margin-bottom:10px;">Write Signature</div>
+                <canvas id="modalSigCanvas" style="width:500px; max-width:90vw; height:220px; border:1px solid #ccc; border-radius:10px; background:#fff;"></canvas>
+                <div style="margin-top:12px; display:flex; gap:10px;">
+                  <button type="button" class="btn btn-outline-secondary" id="modalClearBtn">Clear</button>
+                  <button type="button" class="btn btn-primary" id="modalSaveBtn">Save Signature</button>
+                  <button type="button" class="btn btn-secondary" id="modalCancelBtn">Cancel</button>
+                </div>
+              </div>
+            </div>
+
         </div>
     </div>
 </div>
@@ -397,9 +408,98 @@
         dataUrlInput.value = pngDataUrl;
     });
 
+    // Modal signature logic
+    const sigCanvas = document.getElementById('sigCanvas');
+    const signatureModal = document.getElementById('signatureModal');
+    const modalSigCanvas = document.getElementById('modalSigCanvas');
+    const modalClearBtn = document.getElementById('modalClearBtn');
+    const modalSaveBtn = document.getElementById('modalSaveBtn');
+    const modalCancelBtn = document.getElementById('modalCancelBtn');
 
-    
-
+    // Modal drawing logic (similar to main pad)
+    let modalDrawing = false;
+    let modalHasInk = false;
+    function modalResizeCanvas() {
+        // Restore original modal pad size
+        const ratio = window.devicePixelRatio || 1;
+        modalSigCanvas.width = Math.floor(500 * ratio);
+        modalSigCanvas.height = Math.floor(220 * ratio);
+        modalSigCanvas.style.width = '500px';
+        modalSigCanvas.style.height = '220px';
+        const ctx = modalSigCanvas.getContext('2d');
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#111';
+    }
+    function modalGetPos(e) {
+        const rect = modalSigCanvas.getBoundingClientRect();
+        const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+        const clientY = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
+        return { x: clientX - rect.left, y: clientY - rect.top };
+    }
+    function modalStartDraw(e) {
+        e.preventDefault();
+        modalDrawing = true;
+        const p = modalGetPos(e);
+        const ctx = modalSigCanvas.getContext('2d');
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+    }
+    function modalMoveDraw(e) {
+        if (!modalDrawing) return;
+        e.preventDefault();
+        const p = modalGetPos(e);
+        const ctx = modalSigCanvas.getContext('2d');
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        modalHasInk = true;
+    }
+    function modalEndDraw(e) {
+        if (!modalDrawing) return;
+        e.preventDefault();
+        modalDrawing = false;
+    }
+    function modalClearCanvas() {
+        const ctx = modalSigCanvas.getContext('2d');
+        ctx.clearRect(0, 0, modalSigCanvas.width, modalSigCanvas.height);
+        modalHasInk = false;
+    }
+    // Open modal on main canvas click
+    sigCanvas.addEventListener('click', function () {
+        signatureModal.style.display = 'flex';
+        modalResizeCanvas();
+        // Copy current signature to modal
+        const ctx = modalSigCanvas.getContext('2d');
+        ctx.clearRect(0, 0, modalSigCanvas.width, modalSigCanvas.height);
+        // Copy if main has ink
+        if (sigCanvas.width > 0 && sigCanvas.height > 0) {
+            ctx.drawImage(sigCanvas, 0, 0, modalSigCanvas.width, modalSigCanvas.height);
+        }
+        modalHasInk = false;
+    });
+    // Modal drawing events
+    modalSigCanvas.addEventListener('mousedown', modalStartDraw);
+    modalSigCanvas.addEventListener('mousemove', modalMoveDraw);
+    modalSigCanvas.addEventListener('mouseup', modalEndDraw);
+    modalSigCanvas.addEventListener('mouseleave', modalEndDraw);
+    modalSigCanvas.addEventListener('touchstart', modalStartDraw);
+    modalSigCanvas.addEventListener('touchmove', modalMoveDraw);
+    modalSigCanvas.addEventListener('touchend', modalEndDraw);
+    // Modal clear
+    modalClearBtn.addEventListener('click', modalClearCanvas);
+    // Modal cancel
+    modalCancelBtn.addEventListener('click', function () {
+        signatureModal.style.display = 'none';
+    });
+    // Modal save: copy modal signature to main canvas
+    modalSaveBtn.addEventListener('click', function () {
+        // Copy modal canvas to main canvas
+        const mainCtx = sigCanvas.getContext('2d');
+        mainCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+        mainCtx.drawImage(modalSigCanvas, 0, 0, sigCanvas.width, sigCanvas.height);
+        signatureModal.style.display = 'none';
+    });
 })();
 </script>
 
