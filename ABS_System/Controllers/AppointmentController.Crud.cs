@@ -213,24 +213,25 @@ ORDER BY ACTION_TIME DESC";
                         }
                     }
 
-                    // 2c) update claimed (+qty) and accumulate prev
-                    int claimedAfter = claimedBefore + qty;
 
-                    using (var cmdSo = conn.CreateCommand())
-                    {
-                        cmdSo.Transaction = tx;
-                        cmdSo.CommandText = @"
+                                        // 2c) update claimed (set to qty) and accumulate prev
+                                        int claimedAfter = qty;
+
+                                        using (var cmdSo = conn.CreateCommand())
+                                        {
+                                                cmdSo.Transaction = tx;
+                                                cmdSo.CommandText = @"
 UPDATE SL_SODTL d
 SET
-  UDF_PREV_CLAIMED = COALESCE(UDF_PREV_CLAIMED,0) + COALESCE(UDF_CLAIMED,0),
-  UDF_CLAIMED      = COALESCE(UDF_CLAIMED,0) + @INC
+    UDF_PREV_CLAIMED = COALESCE(UDF_PREV_CLAIMED,0) + COALESCE(UDF_CLAIMED,0),
+    UDF_CLAIMED      = @QTY
 WHERE d.ITEMCODE = @SVC
-  AND d.DOCKEY IN (SELECT s.DOCKEY FROM SL_SO s WHERE s.CODE = @CUST)";
-                        cmdSo.Parameters.Add(FirebirdDb.P("@INC", qty, FbDbType.Integer));
-                        cmdSo.Parameters.Add(FirebirdDb.P("@SVC", code, FbDbType.VarChar));
-                        cmdSo.Parameters.Add(FirebirdDb.P("@CUST", m.CustomerCode, FbDbType.VarChar));
-                        cmdSo.ExecuteNonQuery();
-                    }
+    AND d.DOCKEY IN (SELECT s.DOCKEY FROM SL_SO s WHERE s.CODE = @CUST)";
+                                                cmdSo.Parameters.Add(FirebirdDb.P("@QTY", qty, FbDbType.Integer));
+                                                cmdSo.Parameters.Add(FirebirdDb.P("@SVC", code, FbDbType.VarChar));
+                                                cmdSo.Parameters.Add(FirebirdDb.P("@CUST", m.CustomerCode, FbDbType.VarChar));
+                                                cmdSo.ExecuteNonQuery();
+                                        }
 
                     // 2d) log
                     using (var cmdLog = conn.CreateCommand())
