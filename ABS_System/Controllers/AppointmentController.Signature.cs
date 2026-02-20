@@ -59,6 +59,38 @@ WHERE APPT_ID = @ID";
 
             if (appt == null) return NotFound();
 
+            // Populate Services for this appointment
+            try
+            {
+                using var conn = _db.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+SELECT d.APPT_ID, d.SERVICE_CODE, COALESCE(s.QTY, 0) AS QTY, COALESCE(s.UDF_CLAIMED, 0) AS CLAIMED, COALESCE(s.UDF_PREV_CLAIMED, 0) AS PREV_CLAIMED, s.DESCRIPTION
+FROM APPT_DTL d
+LEFT JOIN SL_SODTL s ON s.ITEMCODE = d.SERVICE_CODE
+    AND s.DOCKEY IN (SELECT so.DOCKEY FROM SL_SO so WHERE so.CODE = @CUST)
+WHERE d.APPT_ID = @APPTID
+";
+                cmd.Parameters.Add(FirebirdDb.P("@APPTID", appt.ApptId, FbDbType.BigInt));
+                cmd.Parameters.Add(FirebirdDb.P("@CUST", appt.CustomerCode ?? string.Empty, FbDbType.VarChar));
+                using var r = cmd.ExecuteReader();
+                var services = new List<ApptDtl>();
+                while (r.Read())
+                {
+                    services.Add(new ApptDtl
+                    {
+                        ApptId = r.IsDBNull(0) ? 0 : r.GetInt64(0),
+                        ServiceCode = r.IsDBNull(1) ? "" : r.GetString(1),
+                        Qty = r.IsDBNull(2) ? 0 : r.GetInt32(2),
+                        Claimed = r.IsDBNull(3) ? 0 : r.GetInt32(3),
+                        PrevClaimed = r.IsDBNull(4) ? 0 : r.GetInt32(4),
+                        Description = r.IsDBNull(5) ? "" : r.GetString(5)
+                    });
+                }
+                appt.Services = services;
+            }
+            catch { appt.Services = new List<ApptDtl>(); }
+
             ViewBag.HasSignature = HasSignature(id);
             ViewBag.SignatureUrl = Url.Action("SignatureImage", "Appointment", new { id });
 

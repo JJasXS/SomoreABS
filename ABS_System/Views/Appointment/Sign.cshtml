@@ -110,6 +110,29 @@
                                         <div style="white-space:pre-wrap;">@Model.Notes</div>
                                     </div>
                                 }
+                                @if (Model.Services != null && Model.Services.Count > 0)
+                                {
+                                    <div class="col-12" style="margin-top:12px;">
+                                        <div style="font-size:12px; opacity:.7;">Service Claims</div>
+                                        <table class="table table-sm table-bordered" style="margin-bottom:0; background:#000000;">
+                                            <thead>
+                                                <tr style="font-size:12px;">
+                                                    <th>Service Name</th>
+                                                    <th style="text-align:right;">Claimed / Qty</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                            @foreach (var svc in Model.Services) {
+                                                var totalClaimed = (svc.Claimed + svc.PrevClaimed);
+                                                <tr style="font-size:13px;">
+                                                    <td>@(string.IsNullOrWhiteSpace(svc.Description) ? svc.ServiceCode : svc.Description)</td>
+                                                    <td style="text-align:right;">@totalClaimed / @svc.Qty</td>
+                                                </tr>
+                                            }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
                             </div>
 
                         </div>
