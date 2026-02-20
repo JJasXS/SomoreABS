@@ -340,7 +340,7 @@ WHERE d.ITEMCODE = @SVC
             var serviceDropdown = new List<dynamic>();
             foreach (var item in serviceItems)
             {
-                int apptQty = apptDtlDict.TryGetValue(item.CODE, out var q) ? q : 0;
+                int apptQty = apptDtlDict.TryGetValue(item.CODE, out int q) ? q : 0;
 
                 if (claimedInfo.TryGetValue(item.CODE, out var info))
                 {

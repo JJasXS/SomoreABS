@@ -513,8 +513,8 @@
                                         var displayTitle =
                                           !string.IsNullOrWhiteSpace(custName)
                                           ? (ToTitleCaseSafe(custName) + (string.IsNullOrWhiteSpace(agentName) ? "" : " / " + ToTitleCaseSafe(agentName)))
-                                          : (!string.IsNullOrWhiteSpace(custCode)
-                                            ? custCode
+                                          : (!string.IsNullOrWhiteSpace(custName)
+                                            ? custName
                                             : ToTitleCaseSafe(appt.Title));
 
                                         var style =
@@ -648,6 +648,7 @@
   window.agentNames   = @Html.Raw(JsonSerializer.Serialize(agentNames, jsonOpt));
   window.customerNames= @Html.Raw(JsonSerializer.Serialize(customerNames, jsonOpt));
   window.agentColors  = @Html.Raw(JsonSerializer.Serialize(agentColors, jsonOpt));
+  window.customerPhones = @Html.Raw(JsonSerializer.Serialize(ViewBag.CustomerPhones ?? new Dictionary<string, string[]>(), jsonOpt));
 
   window.apptServices = @Html.Raw(JsonSerializer.Serialize(ViewBag.ApptServices ?? new Dictionary<long, List<string>>(), jsonOpt));
   window.serviceNames = @Html.Raw(JsonSerializer.Serialize(ViewBag.ServiceNames ?? new Dictionary<string, string>(), jsonOpt));
@@ -858,6 +859,12 @@
     var cust = (window.customerNames && window.customerNames[appt.CustomerCode])
       ? window.customerNames[appt.CustomerCode]
       : (appt.CustomerCode || '');
+    // Get best phone number
+    var phoneArr = (window.customerPhones && window.customerPhones[appt.CustomerCode]) ? window.customerPhones[appt.CustomerCode] : [];
+    var bestPhone = '';
+    for (var i = 0; i < phoneArr.length; i++) {
+      if (phoneArr[i] && phoneArr[i].trim() !== '') { bestPhone = phoneArr[i]; break; }
+    }
 
     var agent = (window.agentNames && window.agentNames[appt.AgentCode])
       ? window.agentNames[appt.AgentCode]
@@ -914,7 +921,7 @@
         servicesHtml +
         '<div class="appt-meta" style="margin-top:6px;">' +
           '<div class="appt-meta-line"><span class="appt-meta-label">When:</span> <span class="appt-meta-value">' + escHtml(when) + '</span></div>' +
-          '<div class="appt-meta-line"><span class="appt-meta-label">Cust:</span> <span class="appt-meta-value">' + escHtml(cust) + '</span></div>' +
+          '<div class="appt-meta-line"><span class="appt-meta-label">Cust:</span> <span class="appt-meta-value">' + escHtml(cust) + (bestPhone ? ' <span style="color:#007bff;font-weight:600;font-size:0.98em;">(' + escHtml(bestPhone) + ')</span>' : '') + '</span></div>' +
           '<div class="appt-meta-line"><span class="appt-meta-label">Agent:</span> <span class="appt-meta-value">' + escHtml(agent) + '</span></div>' +
           actionsHtml +
         '</div>' +

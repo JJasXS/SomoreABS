@@ -231,7 +231,8 @@
           foreach (var cust in (List<dynamic>)ViewBag.Customers)
           {
             var selected = Model.CustomerCode == cust.Code ? "selected" : null;
-            <option value="@cust.Code" selected="@selected">@cust.Name</option>
+            var display = string.IsNullOrWhiteSpace(cust.Phone) ? cust.Name : $"{cust.Name} ({cust.Phone})";
+            <option value="@cust.Code" selected="@selected">@display</option>
           }
         }
       </select>

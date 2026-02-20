@@ -71,7 +71,11 @@ namespace YourApp.Controllers
                 out var agentColors);
 
             // ===== DB: customer dictionary =====
-            var customerNames = LoadCustomerNames();
+            // ===== DB: customer info dictionary (name + phones) =====
+            var customerInfo = LoadCustomerInfo();
+            // For backwards compatibility, keep customerNames as just name
+            var customerNames = customerInfo.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Name, StringComparer.OrdinalIgnoreCase);
+            ViewBag.CustomerPhones = customerInfo.ToDictionary(kvp => kvp.Key, kvp => new[] { kvp.Value.Phone1, kvp.Value.Phone2, kvp.Value.Mobile }, StringComparer.OrdinalIgnoreCase);
 
             // ===== ViewBags for Calendar.cshtml =====
             ViewBag.Year = y;
@@ -348,7 +352,7 @@ namespace YourApp.Controllers
             string branchColor = "#E8E8E8";
             switch (branchNo)
             {
-                case "0": branchColor = "#aafcff"; break;      // Light Pink
+                case "0": branchColor = "#aafcff"; break;      // Office - Cyan
                 case "1": branchColor = "#ffb6c1"; break;      // Light Pink
                 case "2": branchColor = "#add8e6"; break;      // Light Blue
                 case "3": branchColor = "#90ee90"; break;      // Light Green
@@ -377,10 +381,10 @@ namespace YourApp.Controllers
         // =========================================================
         // DB: Customer CODE -> COMPANYNAME
         // =========================================================
-        private Dictionary<string, string> LoadCustomerNames()
+        // Loads customer names and phone numbers (PHONE1, PHONE2, MOBILE)
+        private Dictionary<string, (string Name, string Phone1, string Phone2, string Mobile)> LoadCustomerInfo()
         {
-            var customerNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
+            var customerInfo = new Dictionary<string, (string, string, string, string)>(StringComparer.OrdinalIgnoreCase);
             try
             {
                 using var scope = HttpContext.RequestServices.CreateScope();
@@ -389,20 +393,27 @@ namespace YourApp.Controllers
                 {
                     using var conn = db.Open();
                     using var cmd = conn.CreateCommand();
-                    cmd.CommandText = "SELECT CODE, COMPANYNAME FROM AR_CUSTOMER";
+                    // Join AR_CUSTOMER and AR_CUSTOMERBRANCH for phone numbers using b.CODE = c.CODE
+                    cmd.CommandText = @"
+                        SELECT c.CODE, c.COMPANYNAME, b.PHONE1, b.PHONE2, b.MOBILE
+                        FROM AR_CUSTOMER c
+                        LEFT JOIN AR_CUSTOMERBRANCH b ON b.CODE = c.CODE
+                    ";
                     using var r = cmd.ExecuteReader();
                     while (r.Read())
                     {
                         var code = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
                         var name = r.IsDBNull(1) ? "" : r.GetString(1).Trim();
+                        var phone1 = r.IsDBNull(2) ? "" : r.GetString(2).Trim();
+                        var phone2 = r.IsDBNull(3) ? "" : r.GetString(3).Trim();
+                        var mobile = r.IsDBNull(4) ? "" : r.GetString(4).Trim();
                         if (!string.IsNullOrWhiteSpace(code))
-                            customerNames[code] = name;
+                            customerInfo[code] = (name, phone1, phone2, mobile);
                     }
                 }
             }
             catch { }
-
-            return customerNames;
+            return customerInfo;
         }
 
         // =========================
@@ -419,6 +430,7 @@ namespace YourApp.Controllers
             // (Kept from your code) query service descriptions if you still need it
             var serviceDescriptions = new List<string>();
 
+
             try
             {
                 using var scope = HttpContext.RequestServices.CreateScope();
@@ -434,37 +446,8 @@ namespace YourApp.Controllers
                 }
             }
             catch { }
-
             ViewBag.ServiceItems = serviceDescriptions;
             return View(model);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult Create(CalendarEventVm model)
-        {
-            if (!ModelState.IsValid) return View(model);
-
-            model.Id = _nextId++;
-            model.Date = model.Date.Date;
-            _events.Add(model);
-
-            return RedirectToAction(nameof(Index), new { year = model.Date.Year, month = model.Date.Month });
-        }
-
-        [HttpGet]
-        public IActionResult Edit(int id)
-        {
-            var ev = _events.FirstOrDefault(x => x.Id == id);
-            if (ev == null) return NotFound();
-
-            return View(new CalendarEventVm
-            {
-                Id = ev.Id,
-                Date = ev.Date,
-                Title = ev.Title,
-                Notes = ev.Notes
-            });
         }
 
         [HttpPost]
