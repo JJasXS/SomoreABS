@@ -18,7 +18,7 @@ namespace YourApp.Models
         public DateTime ApptStart { get; set; }
 
         [Required(ErrorMessage = "Please choose an end date & time.")]
-        public DateTime ApptEnd { get; set; }
+        public DateTime? ApptEnd { get; set; }
 
         public string? Title { get; set; }
         public string? Notes { get; set; }

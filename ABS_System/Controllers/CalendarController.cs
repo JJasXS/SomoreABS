@@ -114,6 +114,29 @@ namespace YourApp.Controllers
             ViewBag.AgentBranchNos = agentBranchNos;
             ViewBag.AgentColors = agentColors;
 
+                // ===== DB: all distinct branches for filter =====
+                var branchList = new List<string>();
+                try
+                {
+                    using var scope = HttpContext.RequestServices.CreateScope();
+                    var dbObj = scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                    if (dbObj is YourApp.Data.FirebirdDb db)
+                    {
+                        using var conn = db.Open();
+                        using var cmd = conn.CreateCommand();
+                        cmd.CommandText = "SELECT DISTINCT UDF_BRANCH FROM AGENT";
+                        using var r = cmd.ExecuteReader();
+                        while (r.Read())
+                        {
+                            var branchNo = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                            if (!string.IsNullOrWhiteSpace(branchNo))
+                                branchList.Add(branchNo);
+                        }
+                    }
+                }
+                catch { }
+                ViewBag.AllBranches = branchList;
+
             var birthdays = new List<CustomerBirthdayVm>();
             try
             {
@@ -162,26 +185,30 @@ namespace YourApp.Controllers
                 {
                     using var conn = db.Open();
                     using var cmd = conn.CreateCommand();
-                    if (canSeeAllBranches && selectedBranches != null && selectedBranches.Count > 0)
+                    if (userBranchNo == "1")
                     {
-                        // Filter by selected branches (for office)
-                        var branchParams = new List<string>();
-                        for (int i = 0; i < selectedBranches.Count; i++)
+                        // Branch 1 (office): can filter or see all
+                        if (selectedBranches != null && selectedBranches.Count > 0 && selectedBranches.Count != (ViewBag.AllBranches as List<string>)?.Count)
                         {
-                            var pname = "@branch" + i;
-                            branchParams.Add(pname);
-                            cmd.Parameters.Add(YourApp.Data.FirebirdDb.P(pname, selectedBranches[i], FbDbType.VarChar));
+                            // Filter by selected branches
+                            var branchParams = new List<string>();
+                            for (int i = 0; i < selectedBranches.Count; i++)
+                            {
+                                var pname = "@branch" + i;
+                                branchParams.Add(pname);
+                                cmd.Parameters.Add(YourApp.Data.FirebirdDb.P(pname, selectedBranches[i], FbDbType.VarChar));
+                            }
+                            cmd.CommandText = $@"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap JOIN AGENT a ON a.CODE = ap.AGENT_CODE WHERE a.UDF_BRANCH IN ({string.Join(",", branchParams)}) ORDER BY ap.APPT_START";
                         }
-                        cmd.CommandText = $@"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap JOIN AGENT a ON a.CODE = ap.AGENT_CODE WHERE a.UDF_BRANCH IN ({string.Join(",", branchParams)}) ORDER BY ap.APPT_START";
-                    }
-                    else if (userBranchNo == "1")
-                    {
-                        // Office, no filter
-                        cmd.CommandText = @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap ORDER BY ap.APPT_START";
+                        else
+                        {
+                            // No filter or all branches selected: show all
+                            cmd.CommandText = @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap ORDER BY ap.APPT_START";
+                        }
                     }
                     else
                     {
-                        // Normal user, single branch
+                        // Other branches: only see their own
                         cmd.CommandText = @"SELECT ap.APPT_ID, ap.CUSTOMER_CODE, ap.AGENT_CODE, ap.APPT_START, ap.TITLE, ap.NOTES, ap.STATUS FROM APPOINTMENT ap JOIN AGENT a ON a.CODE = ap.AGENT_CODE WHERE a.UDF_BRANCH = @UDF_BRANCH ORDER BY ap.APPT_START";
                         cmd.Parameters.Add(YourApp.Data.FirebirdDb.P("@UDF_BRANCH", userBranchNo, FbDbType.VarChar));
                     }
@@ -398,6 +425,36 @@ namespace YourApp.Controllers
                 case "18": branchColor = "#bdb76b"; break;     // Dark Khaki
                 case "19": branchColor = "#8fbc8f"; break;     // Dark Sea Green
                 case "20": branchColor = "#dda0dd"; break;     // Plum
+                case "21": branchColor = "#e0bbff"; break;     // Lavender
+                case "22": branchColor = "#b5ead7"; break;     // Mint
+                case "23": branchColor = "#ffdac1"; break;     // Peach
+                case "24": branchColor = "#c7ceea"; break;     // Periwinkle
+                case "25": branchColor = "#ffb347"; break;     // Orange
+                case "26": branchColor = "#b19cd9"; break;     // Pastel Purple
+                case "27": branchColor = "#77dd77"; break;     // Pastel Green
+                case "28": branchColor = "#f49ac2"; break;     // Pastel Pink
+                case "29": branchColor = "#aec6cf"; break;     // Pastel Blue
+                case "30": branchColor = "#cfcfc4"; break;     // Pastel Grey
+                case "31": branchColor = "#fdfd96"; break;     // Pastel Yellow
+                case "32": branchColor = "#836953"; break;     // Brown
+                case "33": branchColor = "#ff6961"; break;     // Red
+                case "34": branchColor = "#cb99c9"; break;     // Purple
+                case "35": branchColor = "#f1cbff"; break;     // Light Lavender
+                case "36": branchColor = "#c23b22"; break;     // Brick Red
+                case "37": branchColor = "#ffb347"; break;     // Orange
+                case "38": branchColor = "#b39eb5"; break;     // Lilac
+                case "39": branchColor = "#ff7f50"; break;     // Coral
+                case "40": branchColor = "#b2fba5"; break;     // Light Green
+                case "41": branchColor = "#ffef96"; break;     // Light Yellow
+                case "42": branchColor = "#c6e2ff"; break;     // Light Blue
+                case "43": branchColor = "#f5b7b1"; break;     // Light Red
+                case "44": branchColor = "#d5f4e6"; break;     // Mint
+                case "45": branchColor = "#e3eaa7"; break;     // Light Olive
+                case "46": branchColor = "#b5ead7"; break;     // Mint
+                case "47": branchColor = "#ffb347"; break;     // Orange
+                case "48": branchColor = "#b19cd9"; break;     // Pastel Purple
+                case "49": branchColor = "#77dd77"; break;     // Pastel Green
+                case "50": branchColor = "#f49ac2"; break;     // Pastel Pink
                 default: branchColor = "#ff9c9c"; break;         // Default Grey
             }
             return branchColor;

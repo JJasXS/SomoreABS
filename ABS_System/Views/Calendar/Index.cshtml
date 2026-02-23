@@ -304,8 +304,7 @@
               @* Branch filter context vars for toolbar *@
               @{
                 var selectedBranches = ViewBag.SelectedBranches as List<string>;
-                var agentBranchNos = ViewBag.AgentBranchNos as Dictionary<string, string>;
-                var allBranches = agentBranchNos != null ? agentBranchNos.Values.Distinct().ToList() : new List<string>();
+                var allBranches = ViewBag.AllBranches as List<string> ?? new List<string>();
               }
             <form method="get" action="@Url.Action("Index")" class="calendar-search-form" style="margin-bottom:0;">
                 <select name="month" class="form-select calendar-month-select">
@@ -330,7 +329,7 @@
                 <button type="submit" class="btn btn-primary">Search</button>
             </form>
 
-            @if ((ViewBag.UserBranchNo as string) == "0")
+            @if ((ViewBag.UserBranchNo as string) == "1" || (ViewBag.UserBranchNo as string) == "0")
             {
               <button class="btn btn-secondary" id="filterAppointmentsBtn">Filter Appointments</button>
               if (selectedBranches != null && selectedBranches.Count > 0 && allBranches.Count > 0 && selectedBranches.Count != allBranches.Count)
@@ -352,15 +351,8 @@
               var form = document.getElementById('branchFilterForm');
               var checkboxList = document.getElementById('branchCheckboxList');
 
-              // Get all branches from agentBranchNos
-              var agentBranchNos = @Html.Raw(JsonSerializer.Serialize(ViewBag.AgentBranchNos ?? new Dictionary<string, string>(), jsonOpt));
               var branchNames = @Html.Raw(JsonSerializer.Serialize(ViewBag.BranchNames ?? new Dictionary<string, string>(), jsonOpt));
-              // Build a set of unique UDF_BRANCH values (not agent codes)
-              var branchSet = new Set();
-              Object.values(agentBranchNos).forEach(function (branchNo) {
-                if (branchNo && branchNo !== '') branchSet.add(branchNo);
-              });
-              var branchList = Array.from(branchSet).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+              var branchList = @Html.Raw(JsonSerializer.Serialize(ViewBag.AllBranches ?? new List<string>(), jsonOpt));
 
               if (filterBtn) filterBtn.addEventListener('click', function () {
                 // Build checkboxes
