@@ -17,7 +17,6 @@ namespace YourApp.Models
         [Required(ErrorMessage = "Please choose a start date & time.")]
         public DateTime ApptStart { get; set; }
 
-        [Required(ErrorMessage = "Please choose an end date & time.")]
         public DateTime? ApptEnd { get; set; }
 
         public string? Title { get; set; }

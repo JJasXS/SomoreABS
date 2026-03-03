@@ -3337,24 +3337,31 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\sd01\\.nuget\\packages\\": {}
+    "C:\\Users\\Administrator\\.nuget\\packages\\": {},
+    "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\sd01\\ABS_System\\ABS_System\\ABS_System.csproj",
+      "projectUniqueName": "C:\\Users\\Administrator\\ABS_System\\ABS_System\\ABS_System.csproj",
       "projectName": "ABS_System",
-      "projectPath": "C:\\Users\\sd01\\ABS_System\\ABS_System\\ABS_System.csproj",
-      "packagesPath": "C:\\Users\\sd01\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\sd01\\ABS_System\\ABS_System\\obj\\",
+      "projectPath": "C:\\Users\\Administrator\\ABS_System\\ABS_System\\ABS_System.csproj",
+      "packagesPath": "C:\\Users\\Administrator\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\Administrator\\ABS_System\\ABS_System\\obj\\",
       "projectStyle": "PackageReference",
+      "fallbackFolders": [
+        "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+      ],
       "configFilePaths": [
-        "C:\\Users\\sd01\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        "C:\\Users\\Administrator\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
       "originalTargetFrameworks": [
         "net10.0"
       ],
       "sources": {
+        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
