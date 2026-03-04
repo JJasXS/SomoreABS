@@ -43,7 +43,7 @@ namespace YourApp.Controllers
 
             // Get selected branches from query string (for server-side filter)
             var selectedBranches = Request.Query["branches"].ToArray();
-            List<string> selectedBranchList = selectedBranches.Length > 0 ? selectedBranches.ToList() : null;
+            List<string> selectedBranchList = selectedBranches.Length > 0 ? selectedBranches.ToList() : new List<string>();
             ViewBag.SelectedBranches = selectedBranchList;
 
             ViewBag.UserBranchNo = userBranchNo;
@@ -59,10 +59,35 @@ namespace YourApp.Controllers
             // ===== DB: appointments in month =====
             var monthAppointments = LoadMonthAppointmentsFiltered(firstDay, lastDay, canSeeAllBranches, userBranchNo, selectedBranchList);
 
+
             // ===== DB: appt services for month + service names =====
             BuildApptServicesAndNames(monthAppointments, out var apptServices, out var serviceNames);
             ViewBag.ApptServices = apptServices;
             ViewBag.ServiceNames = serviceNames;
+
+            // ===== DB: item code to description (for all items) =====
+            var itemDescriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                using var scope = HttpContext.RequestServices.CreateScope();
+                var dbObj = scope.ServiceProvider.GetService(typeof(YourApp.Data.FirebirdDb));
+                if (dbObj is YourApp.Data.FirebirdDb db)
+                {
+                    using var conn = db.Open();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "SELECT CODE, DESCRIPTION FROM ST_ITEM";
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read())
+                    {
+                        var code = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                        var desc = r.IsDBNull(1) ? "" : r.GetString(1).Trim();
+                        if (!string.IsNullOrWhiteSpace(code))
+                            itemDescriptions[code] = desc;
+                    }
+                }
+            }
+            catch { }
+            ViewBag.ItemDescriptions = itemDescriptions;
 
 
             // ===== DB: agent dictionaries + colors =====
