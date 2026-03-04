@@ -834,7 +834,11 @@
     html += '<div style="font-size:12px; font-weight:700; margin-bottom:4px;">Services</div>';
 
     list.forEach(function (code) {
-      var name = (window.serviceNames && window.serviceNames[code]) ? window.serviceNames[code] : code;
+      var name = (window.itemDescriptions && window.itemDescriptions[code])
+        ? window.itemDescriptions[code]
+        : (window.serviceNames && window.serviceNames[code])
+          ? window.serviceNames[code]
+          : code;
       html += '<div class="appt-service-line" style="font-size:12px; line-height:1.35;">- ' + escHtml(name) + '</div>';
     });
 
