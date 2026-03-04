@@ -13,18 +13,18 @@ namespace FirebirdWeb.Helpers
         // ✅ Read from appsettings.json
         public DbHelper(IConfiguration config)
         {
-            var dbPath  = config["Firebird:Database"];   // e.g. C:\eStream\SQLAccounting\DB\ACC-PROACC202601.FDB
+            var dbPath  = config["Firebird:Database"];
             var server  = config["Firebird:Server"] ?? "localhost";
             var port    = config["Firebird:Port"] ?? "3050";
             var user    = config["Firebird:User"] ?? "SYSDBA";
-            var pass    = config["Firebird:Password"] ?? "masterkey";
+            var pass    = config["Firebird:Password"];
             var charset = config["Firebird:Charset"] ?? "UTF8";
 
             if (string.IsNullOrWhiteSpace(dbPath))
                 throw new InvalidOperationException("Firebird:Database is missing in appsettings.json");
+            if (string.IsNullOrWhiteSpace(pass) || pass == "masterkey")
+                throw new InvalidOperationException("Firebird:Password is missing or using insecure default. Please set a strong password in appsettings.json and never use 'masterkey' in production.");
 
-            // ✅ Your requested style: Database=localhost:C:\path\file.fdb
-            // Firebird accepts this "server:path" syntax.
             var dbValue = $"{server}:{dbPath}";
 
             _connectionString =
@@ -77,7 +77,8 @@ namespace FirebirdWeb.Helpers
         {
             try
             {
-                Console.WriteLine($"[DB QUERY] Executing: {sql}");
+                // Do not log SQL with sensitive data
+                Console.WriteLine("[DB QUERY] Executing non-query.");
 
                 using (var conn = new FbConnection(_connectionString))
                 {
@@ -94,7 +95,7 @@ namespace FirebirdWeb.Helpers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DB ERROR] Failed to execute query: {sql}");
+                Console.WriteLine("[DB ERROR] Failed to execute non-query.");
                 Console.WriteLine($"[DB ERROR] Error: {ex.Message}");
                 throw;
             }
