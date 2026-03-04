@@ -111,6 +111,9 @@
         </div>
         <div class="custom-modal-body">
           <form id="branchFilterForm">
+            <div style="display:flex; gap:8px; margin-bottom:8px;">
+              <button type="button" class="btn btn-sm btn-outline-primary" id="toggleCheckAllBranchesBtn" type="button">Check All</button>
+            </div>
             <div id="branchCheckboxList" style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;"></div>
             <div style="display:flex; gap:10px; justify-content:flex-end;">
               <button type="button" class="btn btn-secondary" id="cancelBranchFilterBtn">Cancel</button>
@@ -343,6 +346,7 @@
             // Branch filter modal logic
 
             document.addEventListener('DOMContentLoaded', function () {
+                            var toggleCheckAllBtn = document.getElementById('toggleCheckAllBranchesBtn');
               var filterBtn = document.getElementById('filterAppointmentsBtn');
               var branchModal = document.getElementById('branchFilterModal');
               var overlay = document.getElementById('modalOverlay');
@@ -381,6 +385,32 @@
                     div.appendChild(cb);
                     div.appendChild(lbl);
                     checkboxList.appendChild(div);
+                  });
+                }
+                // Wire up toggle check/uncheck all after checkboxes are rendered
+                if (toggleCheckAllBtn) {
+                  // Initial state: Check All
+                  toggleCheckAllBtn.textContent = 'Check All';
+                  toggleCheckAllBtn.dataset.checked = 'false';
+                  toggleCheckAllBtn.onclick = function() {
+                    var checkboxes = checkboxList.querySelectorAll('input[type="checkbox"]');
+                    var allChecked = Array.from(checkboxes).every(function(cb){ return cb.checked; });
+                    if (!allChecked) {
+                      checkboxes.forEach(function(cb){ cb.checked = true; });
+                      toggleCheckAllBtn.textContent = 'Uncheck All';
+                      toggleCheckAllBtn.dataset.checked = 'true';
+                    } else {
+                      checkboxes.forEach(function(cb){ cb.checked = false; });
+                      toggleCheckAllBtn.textContent = 'Check All';
+                      toggleCheckAllBtn.dataset.checked = 'false';
+                    }
+                  };
+                  // Update button text if user manually checks/unchecks
+                  checkboxList.addEventListener('change', function() {
+                    var checkboxes = checkboxList.querySelectorAll('input[type="checkbox"]');
+                    var allChecked = Array.from(checkboxes).every(function(cb){ return cb.checked; });
+                    toggleCheckAllBtn.textContent = allChecked ? 'Uncheck All' : 'Check All';
+                    toggleCheckAllBtn.dataset.checked = allChecked ? 'true' : 'false';
                   });
                 }
                 overlay.style.display = 'block';
@@ -646,6 +676,7 @@
 
   window.apptServices = @Html.Raw(JsonSerializer.Serialize(ViewBag.ApptServices ?? new Dictionary<long, List<string>>(), jsonOpt));
   window.serviceNames = @Html.Raw(JsonSerializer.Serialize(ViewBag.ServiceNames ?? new Dictionary<string, string>(), jsonOpt));
+  window.itemDescriptions = @Html.Raw(JsonSerializer.Serialize(ViewBag.ItemDescriptions ?? new Dictionary<string, string>(), jsonOpt));
 
   function getAntiForgeryToken() {
     var el = document.querySelector('#antiForgeryForm input[name="__RequestVerificationToken"]');
@@ -803,7 +834,11 @@
     html += '<div style="font-size:12px; font-weight:700; margin-bottom:4px;">Services</div>';
 
     list.forEach(function (code) {
-      var name = (window.serviceNames && window.serviceNames[code]) ? window.serviceNames[code] : code;
+      var name = (window.itemDescriptions && window.itemDescriptions[code])
+        ? window.itemDescriptions[code]
+        : (window.serviceNames && window.serviceNames[code])
+          ? window.serviceNames[code]
+          : code;
       html += '<div class="appt-service-line" style="font-size:12px; line-height:1.35;">- ' + escHtml(name) + '</div>';
     });
 
@@ -884,9 +919,14 @@
     var servicesHtml = getServiceLinesHtml(appt.ApptId);
     var hasMultiServices = servicesHtml && servicesHtml.length > 0;
 
+    // Use itemDescriptions to map appt.Title (item code) to description
+    var itemDesc = (window.itemDescriptions && appt.Title && window.itemDescriptions[appt.Title])
+      ? window.itemDescriptions[appt.Title]
+      : null;
+    var displayTitle = itemDesc || toTitleCase(appt.Title || cust || '');
     var titleHtml =
       '<div class="appt-title appt-title-toggle" style="cursor:' + (hasMultiServices ? 'pointer' : 'default') + '; display:flex; align-items:center; gap:8px;">' +
-        '<span>' + escHtml(toTitleCase(appt.Title || cust || '')) + '</span>' +
+        '<span>' + escHtml(displayTitle) + '</span>' +
         '<span class="appt-status-letter" style="font-size:13px; font-weight:700; margin-left:4px; color:' + statusColor + ';">[' + statusLetter + ']</span>' +
         (hasMultiServices ? '<span class="appt-more" style="font-size:12px; font-weight:700; opacity:0.85;">(more)</span>' : '') +
       '</div>';
@@ -1083,6 +1123,7 @@
         btnYes.disabled = false;
       }
     });
+
 
     // Hamburger menu logic
     var hb = document.getElementById('hamburgerBtn');

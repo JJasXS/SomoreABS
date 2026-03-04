@@ -19,11 +19,14 @@ builder.Services.AddControllersWithViews(options =>                //@jasch_04
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme) //@jasch_04
     .AddCookie(options =>                                                             //@jasch_04
-    {                                                                                 //@jasch_04
+    {
         options.LoginPath = "/Account/Login";                                          //@jasch_04
         options.AccessDeniedPath = "/Account/Login";                                   //@jasch_04
         options.ExpireTimeSpan = TimeSpan.FromHours(8);                                //@jasch_04
         options.SlidingExpiration = true;                                              //@jasch_04
+        options.Cookie.HttpOnly = true; // Prevent JS access
+        options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.Always; // Only send over HTTPS
+        options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Strict; // Prevent CSRF
     });                                                                                //@jasch_04
 
 
