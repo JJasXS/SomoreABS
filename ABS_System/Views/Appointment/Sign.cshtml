@@ -392,14 +392,18 @@
 
         if (!agreeCb.checked) {
             e.preventDefault();
-            alert('Please tick "I agree" before submitting.');
+            alert('Please check the "I agree" box before submitting.');
             return;
         }
 
-        if (!hasInk) {
-            e.preventDefault();
-            alert('Please sign in the signature box before submitting.');
-            return;
+        // Only require signature if the user has opened the signature modal (clicked into signature box)
+        // Only validate if the modal signature was saved
+        if (window.signatureModalOpened) {
+            if (!window.modalSignatureSaved) {
+                e.preventDefault();
+                alert('A signature is required. Please sign in the popup before submitting.');
+                return;
+            }
         }
 
         // export PNG base64
@@ -476,6 +480,9 @@
             ctx.drawImage(sigCanvas, 0, 0, modalSigCanvas.width, modalSigCanvas.height);
         }
         modalHasInk = false;
+        // Track that the user opened the signature modal
+        window.signatureModalOpened = true;
+        window.modalSignatureSaved = false;
     });
     // Modal drawing events
     modalSigCanvas.addEventListener('mousedown', modalStartDraw);
@@ -505,6 +512,8 @@
         };
         img.src = modalSigCanvas.toDataURL('image/png');
         signatureModal.style.display = 'none';
+        // Track that a modal signature was saved
+        window.modalSignatureSaved = true;
     });
 })();
 </script>
