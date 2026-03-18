@@ -2,116 +2,280 @@
     ViewData["Title"] = "Customer History";
     string fromDate = (string)(ViewBag.FromDate ?? "");
     string toDate = (string)(ViewBag.ToDate ?? "");
+
+    var fulfilled = ViewBag.Fulfilled as List<YourApp.Models.Appointment> ?? new List<YourApp.Models.Appointment>();
+    var booked = ViewBag.Booked as List<YourApp.Models.Appointment> ?? new List<YourApp.Models.Appointment>();
+    var cancelled = ViewBag.Cancelled as List<YourApp.Models.Appointment> ?? new List<YourApp.Models.Appointment>();
+    var logIdMap = ViewBag.AppointmentLogIds as Dictionary<long, long> ?? new Dictionary<long, long>();
 }
 
-<!-- Back Button beside heading -->
-<div style="position:relative;margin-top:32px;margin-bottom:16px;">
-    <a href="/Calendar/Index" style="position:absolute;left:18px;top:50%;transform:translateY(-50%);display:flex;align-items:center;background:#007bff;border-radius:8px;padding:0 12px;height:36px;color:#fff;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,0.12);text-decoration:none;font-weight:600;">
-        <span style="font-size:22px;margin-right:8px;">&#8592;</span> Back
-    </a>
-    <div style="text-align:center;">
-        <h2 style="margin:0;">Customer History</h2>
+<div class="history-page container-fluid px-3 px-md-4 px-lg-5 py-4">
+    <div class="history-header d-flex align-items-center justify-content-between gap-3 flex-wrap">
+        <a href="/Calendar/Index" class="btn btn-primary">&#8592; Back</a>
+        <h2 class="m-0">Customer History</h2>
+        <div class="history-spacer" aria-hidden="true"></div>
     </div>
-</div>
 
-<div style="padding-left: 40px; padding-right: 40px;">
-    <!-- Filter Bar -->
-    <form method="get" asp-action="History" style="margin-bottom: 24px; display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap;">
-        <label for="customerCode" style="font-weight:600;">Customer:</label>
-        @await Html.PartialAsync("_CustomerDropdownPartial", ViewBag.Customers as IEnumerable<YourApp.Models.AR_CUSTOMER>)
-        <label for="fromDate" style="font-weight:600; margin-left:8px;">From:</label>
-        <input type="date" id="fromDate" name="fromDate" class="form-control" style="width:170px;" value="@fromDate" />
-        <label for="toDate" style="font-weight:600;">To:</label>
-        <input type="date" id="toDate" name="toDate" class="form-control" style="width:170px;" value="@toDate" />
-        <button type="submit" class="btn btn-primary">Filter</button>
-    </form>
+    <div class="card shadow-sm border-0 history-filter-card mt-3 mb-4">
+        <div class="card-body">
+            <form method="get" asp-action="History" class="history-filter-form">
+                <div class="history-field">
+                    <label for="customerCode">Customer</label>
+                    @await Html.PartialAsync("_CustomerDropdownPartial", ViewBag.Customers as IEnumerable<YourApp.Models.AR_CUSTOMER>)
+                </div>
+                <div class="history-field">
+                    <label for="fromDate">From</label>
+                    <input type="date" id="fromDate" name="fromDate" class="form-control" value="@fromDate" />
+                </div>
+                <div class="history-field">
+                    <label for="toDate">To</label>
+                    <input type="date" id="toDate" name="toDate" class="form-control" value="@toDate" />
+                </div>
+                <button type="submit" class="btn btn-primary history-filter-btn">Filter</button>
+            </form>
+        </div>
+    </div>
 
-    <!-- 3-Column Appointment Status Layout -->
-    <div style="display: flex; gap: 18px;">
-    <div style="flex:1; background:#f8fff8; border-radius:10px; padding:16px; min-width:220px; position:relative;">
-        <h4 style="color:#28a745; text-align:center; margin:0;">FULFILLED</h4>
-        @if ((ViewBag.Fulfilled as List<YourApp.Models.Appointment>)?.Count > 0)
-        {
-            <ul style="padding-left:0; list-style:none;">
-            @foreach (var appt in (List<YourApp.Models.Appointment>)ViewBag.Fulfilled)
-            {
-                <li style="margin-bottom:10px; border-bottom:1px solid #e0e0e0; padding-bottom:8px; display:flex; align-items:center; justify-content:space-between;">
-                    <div>
-                        <b>Code:</b> @appt.ApptId<br />
-                        <b>Title:</b> @appt.Title<br />
-                        <b>Date/Time:</b> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")<br />
-                        <!-- Customer line removed as requested -->
-                        <b>Agent:</b> @(appt.AgentName?.Split("??")[0].Trim() ?? appt.AgentCode)<br />
-                        @if (!string.IsNullOrWhiteSpace(appt.Notes)) { <div style="font-size:85%;color:#888;">@appt.Notes</div> }
-                    </div>
-                    @{
-                        var logIdMap = ViewBag.AppointmentLogIds as Dictionary<long, long>;
-                        long logId = 0;
-                        if (logIdMap != null && logIdMap.ContainsKey(appt.ApptId))
+    <div class="row g-3">
+        <div class="col-12 col-lg-4">
+            <div class="history-column history-column--fulfilled">
+                <div class="history-column-title">
+                    <span>Fulfilled</span>
+                    <span class="badge bg-success">@fulfilled.Count</span>
+                </div>
+
+                @if (fulfilled.Count == 0)
+                {
+                    <div class="history-empty">No data</div>
+                }
+                else
+                {
+                    <div class="history-list">
+                        @foreach (var appt in fulfilled)
                         {
-                            logId = logIdMap[appt.ApptId];
+                            long logId = logIdMap.ContainsKey(appt.ApptId) ? logIdMap[appt.ApptId] : 0;
+                            <div class="history-item">
+                                <div class="history-item-lines">
+                                    <div><span class="history-key">Code:</span> @appt.ApptId</div>
+                                    <div><span class="history-key">Title:</span> @appt.Title</div>
+                                    <div><span class="history-key">Date/Time:</span> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")</div>
+                                    <div><span class="history-key">Agent:</span> @(appt.AgentName?.Split("??")[0].Trim() ?? appt.AgentCode)</div>
+                                    @if (!string.IsNullOrWhiteSpace(appt.Notes))
+                                    {
+                                        <div class="history-note">@appt.Notes</div>
+                                    }
+                                </div>
+                                @if (logId > 0)
+                                {
+                                    <a href="@Url.Action("PrintPdfByLog", "Appointment", new { logId = logId })" target="_blank" class="btn btn-outline-success btn-sm" title="Print this appointment">Print</a>
+                                }
+                            </div>
                         }
-                    }
-                    @if (logId > 0)
-                    {
-                        <a href="@Url.Action("PrintPdfByLog", "Appointment", new { logId = logId })" target="_blank" class="btn btn-outline-success btn-sm" title="Print this appointment">
-                            <span class="bi bi-printer" style="margin-right:4px;"></span>Print
-                        </a>
-                    }
-                </li>
-            }
-            </ul>
-        }
-        else
-        {
-            <div style="color:#888; text-align:center;">No data</div>
-        }
-    </div>
-    <div style="flex:1; background:#f8f9ff; border-radius:10px; padding:16px; min-width:220px;">
-        <h4 style="color:#007bff; text-align:center;">BOOKED</h4>
-        @if ((ViewBag.Booked as List<YourApp.Models.Appointment>)?.Count > 0)
-        {
-            <ul style="padding-left:0; list-style:none;">
-            @foreach (var appt in (List<YourApp.Models.Appointment>)ViewBag.Booked)
-            {
-                <li style="margin-bottom:10px; border-bottom:1px solid #e0e0e0; padding-bottom:8px;">
-                    <b>Code:</b> @appt.ApptId<br />
-                    <b>Title:</b> @appt.Title<br />
-                    <b>Date/Time:</b> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")<br />
-                    <!-- Customer line removed as requested -->
-                    <b>Agent:</b> @(appt.AgentName?.Split("??")[0].Trim() ?? appt.AgentCode)<br />
-                    @if (!string.IsNullOrWhiteSpace(appt.Notes)) { <div style="font-size:85%;color:#888;">@appt.Notes</div> }
-                </li>
-            }
-            </ul>
-        }
-        else
-        {
-            <div style="color:#888; text-align:center;">No data</div>
-        }
-    </div>
-    <div style="flex:1; background:#fff8f8; border-radius:10px; padding:16px; min-width:220px;">
-        <h4 style="color:#dc3545; text-align:center;">CANCELLED</h4>
-        @if ((ViewBag.Cancelled as List<YourApp.Models.Appointment>)?.Count > 0)
-        {
-            <ul style="padding-left:0; list-style:none;">
-            @foreach (var appt in (List<YourApp.Models.Appointment>)ViewBag.Cancelled)
-            {
-                <li style="margin-bottom:10px; border-bottom:1px solid #e0e0e0; padding-bottom:8px;">
-                    <b>Code:</b> @appt.ApptId<br />
-                    <b>Title:</b> @appt.Title<br />
-                    <b>Date/Time:</b> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")<br />
-                    <!-- Customer line removed as requested -->
-                    <b>Agent:</b> @(appt.AgentName?.Split("??")[0].Trim() ?? appt.AgentCode)<br />
-                    @if (!string.IsNullOrWhiteSpace(appt.Notes)) { <div style="font-size:85%;color:#888;">@appt.Notes</div> }
-                </li>
-            }
-            </ul>
-        }
-        else
-        {
-            <div style="color:#888; text-align:center;">No data</div>
-        }
-    </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-4">
+            <div class="history-column history-column--booked">
+                <div class="history-column-title">
+                    <span>Booked</span>
+                    <span class="badge bg-primary">@booked.Count</span>
+                </div>
+
+                @if (booked.Count == 0)
+                {
+                    <div class="history-empty">No data</div>
+                }
+                else
+                {
+                    <div class="history-list">
+                        @foreach (var appt in booked)
+                        {
+                            <div class="history-item">
+                                <div class="history-item-lines">
+                                    <div><span class="history-key">Code:</span> @appt.ApptId</div>
+                                    <div><span class="history-key">Title:</span> @appt.Title</div>
+                                    <div><span class="history-key">Date/Time:</span> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")</div>
+                                    <div><span class="history-key">Agent:</span> @(appt.AgentName?.Split("??")[0].Trim() ?? appt.AgentCode)</div>
+                                    @if (!string.IsNullOrWhiteSpace(appt.Notes))
+                                    {
+                                        <div class="history-note">@appt.Notes</div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-4">
+            <div class="history-column history-column--cancelled">
+                <div class="history-column-title">
+                    <span>Cancelled</span>
+                    <span class="badge bg-danger">@cancelled.Count</span>
+                </div>
+
+                @if (cancelled.Count == 0)
+                {
+                    <div class="history-empty">No data</div>
+                }
+                else
+                {
+                    <div class="history-list">
+                        @foreach (var appt in cancelled)
+                        {
+                            <div class="history-item">
+                                <div class="history-item-lines">
+                                    <div><span class="history-key">Code:</span> @appt.ApptId</div>
+                                    <div><span class="history-key">Title:</span> @appt.Title</div>
+                                    <div><span class="history-key">Date/Time:</span> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")</div>
+                                    <div><span class="history-key">Agent:</span> @(appt.AgentName?.Split("??")[0].Trim() ?? appt.AgentCode)</div>
+                                    @if (!string.IsNullOrWhiteSpace(appt.Notes))
+                                    {
+                                        <div class="history-note">@appt.Notes</div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
     </div>
 </div>
+
+<style>
+    .history-header .history-spacer {
+        width: 72px;
+    }
+
+    .history-filter-card {
+        border-radius: 14px;
+    }
+
+    .history-filter-form {
+        display: grid;
+        grid-template-columns: minmax(260px, 1.8fr) minmax(150px, 1fr) minmax(150px, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+    }
+
+    .history-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .history-field label {
+        font-weight: 600;
+        margin: 0;
+    }
+
+    .history-field #customerCode {
+        width: 100% !important;
+        text-align: left !important;
+    }
+
+    .history-filter-btn {
+        min-width: 110px;
+    }
+
+    .history-column {
+        border-radius: 14px;
+        min-height: 420px;
+        padding: 14px;
+        border: 1px solid rgba(0,0,0,.08);
+    }
+
+    .history-column--fulfilled {
+        background: #f8fff8;
+    }
+
+    .history-column--booked {
+        background: #f8f9ff;
+    }
+
+    .history-column--cancelled {
+        background: #fff8f8;
+    }
+
+    .history-column-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .3px;
+    }
+
+    .history-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .history-item {
+        background: #fff;
+        border: 1px solid rgba(0,0,0,.08);
+        border-radius: 10px;
+        padding: 10px;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: flex-start;
+    }
+
+    .history-item .btn {
+        align-self: flex-start;
+        white-space: nowrap;
+    }
+
+    .history-item-lines {
+        font-size: 14px;
+        line-height: 1.4;
+    }
+
+    .history-key {
+        font-weight: 700;
+    }
+
+    .history-note {
+        margin-top: 6px;
+        color: #6b7280;
+        font-size: 12px;
+    }
+
+    .history-empty {
+        color: #7a7a7a;
+        text-align: center;
+        margin-top: 30px;
+    }
+
+    @@media (max-width: 991.98px) {
+        .history-filter-form {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .history-filter-btn {
+            width: 100%;
+            grid-column: 1 / -1;
+        }
+
+        .history-header .history-spacer {
+            display: none;
+        }
+    }
+
+    @@media (max-width: 575.98px) {
+        .history-filter-form {
+            grid-template-columns: 1fr;
+        }
+
+        .history-page {
+            padding-top: 16px !important;
+        }
+    }
+</style>
