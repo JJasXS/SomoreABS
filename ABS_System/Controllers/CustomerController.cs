@@ -45,14 +45,16 @@ namespace ABS_System.Controllers
             var fileName = $"Appointment_{apptId}.pdf";
             return File(ms.ToArray(), "application/pdf", fileName);
         }
-        // GET: /Customer/History?customerCode=C0001
-        public IActionResult History(string customerCode = "")
+        // GET: /Customer/History?customerCode=C0001&fromDate=2026-01-01&toDate=2026-01-31
+        public IActionResult History(string customerCode = "", DateTime? fromDate = null, DateTime? toDate = null)
         {
             using var conn = _db.Open();
 
             // 1) Load dropdown customers
             var customers = LoadCustomers(conn);
             ViewBag.Customers = customers;
+            ViewBag.FromDate = fromDate?.ToString("yyyy-MM-dd") ?? "";
+            ViewBag.ToDate = toDate?.ToString("yyyy-MM-dd") ?? "";
 
 
             var selectedInput = (customerCode ?? "").Trim();
@@ -74,7 +76,7 @@ namespace ABS_System.Controllers
             }
 
             // 3) Load appointments
-            var appts = LoadAppointmentsByCustomer(conn, selectedCode);
+            var appts = LoadAppointmentsByCustomer(conn, selectedCode, fromDate, toDate);
 
             if (appts.Count == 0)
             {
@@ -141,7 +143,7 @@ namespace ABS_System.Controllers
             return list;
         }
 
-        private List<Appointment> LoadAppointmentsByCustomer(FbConnection conn, string customerCode)
+        private List<Appointment> LoadAppointmentsByCustomer(FbConnection conn, string customerCode, DateTime? fromDate = null, DateTime? toDate = null)
         {
             var list = new List<Appointment>();
 
@@ -155,9 +157,28 @@ SELECT
   APPT_ID, CUSTOMER_CODE, AGENT_CODE, APPT_START, APPT_END, TITLE, STATUS, NOTES
 FROM APPOINTMENT
 WHERE CUSTOMER_CODE = @CODE
+";
+
+            if (fromDate.HasValue)
+            {
+                cmd.CommandText += "\nAND APPT_START >= @FROMDATE";
+            }
+
+            if (toDate.HasValue)
+            {
+                cmd.CommandText += "\nAND APPT_START < @TODATE_NEXT";
+            }
+
+            cmd.CommandText += @"
 ORDER BY APPT_START DESC
 ";
             cmd.Parameters.Add(FirebirdDb.P("@CODE", customerCode, FbDbType.VarChar));
+
+            if (fromDate.HasValue)
+                cmd.Parameters.Add(FirebirdDb.P("@FROMDATE", fromDate.Value.Date, FbDbType.TimeStamp));
+
+            if (toDate.HasValue)
+                cmd.Parameters.Add(FirebirdDb.P("@TODATE_NEXT", toDate.Value.Date.AddDays(1), FbDbType.TimeStamp));
 
             using var r = cmd.ExecuteReader();
             while (r.Read())

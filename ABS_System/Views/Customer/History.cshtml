@@ -1,5 +1,7 @@
 @{
     ViewData["Title"] = "Customer History";
+    string fromDate = (string)(ViewBag.FromDate ?? "");
+    string toDate = (string)(ViewBag.ToDate ?? "");
 }
 
 <!-- Back Button beside heading -->
@@ -14,9 +16,13 @@
 
 <div style="padding-left: 40px; padding-right: 40px;">
     <!-- Filter Bar -->
-    <form method="get" asp-action="History" style="margin-bottom: 24px; display: flex; gap: 12px; align-items: center; justify-content: center;">
+    <form method="get" asp-action="History" style="margin-bottom: 24px; display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap;">
         <label for="customerCode" style="font-weight:600;">Customer:</label>
         @await Html.PartialAsync("_CustomerDropdownPartial", ViewBag.Customers as IEnumerable<YourApp.Models.AR_CUSTOMER>)
+        <label for="fromDate" style="font-weight:600; margin-left:8px;">From:</label>
+        <input type="date" id="fromDate" name="fromDate" class="form-control" style="width:170px;" value="@fromDate" />
+        <label for="toDate" style="font-weight:600;">To:</label>
+        <input type="date" id="toDate" name="toDate" class="form-control" style="width:170px;" value="@toDate" />
         <button type="submit" class="btn btn-primary">Filter</button>
     </form>
 
