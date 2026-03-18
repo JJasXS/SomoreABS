@@ -97,8 +97,8 @@ WHERE d.APPT_ID = @APPTID
             ViewBag.DefaultSignedBy = GetCustomerCompanyName(appt.CustomerCode);
 
             ViewBag.StatementText =
-                "I hereby confirm and acknowledge that the appointment details shown are correct. " +
-                "I agree that this e-signature is valid and may be used as proof of acknowledgement.";
+                "I hereby confirm and acknowledge that the appointment details shown are correct." +
+                " I agree that this e-signature is valid and may be used as proof of acknowledgement.";
 
             // Set ViewBag.LogId for print button (latest LOG_ID for this APPT_ID)
             try
