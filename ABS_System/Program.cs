@@ -6,6 +6,7 @@ using QuestPDF.Infrastructure;                       //@jasch_04
 
 var builder = WebApplication.CreateBuilder(args);    //@jasch_04
 QuestPDF.Settings.License = LicenseType.Community;   //@jasch_04 // Set QuestPDF license type
+builder.Host.UseWindowsService();
 
 
 // =========================                                //@jasch_04
