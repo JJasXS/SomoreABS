@@ -197,6 +197,13 @@
         </div>
 
         <div class="side-menu-body">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; padding:10px 12px; border:1px solid rgba(0,0,0,0.10); border-radius:10px;">
+              <div style="font-weight:800;">Theme</div>
+              <label style="display:flex; align-items:center; gap:8px; margin:0; cursor:pointer; user-select:none;">
+                <span id="themeLabel" style="font-size:13px; font-weight:700; opacity:.85;">Light</span>
+                <input type="checkbox" id="themeToggle" style="width:44px; height:22px; margin:0;" />
+              </label>
+            </div>
             <div class="side-menu-link" onclick="viewCustHistory()" style="width:100%; margin-bottom:16px; padding:12px; background:#e9f5ff; color:#007bff; border-radius:10px; font-weight:700; font-size:15px; text-align:center; cursor:pointer; transition:background 0.2s;">
               View Customer History
             </div>
@@ -666,6 +673,63 @@
   display: inline-flex;
   align-items: center;
 }
+
+  /* ===== PAGE-LOCAL DARK MODE FIXES ===== */
+  html.theme-dark .calendar-shell{
+    background:#121722 !important;
+    border-color:rgba(255,255,255,0.10) !important;
+    box-shadow:0 2px 18px rgba(0,0,0,0.35) !important;
+    color:#e9eef5 !important;
+  }
+
+  html.theme-dark .hamburger-btn{
+    background:#1b2230 !important;
+    color:#e9eef5 !important;
+    border-color:rgba(255,255,255,0.16) !important;
+    box-shadow:0 2px 10px rgba(0,0,0,0.28) !important;
+  }
+
+  html.theme-dark .hamburger-btn:hover{
+    background:#242e42 !important;
+  }
+
+  html.theme-dark .side-menu{
+    background:#151923 !important;
+    color:#e9eef5 !important;
+    box-shadow:-6px 0 24px rgba(0,0,0,0.40) !important;
+  }
+
+  html.theme-dark .side-menu-header,
+  html.theme-dark .side-menu-footer{
+    border-color:rgba(255,255,255,0.10) !important;
+  }
+
+  html.theme-dark .side-menu-title,
+  html.theme-dark .side-menu-body,
+  html.theme-dark .side-menu-body span,
+  html.theme-dark .side-menu-body div,
+  html.theme-dark .side-menu-body label,
+  html.theme-dark .side-menu-body td,
+  html.theme-dark .side-menu-body th{
+    color:#e9eef5 !important;
+  }
+
+  html.theme-dark .side-menu-close{
+    background:#1b2230 !important;
+    color:#e9eef5 !important;
+    border-color:rgba(255,255,255,0.16) !important;
+  }
+
+  html.theme-dark .custom-modal{
+    background:#151923 !important;
+    color:#e9eef5 !important;
+    box-shadow:0 8px 40px rgba(0,0,0,0.40) !important;
+  }
+
+  html.theme-dark .custom-modal-content{
+    background:#151923 !important;
+    color:#e9eef5 !important;
+  }
 </style>
 
 @section Scripts {
@@ -1056,6 +1120,26 @@
   // ✅ Init
   // =========================
   document.addEventListener('DOMContentLoaded', function () {
+
+    // Theme toggle in menu (uses global layout helpers)
+    (function(){
+      const cb = document.getElementById('themeToggle');
+      const label = document.getElementById('themeLabel');
+      if (!cb || !label || typeof window.getAppTheme !== 'function' || typeof window.setAppTheme !== 'function') return;
+
+      function sync(){
+        const t = window.getAppTheme();
+        cb.checked = (t === 'dark');
+        label.textContent = cb.checked ? 'Dark' : 'Light';
+      }
+
+      cb.addEventListener('change', function(){
+        window.setAppTheme(cb.checked ? 'dark' : 'light');
+      });
+
+      window.addEventListener('themechanged', sync);
+      sync();
+    })();
 
     // Day cell click opens day modal
     document.querySelectorAll('.calendar-cell-day').forEach(function (cell) {

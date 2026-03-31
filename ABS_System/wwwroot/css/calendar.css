@@ -523,3 +523,143 @@
 .modal-overlay[style*="display:none"] {
   pointer-events: none !important;
 }
+
+/* =========================================
+   Dark theme overrides
+   ========================================= */
+html.theme-dark .calendar-title,
+html.theme-dark .calendar-title * {
+  color: #e9eef5;
+}
+
+html.theme-dark .calendar-month-click {
+  border-color: rgba(255,255,255,0.18);
+  background: #1b2230;
+  color: #e9eef5;
+}
+
+html.theme-dark .calendar-month-click:hover {
+  background: #232c3d;
+  border-color: rgba(255,255,255,0.24);
+}
+
+html.theme-dark .custom-modal {
+  background: #1a2130 !important;
+  border-color: rgba(255,255,255,0.14);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+}
+
+html.theme-dark .custom-modal-header {
+  border-bottom-color: rgba(255,255,255,0.12);
+}
+
+html.theme-dark .custom-modal-header h5,
+html.theme-dark .custom-modal-body {
+  color: #e9eef5;
+}
+
+html.theme-dark .modal-close {
+  color: #c8d2e2;
+}
+
+html.theme-dark .modal-close:hover {
+  color: #ffffff;
+  background: rgba(255,255,255,0.08);
+}
+
+html.theme-dark .appt-empty {
+  border-color: rgba(255,255,255,0.14);
+  color: #c8d2e2;
+  background: #1b2230;
+}
+
+html.theme-dark .calendar-table th {
+  background: #1b2230;
+  color: #e9eef5;
+  border-color: rgba(255,255,255,0.12);
+}
+
+html.theme-dark .calendar-table td {
+  background: #151b27;
+  color: #e9eef5;
+  border-color: rgba(255,255,255,0.10);
+}
+
+html.theme-dark .calendar-cell-empty {
+  background: #131925;
+}
+
+html.theme-dark .calendar-cell-day {
+  background: #151b27 !important;
+  color: #e9eef5;
+}
+
+html.theme-dark .calendar-cell-day:hover,
+html.theme-dark .calendar-cell-day:focus {
+  background: #20283a !important;
+}
+
+html.theme-dark .day-number {
+  background: #273247;
+  border-color: rgba(255,255,255,0.18);
+  color: #e9eef5;
+}
+
+html.theme-dark .appt-card,
+html.theme-dark .appt-card.in-cell {
+  border-color: rgba(255,255,255,0.15);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+  color: #e9eef5;
+}
+
+html.theme-dark .appt-card.in-cell .appt-title,
+html.theme-dark .appt-card.in-cell .appt-time,
+html.theme-dark .appt-title,
+html.theme-dark .appt-meta-value {
+  color: #e9eef5 !important;
+}
+
+html.theme-dark .appt-meta-label {
+  color: #aab6ca;
+}
+
+html.theme-dark .appt-time {
+  border-color: rgba(255,255,255,0.16);
+  background: rgba(0,0,0,0.25);
+  color: #e9eef5;
+}
+
+html.theme-dark .appt-card.in-cell.is-fulfilled .appt-title {
+  text-decoration-color: rgba(255,255,255,0.55);
+}
+
+html.theme-dark .scrollable-appt-list:hover::-webkit-scrollbar-thumb,
+html.theme-dark .appt-card-list:hover::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.28);
+}
+
+html.theme-dark .side-menu {
+  background: #151923 !important;
+  color: #e9eef5 !important;
+}
+
+html.theme-dark .side-menu-title,
+html.theme-dark .side-menu-body,
+html.theme-dark .side-menu-body * {
+  color: #e9eef5;
+}
+
+html.theme-dark .side-menu-close {
+  color: #e9eef5;
+  border-color: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.05);
+}
+
+html.theme-dark .side-menu-link {
+  background: #21314a !important;
+  color: #8ac1ff !important;
+}
+
+html.theme-dark #themeLabel {
+  color: #e9eef5 !important;
+}

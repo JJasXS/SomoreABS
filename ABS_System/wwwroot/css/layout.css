@@ -85,6 +85,35 @@ body {
 }
 
 /* =========================
+   Dark theme overrides
+   ========================= */
+html.theme-dark .custom-header {
+  background: #151923 !important;
+  border-bottom-color: rgba(255,255,255,0.10) !important;
+}
+
+html.theme-dark .custom-footer {
+  background: #151923 !important;
+  border-top-color: rgba(255,255,255,0.10) !important;
+}
+
+html.theme-dark .custom-header .h5,
+html.theme-dark .custom-header span {
+  color: #e9eef5 !important;
+}
+
+html.theme-dark .custom-header img {
+  background: rgba(255,255,255,0.08);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+}
+
+html.theme-dark .custom-footer span,
+html.theme-dark .custom-footer small,
+html.theme-dark .custom-footer .text-muted {
+  color: rgba(233,238,245,0.78) !important;
+}
+
+/* =========================
    Optional: "card-like" header/footer
    If you want more premium look:
    uncomment the block below
