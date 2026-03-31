@@ -183,7 +183,7 @@ namespace YourApp.Controllers
                         if (DateTime.TryParse(dobStr, out var dob))
                         {
                             // Only show birthdays in the selected month
-                            if (dob.Month == month)
+                            if (dob.Month == m)
                             {
                                 birthdays.Add(new CustomerBirthdayVm { Name = name, Birthday = dob });
                             }

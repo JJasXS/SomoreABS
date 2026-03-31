@@ -2,6 +2,8 @@
 
 @{
     ViewData["Title"] = "Verify OTP";
+    var otpRemainingSeconds = (int)(ViewBag.OtpRemainingSeconds ?? 0);
+    var otpExpiresAtUnix = (long)(ViewBag.OtpExpiresAtUnix ?? 0L);
 }
 
 <div class="container flex-fill d-flex align-items-center justify-content-center py-4">
@@ -29,7 +31,7 @@
                 </div>
             }
 
-            <form asp-action="VerifyOtp" method="post" novalidate>
+            <form asp-action="VerifyOtp" method="post" novalidate id="verifyOtpForm">
                 @Html.AntiForgeryToken()
 
                 <input type="hidden" asp-for="AgentCode" />
@@ -51,17 +53,21 @@
                         }
                     </div>
 
+                    <div class="small text-center mt-3 otp-timer" id="otpTimer" data-expires-at="@otpExpiresAtUnix">
+                        OTP expires in <span id="otpCountdown">@otpRemainingSeconds</span>s
+                    </div>
+
                     <span asp-validation-for="Otp" class="text-danger small d-block text-center mt-2"></span>
                 </div>
 
-                <button type="submit" class="btn btn-primary w-100" style="border-radius: 12px; padding: 10px 14px;">
+                <button type="submit" class="btn btn-primary w-100" id="verifyOtpBtn" style="border-radius: 12px; padding: 10px 14px;">
                     Verify
                 </button>
 
                 <div class="text-center mt-3">
                     <small class="text-muted">
                         Didn’t get it?
-                        <a href="@Url.Action("Login", "Account")" class="text-decoration-none">Resend OTP</a>
+                        <a href="@Url.Action("Login", "Account")" class="text-decoration-none" id="resendOtpLink">Resend OTP</a>
                     </small>
                 </div>
             </form>
@@ -72,19 +78,35 @@
 <style>
     /* Keep OTP boxes consistent */
     .otp-box {
-        width: 52px;
-        height: 52px;
-        font-size: 1.25rem;
+        width: 62px;
+        height: 62px;
+        font-size: 1.55rem;
         font-weight: 800;
         border-radius: 12px;
         padding: 0;
     }
+
+    .otp-input-group {
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+    }
+
+    .otp-timer {
+        color: #6c757d;
+        font-weight: 600;
+    }
+
+    .otp-timer.is-expired {
+        color: #dc3545;
+    }
+
     .otp-box:focus {
         box-shadow: 0 0 0 .2rem rgba(13,110,253,.15);
     }
 
     @@media (max-width: 420px) {
-        .otp-box { width: 44px; height: 48px; }
+        .otp-box { width: 48px; height: 52px; font-size: 1.2rem; }
     }
 </style>
 
@@ -95,10 +117,49 @@
         (function () {
             var boxes = Array.prototype.slice.call(document.querySelectorAll('.otp-box'));
             var hidden = document.getElementById('Otp');
-            if (!boxes.length || !hidden) return;
+            var form = document.getElementById('verifyOtpForm');
+            var submitBtn = document.getElementById('verifyOtpBtn');
+            var timer = document.getElementById('otpTimer');
+            var countdown = document.getElementById('otpCountdown');
+            var expiresAt = parseInt((timer && timer.dataset.expiresAt) || '0', 10);
+            var isSubmitting = false;
+            if (!boxes.length || !hidden || !form) return;
+
+            function setExpiredState() {
+                boxes.forEach(function (box) { box.disabled = true; });
+                if (submitBtn) submitBtn.disabled = true;
+                if (timer) timer.classList.add('is-expired');
+                if (timer) timer.innerHTML = 'OTP expired. Please use <a href="@Url.Action("Login", "Account")" class="text-decoration-none">Resend OTP</a>.';
+            }
+
+            function startCountdown() {
+                if (!timer || !countdown || !expiresAt) return;
+
+                function tick() {
+                    var now = Math.floor(Date.now() / 1000);
+                    var remaining = Math.max(0, expiresAt - now);
+                    countdown.textContent = String(remaining);
+                    if (remaining <= 0) {
+                        window.clearInterval(intervalId);
+                        setExpiredState();
+                    }
+                }
+
+                tick();
+                var intervalId = window.setInterval(tick, 1000);
+            }
 
             function updateHidden() {
                 hidden.value = boxes.map(function (b) { return (b.value || '').trim(); }).join('');
+            }
+
+            function tryAutoSubmit() {
+                updateHidden();
+                if (isSubmitting) return;
+                if (hidden.value.length !== 6) return;
+                if (submitBtn && submitBtn.disabled) return;
+                isSubmitting = true;
+                form.requestSubmit();
             }
 
             function focusBox(i) {
@@ -116,6 +177,7 @@
 
                     if (v && idx < boxes.length - 1) focusBox(idx + 1);
                     updateHidden();
+                    tryAutoSubmit();
                 });
 
                 box.addEventListener('keydown', function (e) {
@@ -147,11 +209,13 @@
                 }
                 updateHidden();
                 focusBox(Math.min(text.length, boxes.length) - 1);
+                tryAutoSubmit();
                 e.preventDefault();
             });
 
             // Autofocus first
             focusBox(0);
+            startCountdown();
         })();
     </script>
 }

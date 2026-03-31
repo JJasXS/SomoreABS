@@ -267,19 +267,21 @@
                         </tr>
                         </thead>
                         <tbody>
-                        @foreach (var b in sorted)
+                        @for (var i = 0; i < sorted.Count; i++)
                         {
-                            <tr>
+                            var b = sorted[i];
+                            var isHiddenBirthdayRow = i >= 10;
+                            <tr class="birthday-row@(isHiddenBirthdayRow ? " birthday-row-hidden" : "")">
                                 <td style="padding:4px 8px; font-weight:500; font-size:10px;">@b.Name</td>
                                 <td style="padding:4px 8px; color:#888;">@b.Birthday?.ToString("dd/MM/yyyy")</td>
                                 <td style="padding:4px 8px;">
                                     @if (b.IsToday)
                                     {
-                                        <span style="color:#28a745; font-weight:700;">Today</span>
+                                        <span class="birthday-days-status birthday-days-today">Today</span>
                                     }
                                     else if ((b.DaysToNext ?? 0) > 0)
                                     {
-                                        <span style="color:@(b.IsPassed ? "#dc3545" : "#007bff"); font-weight:700;">
+                                        <span class="birthday-days-status @(b.IsPassed ? "birthday-days-passed" : "birthday-days-future")">
                                             in @b.DaysToNext day@(b.DaysToNext == 1 ? "" : "s")
                                         </span>
                                     }
@@ -288,6 +290,13 @@
                         }
                         </tbody>
                     </table>
+
+                    @if (sorted.Count > 10)
+                    {
+                        <button type="button" class="birthday-more-btn" id="birthdayMoreBtn" data-visible-count="10">
+                            more...
+                        </button>
+                    }
                 }
                 else
                 {
@@ -674,6 +683,38 @@
   align-items: center;
 }
 
+  .birthday-row-hidden{
+    display:none;
+  }
+
+  .birthday-more-btn{
+    margin-top:10px;
+    width:100%;
+    padding:8px 10px;
+    border-radius:10px;
+    border:1px solid rgba(0,0,0,0.10);
+    background:#eef4ff;
+    color:#315fc8;
+    font-weight:700;
+    cursor:pointer;
+  }
+
+  .birthday-days-status{
+    font-weight:700;
+  }
+
+  .birthday-days-today{
+    color:#28a745 !important;
+  }
+
+  .birthday-days-future{
+    color:#007bff !important;
+  }
+
+  .birthday-days-passed{
+    color:#dc3545 !important;
+  }
+
   /* ===== PAGE-LOCAL DARK MODE FIXES ===== */
   html.theme-dark .calendar-shell{
     background:#121722 !important;
@@ -800,6 +841,24 @@
 
   html.theme-dark .birthday-empty{
     color:#b8c4d7 !important;
+  }
+
+  html.theme-dark .birthday-more-btn{
+    background:#1b2230 !important;
+    border-color:rgba(255,255,255,0.12) !important;
+    color:#8ac1ff !important;
+  }
+
+  html.theme-dark .side-menu-body .birthday-days-today{
+    color:#28a745 !important;
+  }
+
+  html.theme-dark .side-menu-body .birthday-days-future{
+    color:#007bff !important;
+  }
+
+  html.theme-dark .side-menu-body .birthday-days-passed{
+    color:#dc3545 !important;
   }
 
   html.theme-dark .confirm-delete-modal{
@@ -1342,6 +1401,26 @@
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') closeMenu();
     });
+
+    var birthdayMoreBtn = document.getElementById('birthdayMoreBtn');
+    if (birthdayMoreBtn) {
+      birthdayMoreBtn.addEventListener('click', function () {
+        var visibleCount = parseInt(birthdayMoreBtn.getAttribute('data-visible-count') || '10', 10);
+        var rows = Array.prototype.slice.call(document.querySelectorAll('.birthday-row'));
+        var nextVisibleCount = visibleCount + 10;
+
+        rows.forEach(function (row, index) {
+          if (index < nextVisibleCount) {
+            row.classList.remove('birthday-row-hidden');
+          }
+        });
+
+        birthdayMoreBtn.setAttribute('data-visible-count', String(nextVisibleCount));
+        if (rows.length <= nextVisibleCount) {
+          birthdayMoreBtn.style.display = 'none';
+        }
+      });
+    }
 
     // expose functions globally (called from onclick in header)
     window.showMonthModal = showMonthModal;

@@ -16,8 +16,16 @@ namespace YourApp.Controllers
 {
     public class AccountController : Controller
     {
+        private sealed class OtpEntry
+        {
+            public string Code { get; init; } = "";
+            public DateTime ExpiresAtUtc { get; init; }
+        }
+
+        private const int OtpLifetimeSeconds = 60;
+
         // OTP stored by AgentCode
-        private static readonly ConcurrentDictionary<string, string> OtpStore = new();
+        private static readonly ConcurrentDictionary<string, OtpEntry> OtpStore = new();
 
         private readonly FirebirdDb _db;
         private readonly IConfiguration _config;
@@ -96,7 +104,11 @@ namespace YourApp.Controllers
             // 2) Generate OTP + store
             // =========================
             var otp = new Random().Next(100000, 999999).ToString();
-            OtpStore[agentCode] = otp;
+            OtpStore[agentCode] = new OtpEntry
+            {
+                Code = otp,
+                ExpiresAtUtc = DateTime.UtcNow.AddSeconds(OtpLifetimeSeconds)
+            };
 
             Console.WriteLine($"[OTP] Generated OTP for AgentCode={agentCode}, Email={emailIn}: {otp}");
 
@@ -142,6 +154,7 @@ namespace YourApp.Controllers
             // keep for next post
             TempData["AgentCode"] = agentCode;
             TempData["Email"] = email;
+            SetOtpExpiryViewData(agentCode);
 
             return View(new OtpViewModel { AgentCode = agentCode });
         }
@@ -158,9 +171,25 @@ namespace YourApp.Controllers
 
             var agentCodeIn = (model.AgentCode ?? "").Trim();
             var otpIn = (model.Otp ?? "").Trim();
+            SetOtpExpiryViewData(agentCodeIn);
 
             // ✅ 1) OTP check
-            if (!OtpStore.TryGetValue(agentCodeIn, out var otp) || otp != otpIn)
+            if (!OtpStore.TryGetValue(agentCodeIn, out var otpEntry))
+            {
+                ModelState.AddModelError("Otp", "OTP not found. Please request a new one.");
+                return View(model);
+            }
+
+            if (otpEntry.ExpiresAtUtc <= DateTime.UtcNow)
+            {
+                OtpStore.TryRemove(agentCodeIn, out _);
+                ViewBag.OtpExpiresAtUnix = 0L;
+                ViewBag.OtpRemainingSeconds = 0;
+                ModelState.AddModelError("Otp", "OTP expired. Please request a new one.");
+                return View(model);
+            }
+
+            if (otpEntry.Code != otpIn)
             {
                 ModelState.AddModelError("Otp", "Invalid OTP.");
                 return View(model);
@@ -292,6 +321,21 @@ namespace YourApp.Controllers
             msg.To.Add(new MailAddress(toEmail));
 
             smtp.Send(msg);
+        }
+
+        private void SetOtpExpiryViewData(string? agentCode)
+        {
+            var code = (agentCode ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(code) || !OtpStore.TryGetValue(code, out var otpEntry))
+            {
+                ViewBag.OtpExpiresAtUnix = 0L;
+                ViewBag.OtpRemainingSeconds = 0;
+                return;
+            }
+
+            var remainingSeconds = Math.Max(0, (int)Math.Ceiling((otpEntry.ExpiresAtUtc - DateTime.UtcNow).TotalSeconds));
+            ViewBag.OtpExpiresAtUnix = new DateTimeOffset(otpEntry.ExpiresAtUtc).ToUnixTimeSeconds();
+            ViewBag.OtpRemainingSeconds = remainingSeconds;
         }
     }
 }
