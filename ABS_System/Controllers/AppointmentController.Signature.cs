@@ -14,6 +14,10 @@ namespace YourApp.Controllers
 {
     public partial class AppointmentController : Controller
     {
+        private const int MAX_SIGNATURE_DATAURL_CHARS = 1_500_000; // ~1.5MB text payload
+        private const int MAX_SIGNATURE_BYTES = 1_000_000;          // 1MB PNG max
+        private const int MAX_SIGNATURE_PIXELS = 4_000_000;         // DoS guard
+
         // =========================================================
         // ✅ SIGNATURE (GET)
         // GET: /Appointment/Sign/5
@@ -134,6 +138,11 @@ WHERE d.APPT_ID = @APPTID
                 TempData["Err"] = "Signature is required.";
                 return RedirectToAction("Sign", new { id = apptId });
             }
+            if (signatureDataUrl.Length > MAX_SIGNATURE_DATAURL_CHARS)
+            {
+                TempData["Err"] = "Signature is too large.";
+                return RedirectToAction("Sign", new { id = apptId });
+            }
 
             var m = Regex.Match(signatureDataUrl, @"^data:image\/png;base64,(.+)$");
             if (!m.Success)
@@ -146,11 +155,21 @@ WHERE d.APPT_ID = @APPTID
             try
             {
                 pngBytes = Convert.FromBase64String(m.Groups[1].Value);
+                if (pngBytes.Length > MAX_SIGNATURE_BYTES)
+                {
+                    TempData["Err"] = "Signature exceeds maximum allowed size.";
+                    return RedirectToAction("Sign", new { id = apptId });
+                }
 
                 using (var inputStream = new MemoryStream(pngBytes))
-                using (var image = SixLabors.ImageSharp.Image.Load(inputStream)) // ✅ correct overload
-{
+                using (var image = SixLabors.ImageSharp.Image.Load(inputStream))
                 {
+                    if ((long)image.Width * image.Height > MAX_SIGNATURE_PIXELS)
+                    {
+                        TempData["Err"] = "Signature dimensions are too large.";
+                        return RedirectToAction("Sign", new { id = apptId });
+                    }
+
                     if (image.Width > 600)
                     {
                         int newWidth = 600;
@@ -163,7 +182,7 @@ WHERE d.APPT_ID = @APPTID
                         pngBytes = outputStream.ToArray();
                     }
                 }
-            }}
+            }
             catch
             {
                 TempData["Err"] = "Invalid signature data.";

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using FirebirdSql.Data.FirebirdClient;
 using YourApp.Data;
@@ -12,6 +13,7 @@ using YourApp.Documents;
 
 namespace ABS_System.Controllers
 {
+    [Authorize]
     public class CustomerController : Controller
     {
         private readonly FirebirdDb _db;
@@ -22,6 +24,7 @@ namespace ABS_System.Controllers
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public IActionResult PrintHistory(long apptId)
         {
             using var conn = _db.Open();
@@ -95,13 +98,36 @@ namespace ABS_System.Controllers
             var logIdMap = new Dictionary<long, long>();
             using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = @"SELECT APPT_ID, MIN(LOG_ID) FROM APPOINTMENT_LOG WHERE ACTION_TYPE = 'ADDED' AND APPT_ID IN (" + string.Join(",", appts.Select(a => a.ApptId)) + ") GROUP BY APPT_ID";
-                using var r = cmd.ExecuteReader();
-                while (r.Read())
+                var apptIds = appts
+                    .Select(a => a.ApptId)
+                    .Where(x => x > 0)
+                    .Distinct()
+                    .ToList();
+
+                if (apptIds.Count > 0)
                 {
-                    var apptId = r.IsDBNull(0) ? 0 : r.GetInt64(0);
-                    var logId = r.IsDBNull(1) ? 0 : r.GetInt64(1);
-                    if (apptId > 0 && logId > 0) logIdMap[apptId] = logId;
+                    var pNames = new List<string>(apptIds.Count);
+                    for (int i = 0; i < apptIds.Count; i++)
+                    {
+                        var p = $"@APPTID_{i}";
+                        pNames.Add(p);
+                        cmd.Parameters.Add(FirebirdDb.P(p, apptIds[i], FbDbType.BigInt));
+                    }
+
+                    cmd.CommandText = $@"
+SELECT APPT_ID, MIN(LOG_ID)
+FROM APPOINTMENT_LOG
+WHERE ACTION_TYPE = 'ADDED'
+  AND APPT_ID IN ({string.Join(", ", pNames)})
+GROUP BY APPT_ID";
+
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read())
+                    {
+                        var apptId = r.IsDBNull(0) ? 0 : r.GetInt64(0);
+                        var logId = r.IsDBNull(1) ? 0 : r.GetInt64(1);
+                        if (apptId > 0 && logId > 0) logIdMap[apptId] = logId;
+                    }
                 }
             }
             ViewBag.AppointmentLogIds = logIdMap;

@@ -884,6 +884,8 @@
   // ✅ Build modal appointment card
   // =========================
   function buildApptCard(appt) {
+    var safeApptId = parseInt(appt && appt.ApptId, 10);
+    if (!Number.isFinite(safeApptId) || safeApptId <= 0) safeApptId = 0;
     var when = '';
     var timeOnly = '';
     if (appt.ApptStart) {
@@ -927,7 +929,7 @@
     else if (done) { statusLetter = 'F'; statusColor = '#5cb85c'; }
 
     // Services dropdown only if >1 service
-    var servicesHtml = getServiceLinesHtml(appt.ApptId);
+    var servicesHtml = getServiceLinesHtml(safeApptId);
     var hasMultiServices = servicesHtml && servicesHtml.length > 0;
 
     // Use itemDescriptions to map appt.Title (item code) to description
@@ -948,17 +950,17 @@
       actionsHtml =
         '<div class="appt-actions" style="margin-top:6px; display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between;">' +
           '<div style="display:flex;gap:6px;margin-right:auto;">' +
-            '<a href="/Appointment/Edit/' + appt.ApptId + '" class="btn btn-sm btn-primary">Edit</a>' +
-            '<a href="#" class="btn btn-sm btn-danger appt-delete" data-appt-id="' + appt.ApptId + '">Cancelled?</a>' +
+            '<a href="/Appointment/Edit/' + safeApptId + '" class="btn btn-sm btn-primary">Edit</a>' +
+            '<a href="#" class="btn btn-sm btn-danger appt-delete" data-appt-id="' + safeApptId + '">Cancelled?</a>' +
           '</div>' +
           '<div>' +
-            '<a href="/Appointment/Sign/' + appt.ApptId + '" class="btn btn-sm btn-success" style="background:#28a745;border-color:#28a745;">Submit E-Sign</a>' +
+            '<a href="/Appointment/Sign/' + safeApptId + '" class="btn btn-sm btn-success" style="background:#28a745;border-color:#28a745;">Submit E-Sign</a>' +
           '</div>' +
         '</div>';
     }
 
     return (
-      '<div class="appt-card modal-card' + doneClass + '" data-appt-id="' + appt.ApptId + '"' + style + '>' +
+      '<div class="appt-card modal-card' + doneClass + '" data-appt-id="' + safeApptId + '"' + style + '>' +
         '<div class="appt-top">' +
           '<div>' + titleHtml + '</div>' +
           '<div class="appt-top-right"><div class="appt-time">' + escHtml(timeOnly || '') + '</div></div>' +

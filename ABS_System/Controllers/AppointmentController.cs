@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using YourApp.Data;
 
 namespace YourApp.Controllers
 {
+    [Authorize]
     public partial class AppointmentController : Controller
     {
         private readonly FirebirdDb _db;

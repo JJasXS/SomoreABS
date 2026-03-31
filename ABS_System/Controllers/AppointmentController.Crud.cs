@@ -324,9 +324,23 @@ WHERE d.ITEMCODE = @SVC
             using (var conn = _db.Open())
             using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText =
-                    $"SELECT ITEMCODE, QTY, UDF_CLAIMED, UDF_PREV_CLAIMED FROM SL_SODTL " +
-                    $"WHERE ITEMCODE IN ('{string.Join("','", serviceItems.Select(x => x.CODE))}')";
+                var svcCodes = serviceItems
+                    .Select(x => (x.CODE ?? "").Trim())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (svcCodes.Count > 0)
+                {
+                    var inClause = BuildInClauseParams(cmd, "@p_item_", svcCodes);
+                    cmd.CommandText =
+                        $"SELECT ITEMCODE, QTY, UDF_CLAIMED, UDF_PREV_CLAIMED FROM SL_SODTL " +
+                        $"WHERE ITEMCODE IN ({inClause})";
+                }
+                else
+                {
+                    cmd.CommandText = "SELECT ITEMCODE, QTY, UDF_CLAIMED, UDF_PREV_CLAIMED FROM SL_SODTL WHERE 1 = 0";
+                }
                 using var r = cmd.ExecuteReader();
                 while (r.Read())
                 {

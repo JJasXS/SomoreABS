@@ -295,6 +295,8 @@
 
 <script>
 (function () {
+    const SIG_CANVAS_CSS_WIDTH = 900;
+    const SIG_CANVAS_CSS_HEIGHT = 350;
     const sigCanvas = document.getElementById('sigCanvas');
     const clearBtn = document.getElementById('clearBtn');
     const form = document.getElementById('signForm');
@@ -314,10 +316,10 @@
     /** Main canvas: preview only (bitmap space). Drawing happens only in the modal. */
     function resizeMainCanvas() {
         const ratio = window.devicePixelRatio || 1;
-        sigCanvas.width = Math.floor(900 * ratio);
-        sigCanvas.height = Math.floor(350 * ratio);
-        sigCanvas.style.width = '900px';
-        sigCanvas.style.height = '350px';
+        sigCanvas.width = Math.floor(SIG_CANVAS_CSS_WIDTH * ratio);
+        sigCanvas.height = Math.floor(SIG_CANVAS_CSS_HEIGHT * ratio);
+        sigCanvas.style.width = `${SIG_CANVAS_CSS_WIDTH}px`;
+        sigCanvas.style.height = `${SIG_CANVAS_CSS_HEIGHT}px`;
         const ctx = sigCanvas.getContext('2d');
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
@@ -366,10 +368,10 @@
 
     function modalResizeCanvas() {
         const ratio = window.devicePixelRatio || 1;
-        modalSigCanvas.width = Math.floor(900 * ratio);
-        modalSigCanvas.height = Math.floor(350 * ratio);
-        modalSigCanvas.style.width = '900px';
-        modalSigCanvas.style.height = '350px';
+        modalSigCanvas.width = Math.floor(SIG_CANVAS_CSS_WIDTH * ratio);
+        modalSigCanvas.height = Math.floor(SIG_CANVAS_CSS_HEIGHT * ratio);
+        modalSigCanvas.style.width = `${SIG_CANVAS_CSS_WIDTH}px`;
+        modalSigCanvas.style.height = `${SIG_CANVAS_CSS_HEIGHT}px`;
         const ctx = modalSigCanvas.getContext('2d');
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
         ctx.lineWidth = 2;

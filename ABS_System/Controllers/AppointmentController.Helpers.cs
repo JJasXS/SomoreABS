@@ -10,6 +10,9 @@ namespace YourApp.Controllers
 {
     public partial class AppointmentController : Controller
     {
+        private static void LogWarn(string where, Exception ex)
+            => Console.WriteLine($"[WARN][AppointmentController] {where}: {ex.Message}");
+
         // =========================================================
         // HELPERS
         // =========================================================
@@ -128,7 +131,10 @@ WHERE CODE = @CODE";
                     m = apptStart.Month;
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                LogWarn(nameof(GetApptYearMonth), ex);
+            }
 
             return (y, m);
         }
@@ -251,7 +257,15 @@ LEFT JOIN AR_CUSTOMERBRANCH b ON b.CODE = c.CODE";
 
                 // Query UDF_CLAIMED, UDF_PREV_CLAIMED, QTY for each service
                 using var cmdDtl = conn.CreateCommand();
-                cmdDtl.CommandText = @"SELECT CODE, QTY, UDF_CLAIMED, UDF_PREV_CLAIMED FROM SL_SODTL WHERE CODE IN ('" + string.Join("','", allItems.Select(x => x.CODE)) + "')";
+                var codes = allItems.Select(x => (x.CODE ?? "").Trim())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (codes.Count == 0)
+                    return serviceItems;
+
+                var inClause = BuildInClauseParams(cmdDtl, "@p_svc_", codes);
+                cmdDtl.CommandText = $"SELECT CODE, QTY, UDF_CLAIMED, UDF_PREV_CLAIMED FROM SL_SODTL WHERE CODE IN ({inClause})";
                 var claimedInfo = new Dictionary<string, (int qty, int claimed, int prevClaimed)>();
                 using var rDtl = cmdDtl.ExecuteReader();
                 while (rDtl.Read())
@@ -277,8 +291,23 @@ LEFT JOIN AR_CUSTOMERBRANCH b ON b.CODE = c.CODE";
                     serviceItems.Add(item);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                LogWarn(nameof(LoadServiceItems), ex);
+            }
             return serviceItems;
+        }
+
+        private static string BuildInClauseParams(FbCommand cmd, string paramPrefix, List<string> values)
+        {
+            var names = new List<string>(values.Count);
+            for (int i = 0; i < values.Count; i++)
+            {
+                var pName = $"{paramPrefix}{i}";
+                names.Add(pName);
+                cmd.Parameters.Add(FirebirdDb.P(pName, values[i], FbDbType.VarChar));
+            }
+            return string.Join(", ", names);
         }
 
         private List<string> LoadSelectedServiceCodes(long apptId)

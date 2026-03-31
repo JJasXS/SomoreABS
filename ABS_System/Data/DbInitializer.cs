@@ -183,13 +183,26 @@ WHERE COALESCE(UDF_TOTALCLAIMED, 0) <> COALESCE(UDF_PREV_CLAIMED, 0) + COALESCE(
             EnsureDecimalColumnWithDefaultZero(conn, tableName: "SL_SODTL", columnName: "UDF_PREV_CLAIMED");
             EnsureDecimalColumnWithDefaultZero(conn, tableName: "SL_SODTL", columnName: "UDF_TOTALCLAIMED");
 
-            ExecNonQuery(conn, @"
-CREATE OR ALTER TRIGGER BIU_SL_SODTL_TOTALCLAIMED FOR SL_SODTL
+            if (TriggerExists(conn, "BIU_SL_SODTL_TOTALCLAIMED"))
+            {
+                ExecNonQuery(conn, @"
+ALTER TRIGGER BIU_SL_SODTL_TOTALCLAIMED
 ACTIVE BEFORE INSERT OR UPDATE POSITION 0
 AS
 BEGIN
     NEW.UDF_TOTALCLAIMED = COALESCE(NEW.UDF_PREV_CLAIMED, 0) + COALESCE(NEW.UDF_CLAIMED, 0);
 END");
+            }
+            else
+            {
+                ExecNonQuery(conn, @"
+CREATE TRIGGER BIU_SL_SODTL_TOTALCLAIMED FOR SL_SODTL
+ACTIVE BEFORE INSERT OR UPDATE POSITION 0
+AS
+BEGIN
+    NEW.UDF_TOTALCLAIMED = COALESCE(NEW.UDF_PREV_CLAIMED, 0) + COALESCE(NEW.UDF_CLAIMED, 0);
+END");
+            }
 
             ExecNonQuery(conn, @"
 UPDATE SL_SODTL
@@ -439,6 +452,17 @@ WHERE rdb$relation_name = @TNAME
   AND rdb$field_name    = @CNAME";
             cmd.Parameters.Add(new FbParameter("@TNAME", tableName.ToUpperInvariant()));
             cmd.Parameters.Add(new FbParameter("@CNAME", columnName.ToUpperInvariant()));
+            return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
+        }
+
+        private static bool TriggerExists(FbConnection conn, string triggerName)
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+SELECT COUNT(*)
+FROM rdb$triggers
+WHERE rdb$trigger_name = @TRG";
+            cmd.Parameters.Add(new FbParameter("@TRG", triggerName.ToUpperInvariant()));
             return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
         }
 

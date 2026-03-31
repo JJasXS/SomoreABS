@@ -11,6 +11,9 @@ namespace YourApp.Controllers
     [Authorize]
     public class CalendarController : Controller
     {
+        private static void LogWarn(string where, Exception ex)
+            => Console.WriteLine($"[WARN][CalendarController] {where}: {ex.Message}");
+
         // ✅ In-memory calendar events (resets when app restarts)
         private static readonly List<CalendarEventVm> _events = new();
         private static int _nextId = 1;
@@ -86,7 +89,7 @@ namespace YourApp.Controllers
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { LogWarn("Index.LoadItemDescriptions", ex); }
             ViewBag.ItemDescriptions = itemDescriptions;
 
 
@@ -117,7 +120,7 @@ namespace YourApp.Controllers
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { LogWarn("Index.LoadBranchNames", ex); }
             ViewBag.BranchNames = branchNames;
 
             // ===== DB: customer dictionary =====
@@ -159,7 +162,7 @@ namespace YourApp.Controllers
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex) { LogWarn("Index.LoadAllBranches", ex); }
                 ViewBag.AllBranches = branchList;
 
             var birthdays = new List<CustomerBirthdayVm>();
@@ -188,7 +191,7 @@ namespace YourApp.Controllers
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { LogWarn("Index.LoadBirthdays", ex); }
             ViewBag.CustomerBirthdays = birthdays;
 
             return View(monthEvents);
@@ -420,7 +423,7 @@ namespace YourApp.Controllers
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { LogWarn(nameof(BuildAgentDictionaries), ex); }
         }
 
         private string GetBranchColor(string branchNo)
@@ -519,7 +522,7 @@ namespace YourApp.Controllers
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { LogWarn(nameof(LoadCustomerInfo), ex); }
             return customerInfo;
         }
 
@@ -552,7 +555,7 @@ namespace YourApp.Controllers
                         serviceDescriptions.Add(r.IsDBNull(0) ? "" : r.GetString(0).Trim());
                 }
             }
-            catch { }
+            catch (Exception ex) { LogWarn("Create.LoadServiceDescriptions", ex); }
             ViewBag.ServiceItems = serviceDescriptions;
             return View(model);
         }
