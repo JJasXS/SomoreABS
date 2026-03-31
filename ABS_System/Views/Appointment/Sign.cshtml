@@ -290,6 +290,74 @@
 
   .card { break-inside:avoid; page-break-inside:avoid; }
 }
+
+html.theme-dark .container > .card,
+html.theme-dark .container .card {
+  background: #151923 !important;
+  border-color: rgba(255,255,255,0.10) !important;
+  color: #e9eef5 !important;
+}
+
+html.theme-dark .container h3,
+html.theme-dark .container label,
+html.theme-dark .container .card-body,
+html.theme-dark .container .card-body div,
+html.theme-dark .container .form-check-label {
+  color: #e9eef5 !important;
+}
+
+html.theme-dark #statementBox {
+  background: #1b2230 !important;
+  border-color: rgba(255,255,255,0.10) !important;
+  color: #d9e1ee !important;
+}
+
+html.theme-dark .container .form-control {
+  background: #121722 !important;
+  border-color: rgba(255,255,255,0.10) !important;
+  color: #e9eef5 !important;
+}
+
+html.theme-dark .container .form-control::placeholder {
+  color: #9aa8bc !important;
+}
+
+html.theme-dark .container .table,
+html.theme-dark .container .table th,
+html.theme-dark .container .table td {
+  background: #151923 !important;
+  color: #e9eef5 !important;
+  border-color: rgba(255,255,255,0.10) !important;
+}
+
+html.theme-dark .container .table thead tr {
+  background: #1b2230 !important;
+}
+
+html.theme-dark .container img[alt="Signature"] {
+  filter: invert(1) brightness(1.08);
+}
+
+html.theme-dark #sigCanvas,
+html.theme-dark #modalSigCanvas {
+  background: #101620 !important;
+}
+
+html.theme-dark #sigCanvas,
+html.theme-dark #modalSigCanvas,
+html.theme-dark #statementBox,
+html.theme-dark .container .form-control {
+  color-scheme: dark;
+}
+
+html.theme-dark #signatureModal > div {
+  background: #151923 !important;
+  color: #e9eef5 !important;
+}
+
+html.theme-dark #modalSigCanvas {
+  border-color: rgba(255,255,255,0.14) !important;
+}
 </style>
 
 
@@ -312,6 +380,10 @@
     const modalCancelBtn = document.getElementById('modalCancelBtn');
 
     window.modalSignatureSaved = false;
+
+    function getSignatureStrokeColor() {
+        return document.documentElement.classList.contains('theme-dark') ? '#f3f6fb' : '#111';
+    }
 
     /** Main canvas: preview only (bitmap space). Drawing happens only in the modal. */
     function resizeMainCanvas() {
@@ -376,7 +448,7 @@
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
         ctx.lineWidth = 2;
         ctx.lineCap = 'round';
-        ctx.strokeStyle = '#111';
+        ctx.strokeStyle = getSignatureStrokeColor();
     }
 
     function modalGetPos(e) {
@@ -422,6 +494,9 @@
         }
         const ratio = window.devicePixelRatio || 1;
         mctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        mctx.lineWidth = 2;
+        mctx.lineCap = 'round';
+        mctx.strokeStyle = getSignatureStrokeColor();
         window.modalSignatureSaved = false;
     });
 

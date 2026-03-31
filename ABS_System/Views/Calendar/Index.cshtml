@@ -164,7 +164,7 @@
          ✅ CONFIRM DELETE MODAL
          ========================= -->
     <div id="confirmDeleteModal"
-         class="custom-modal"
+         class="custom-modal confirm-delete-modal"
          style="display:none; width:min(340px,90vw) !important; background:#f1f1f1 !important;">
         <div class="custom-modal-content">
             <div class="custom-modal-header">
@@ -197,14 +197,14 @@
         </div>
 
         <div class="side-menu-body">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; padding:10px 12px; border:1px solid rgba(0,0,0,0.10); border-radius:10px;">
+            <div class="side-menu-theme-card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; padding:10px 12px; border:1px solid rgba(0,0,0,0.10); border-radius:10px;">
               <div style="font-weight:800;">Theme</div>
               <label style="display:flex; align-items:center; gap:8px; margin:0; cursor:pointer; user-select:none;">
                 <span id="themeLabel" style="font-size:13px; font-weight:700; opacity:.85;">Light</span>
                 <input type="checkbox" id="themeToggle" style="width:44px; height:22px; margin:0;" />
               </label>
             </div>
-            <div class="side-menu-link" onclick="viewCustHistory()" style="width:100%; margin-bottom:16px; padding:12px; background:#e9f5ff; color:#007bff; border-radius:10px; font-weight:700; font-size:15px; text-align:center; cursor:pointer; transition:background 0.2s;">
+            <div class="side-menu-link side-menu-history-link" onclick="viewCustHistory()" style="width:100%; margin-bottom:16px; padding:12px; background:#e9f5ff; color:#007bff; border-radius:10px; font-weight:700; font-size:15px; text-align:center; cursor:pointer; transition:background 0.2s;">
               View Customer History
             </div>
             <div class="side-menu-birthdays" style="margin-bottom:18px;">
@@ -258,7 +258,7 @@
 
                 @if (sorted.Count > 0)
                 {
-                    <table style="width:100%; font-size:11px; border-collapse:collapse;">
+                    <table class="birthday-table" style="width:100%; font-size:11px; border-collapse:collapse;">
                         <thead>
                         <tr style="background:#f8f8f8;">
                             <th style="padding:4px 8px; text-align:left; font-weight:600;">Name</th>
@@ -291,7 +291,7 @@
                 }
                 else
                 {
-                    <div style="color:#888; font-size:13px;">No birthdays this month.</div>
+                    <div class="birthday-empty" style="color:#888; font-size:13px;">No birthdays this month.</div>
                 }
             </div>
         </div>
@@ -606,8 +606,8 @@
   .appt-card.in-cell.is-cancelled { opacity: 0.45 !important; }
 
   /* Hamburger + Side Menu */
-  .calendar-shell { position: relative; width: 100% !important; max-width: none !important; margin: 0 !important; background:#fff; border:1px solid rgba(0,0,0,0.08); border-radius:14px; padding:14px; box-shadow:0 2px 14px rgba(0,0,0,0.06); }
-  .hamburger-btn{ position:absolute; top:10px; right:12px; width:42px; height:38px; border:1px solid rgba(0,0,0,0.12); border-radius:10px; background:#fff; box-shadow:0 2px 10px rgba(0,0,0,0.06); font-size:20px; line-height:1; cursor:pointer; z-index:20; }
+  .calendar-shell { position: relative; width: 100% !important; max-width: none !important; margin: 0 !important; background:#fff; border:1px solid rgba(31,79,161,0.08); border-radius:14px; padding:14px; box-shadow:0 2px 14px rgba(0,0,0,0.06); }
+  .hamburger-btn{ position:absolute; top:10px; right:12px; width:42px; height:38px; border:1px solid rgba(31,79,161,0.10); border-radius:10px; background:#fff; box-shadow:0 2px 10px rgba(0,0,0,0.06); font-size:20px; line-height:1; cursor:pointer; z-index:20; color:#233146; }
   .hamburger-btn:hover{ background: rgba(0,0,0,0.03); }
 
   .side-menu-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1200; }
@@ -699,6 +699,56 @@
     box-shadow:-6px 0 24px rgba(0,0,0,0.40) !important;
   }
 
+  html.theme-dark .calendar-toolbar .form-select,
+  html.theme-dark .calendar-toolbar .btn,
+  html.theme-dark .calendar-toolbar .btn.btn-outline-secondary{
+    background:#1b2230 !important;
+    color:#e9eef5 !important;
+    border-color:rgba(255,255,255,0.14) !important;
+  }
+
+  html.theme-dark .calendar-toolbar .btn:hover,
+  html.theme-dark .calendar-toolbar .btn.btn-outline-secondary:hover{
+    background:#242e42 !important;
+    color:#ffffff !important;
+  }
+
+  html.theme-dark .calendar-shell .calendar-table,
+  html.theme-dark .calendar-shell .calendar-table tbody,
+  html.theme-dark .calendar-shell .calendar-table tr{
+    background:#151b27 !important;
+    color:#e9eef5 !important;
+  }
+
+  html.theme-dark .calendar-shell .calendar-table th{
+    background:#1b2230 !important;
+    color:#e9eef5 !important;
+    border-color:rgba(255,255,255,0.12) !important;
+  }
+
+  html.theme-dark .calendar-shell .calendar-table td,
+  html.theme-dark .calendar-shell td.calendar-cell,
+  html.theme-dark .calendar-shell td.calendar-cell-day{
+    background:#151b27 !important;
+    color:#e9eef5 !important;
+    border-color:rgba(255,255,255,0.10) !important;
+  }
+
+  html.theme-dark .calendar-shell td.calendar-cell-empty{
+    background:#131925 !important;
+  }
+
+  html.theme-dark .calendar-shell td.calendar-cell-day:hover,
+  html.theme-dark .calendar-shell td.calendar-cell-day:focus{
+    background:#20283a !important;
+  }
+
+  html.theme-dark .day-number{
+    background:#273247 !important;
+    border-color:rgba(255,255,255,0.18) !important;
+    color:#e9eef5 !important;
+  }
+
   html.theme-dark .side-menu-header,
   html.theme-dark .side-menu-footer{
     border-color:rgba(255,255,255,0.10) !important;
@@ -718,6 +768,43 @@
     background:#1b2230 !important;
     color:#e9eef5 !important;
     border-color:rgba(255,255,255,0.16) !important;
+  }
+
+  html.theme-dark .side-menu-theme-card{
+    background:#1b2230 !important;
+    border-color:rgba(255,255,255,0.12) !important;
+  }
+
+  html.theme-dark .side-menu-history-link{
+    background:#21314a !important;
+    color:#8ac1ff !important;
+  }
+
+  html.theme-dark .birthday-table,
+  html.theme-dark .birthday-table tbody,
+  html.theme-dark .birthday-table tr{
+    background:transparent !important;
+    color:#e9eef5 !important;
+  }
+
+  html.theme-dark .birthday-table thead tr{
+    background:#1b2230 !important;
+  }
+
+  html.theme-dark .birthday-table th,
+  html.theme-dark .birthday-table td{
+    background:transparent !important;
+    color:#e9eef5 !important;
+    border-color:rgba(255,255,255,0.10) !important;
+  }
+
+  html.theme-dark .birthday-empty{
+    color:#b8c4d7 !important;
+  }
+
+  html.theme-dark .confirm-delete-modal{
+    background:#151923 !important;
+    color:#e9eef5 !important;
   }
 
   html.theme-dark .custom-modal{

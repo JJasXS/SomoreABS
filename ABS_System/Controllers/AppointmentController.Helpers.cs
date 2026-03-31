@@ -265,7 +265,7 @@ LEFT JOIN AR_CUSTOMERBRANCH b ON b.CODE = c.CODE";
                     return serviceItems;
 
                 var inClause = BuildInClauseParams(cmdDtl, "@p_svc_", codes);
-                cmdDtl.CommandText = $"SELECT CODE, QTY, UDF_CLAIMED, UDF_PREV_CLAIMED FROM SL_SODTL WHERE CODE IN ({inClause})";
+                cmdDtl.CommandText = $"SELECT ITEMCODE, QTY, UDF_CLAIMED, UDF_PREV_CLAIMED FROM SL_SODTL WHERE ITEMCODE IN ({inClause})";
                 var claimedInfo = new Dictionary<string, (int qty, int claimed, int prevClaimed)>();
                 using var rDtl = cmdDtl.ExecuteReader();
                 while (rDtl.Read())

@@ -35,14 +35,15 @@
   align-items: center;
   padding: 3px 10px;
   border-radius: 999px;
-  border: 1px solid #e8e8e8;
-  background: #fafafa;
+  border: 1px solid rgba(31, 79, 161, 0.14);
+  background: linear-gradient(180deg, #ffffff 0%, #eef4ff 100%);
+  color: #315fc8;
   transition: background 0.2s ease, border 0.2s ease;
 }
 
 .calendar-month-click:hover {
-  background: #f1f1f1;
-  border-color: #dedede;
+  background: linear-gradient(180deg, #ffffff 0%, #e6efff 100%);
+  border-color: rgba(31, 79, 161, 0.22);
 }
 
 /* ================================
@@ -197,8 +198,8 @@
   text-align: left;
   vertical-align: top;
   padding: 10px;
-  background: #fafafa;
-  color: #222;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef3fb 100%);
+  color: #233146;
 }
 
 .calendar-table td {
@@ -207,7 +208,7 @@
   padding: 8px;
   background: #fff;
   color: #222;
-  border-color: #efefef;
+  border-color: rgba(31,79,161,0.08);
 }
 
 .calendar-table th,
@@ -226,20 +227,20 @@
 }
 
 .calendar-cell-empty {
-  background: #fbfbfb;
+  background: #f7f9fc;
 }
 
 /* Clickable day cell */
 .calendar-cell-day {
   cursor: pointer;
   transition: background 0.15s ease, outline 0.15s ease;
-  background: #fff !important;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%) !important;
   color: #222;
 }
 
 .calendar-cell-day:hover,
 .calendar-cell-day:focus {
-  background: #f6f6f6 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #eef5ff 100%) !important;
   outline: none !important;
 }
 
@@ -266,9 +267,10 @@
   width: 26px;
   height: 26px;
   border-radius: 999px;
-  background: #f2f2f2;
-  border: 1px solid #e6e6e6;
+  background: linear-gradient(180deg, #ffffff 0%, #eef4fb 100%);
+  border: 1px solid rgba(31,79,161,0.10);
   font-size: 0.95rem;
+  color: #233146;
 }
 
 /* The scroll area in the cell */
@@ -351,7 +353,7 @@
   font-weight: 700;
   font-size: 0.92rem;
   line-height: 1.15;
-  color: #1f1f1f;
+  color: #1b2738;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -364,8 +366,8 @@
   padding: 2px 8px;
   border-radius: 999px;
   border: 1px solid rgba(0,0,0,0.10);
-  background: rgba(255,255,255,0.55);
-  color: #222;
+  background: rgba(255,255,255,0.72);
+  color: #223149;
 }
 
 .appt-meta {
@@ -534,12 +536,12 @@ html.theme-dark .calendar-title * {
 
 html.theme-dark .calendar-month-click {
   border-color: rgba(255,255,255,0.18);
-  background: #1b2230;
+  background: linear-gradient(180deg, #1b2230 0%, #182131 100%);
   color: #e9eef5;
 }
 
 html.theme-dark .calendar-month-click:hover {
-  background: #232c3d;
+  background: linear-gradient(180deg, #232c3d 0%, #1d2940 100%);
   border-color: rgba(255,255,255,0.24);
 }
 
@@ -574,7 +576,7 @@ html.theme-dark .appt-empty {
 }
 
 html.theme-dark .calendar-table th {
-  background: #1b2230;
+  background: linear-gradient(180deg, #1b2230 0%, #182131 100%);
   color: #e9eef5;
   border-color: rgba(255,255,255,0.12);
 }

@@ -9,6 +9,9 @@ body {
   /* keep bootstrap defaults, but improve font rendering */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background:
+    radial-gradient(circle at top, rgba(39,110,241,0.08), transparent 36%),
+    linear-gradient(180deg, #f5f8fc 0%, #eef3f8 100%);
 }
 
 /* Optional: nicer default page background */
@@ -111,6 +114,12 @@ html.theme-dark .custom-footer span,
 html.theme-dark .custom-footer small,
 html.theme-dark .custom-footer .text-muted {
   color: rgba(233,238,245,0.78) !important;
+}
+
+html.theme-dark body {
+  background:
+    radial-gradient(circle at top, rgba(65,110,255,0.14), transparent 34%),
+    linear-gradient(180deg, #0e1118 0%, #10131b 100%);
 }
 
 /* =========================

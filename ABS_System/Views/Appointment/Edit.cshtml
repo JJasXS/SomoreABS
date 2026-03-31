@@ -46,10 +46,11 @@
   .booking-form {
     max-width: 760px;
     margin: 0 auto;
-    background: #f8f9fa;
+    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(246,249,255,0.98) 100%);
     border-radius: 12px;
     padding: 34px 32px 28px 32px;
     box-shadow: 0 2px 14px rgba(0,0,0,0.08);
+    border: 1px solid rgba(31,79,161,0.08);
   }
 
   h2 {
@@ -61,7 +62,7 @@
     font-weight: 700;
     margin-bottom: 6px;
     display: block;
-    color: #222;
+    color: #223149;
   }
 
   .booking-form input,
@@ -69,7 +70,7 @@
     width: 100%;
     padding: 9px 10px;
     margin-bottom: 16px;
-    border: 1px solid #cfcfcf;
+    border: 1px solid rgba(31,79,161,0.12);
     border-radius: 8px;
     font-size: 1em;
     background: #fff;
@@ -131,6 +132,11 @@
     margin-bottom: 14px;
     font-size: .95em;
   }
+
+  .validation-summary:empty {
+    display: none;
+  }
+
   .validation-summary ul { margin: 0; padding-left: 18px; }
 
   /* =========================
@@ -242,6 +248,36 @@
     justify-content: center;
     height: 44px;
     flex: 1;
+  }
+
+  html.theme-dark .booking-form{
+    background: linear-gradient(180deg, rgba(21,25,35,0.98) 0%, rgba(18,23,34,0.98) 100%);
+    border-color: rgba(255,255,255,0.10);
+    box-shadow: 0 2px 14px rgba(0,0,0,0.28);
+  }
+
+  html.theme-dark .booking-form label,
+  html.theme-dark .svc-hint,
+  html.theme-dark .svc-msg{
+    color: #d7deea;
+  }
+
+  html.theme-dark .booking-form input,
+  html.theme-dark .booking-form select,
+  html.theme-dark .customer-dropdown{
+    background: #121722;
+    color: #e9eef5;
+    border-color: rgba(255,255,255,0.10);
+  }
+
+  html.theme-dark .customer-option{
+    background: #121722;
+    color: #e9eef5;
+  }
+
+  html.theme-dark .customer-option:hover,
+  html.theme-dark .customer-option.is-selected{
+    background: #1d2940;
   }
 
   .booking-form a {
