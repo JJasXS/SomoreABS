@@ -329,6 +329,14 @@
                     <input type="hidden" name="pickDate" value="1" />
                 }
 
+                @if (selectedBranches != null)
+                {
+                    foreach (var branch in selectedBranches)
+                    {
+                        <input type="hidden" name="branches" value="@branch" />
+                    }
+                }
+
                 <button type="submit" class="btn btn-primary">Search</button>
             </form>
 
@@ -337,9 +345,12 @@
               <button class="btn btn-secondary" id="filterAppointmentsBtn">Filter Appointments</button>
               if (selectedBranches != null && selectedBranches.Count > 0 && allBranches.Count > 0 && selectedBranches.Count != allBranches.Count)
               {
-                <span style="margin-left: 8px; font-size: 0.95em; color: #555;">
-                  Showing branches: @string.Join(", ", selectedBranches)
-                </span>
+                
+                <a class="btn btn-outline-secondary btn-sm"
+                   style="margin-left:8px;"
+                   href="@Url.Action("Index", new { year = year, month = month, pickDate = pickDate ? 1 : (int?)null })">
+                  Clear Filter
+                </a>
               }
             }
             <script>
@@ -447,17 +458,17 @@
 
         <div class="calendar-nav-actions">
             <a class="btn btn-secondary"
-               href="@Url.Action("Index", new { year = firstDay.AddMonths(-1).Year, month = firstDay.AddMonths(-1).Month, pickDate = pickDate ? 1 : (int?)null })">
+               href="@Url.Action("Index", new { year = firstDay.AddMonths(-1).Year, month = firstDay.AddMonths(-1).Month, pickDate = pickDate ? 1 : (int?)null, branches = selectedBranches })">
                 &lt; Prev
             </a>
 
             <a class="btn btn-secondary"
-               href="@Url.Action("Index", new { year = DateTime.Today.Year, month = DateTime.Today.Month, pickDate = pickDate ? 1 : (int?)null })">
+               href="@Url.Action("Index", new { year = DateTime.Today.Year, month = DateTime.Today.Month, pickDate = pickDate ? 1 : (int?)null, branches = selectedBranches })">
                 This Month
             </a>
 
             <a class="btn btn-secondary"
-               href="@Url.Action("Index", new { year = firstDay.AddMonths(1).Year, month = firstDay.AddMonths(1).Month, pickDate = pickDate ? 1 : (int?)null })">
+               href="@Url.Action("Index", new { year = firstDay.AddMonths(1).Year, month = firstDay.AddMonths(1).Month, pickDate = pickDate ? 1 : (int?)null, branches = selectedBranches })">
                 Next &gt;
             </a>
         </div>
@@ -1175,17 +1186,36 @@
 
     var currentMonth = parseInt('@month');
     var currentYear = parseInt('@year');
+    var baseUrl = '@Url.Action("Index", "Calendar")';
+
+    function navigateBirthdayMonth() {
+      var url = new URL(baseUrl, window.location.origin);
+      url.searchParams.set('year', currentYear);
+      url.searchParams.set('month', currentMonth);
+
+      var currentUrl = new URL(window.location.href);
+      var branches = currentUrl.searchParams.getAll('branches');
+      branches.forEach(function (b) {
+        url.searchParams.append('branches', b);
+      });
+
+      if (currentUrl.searchParams.get('pickDate') === '1') {
+        url.searchParams.set('pickDate', '1');
+      }
+
+      window.location.href = url.toString();
+    }
 
     prevBtn && prevBtn.addEventListener('click', function () {
       currentMonth--;
       if (currentMonth < 1) { currentMonth = 12; currentYear--; }
-      window.location.href = '@Url.Action("Index", "Calendar")' + '?year=' + currentYear + '&month=' + currentMonth;
+      navigateBirthdayMonth();
     });
 
     nextBtn && nextBtn.addEventListener('click', function () {
       currentMonth++;
       if (currentMonth > 12) { currentMonth = 1; currentYear++; }
-      window.location.href = '@Url.Action("Index", "Calendar")' + '?year=' + currentYear + '&month=' + currentMonth;
+      navigateBirthdayMonth();
     });
   }
 
