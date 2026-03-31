@@ -199,7 +199,7 @@
           foreach (var cust in (List<dynamic>)ViewBag.Customers)
           {
             var selected = Model.CustomerCode == cust.Code ? "selected" : null;
-            <option value="@cust.Code" selected="@selected">@cust.Name</option>
+            <option value="@cust.Code" selected="@selected">@cust.DisplayName</option>
           }
         }
       </select>

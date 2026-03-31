@@ -133,6 +133,15 @@ WHERE CODE = @CODE";
             return (y, m);
         }
 
+        /// <summary>First non-empty phone from AR_CUSTOMERBRANCH: PHONE1, then PHONE2, then MOBILE.</summary>
+        private static string PickCustomerBranchPhone(string? phone1, string? phone2, string? mobile)
+        {
+            if (!string.IsNullOrWhiteSpace(phone1)) return phone1.Trim();
+            if (!string.IsNullOrWhiteSpace(phone2)) return phone2.Trim();
+            if (!string.IsNullOrWhiteSpace(mobile)) return mobile.Trim();
+            return "";
+        }
+
         private void LoadAgentsAndCustomers(string branchNo, out List<dynamic> agents, out List<dynamic> customers)
         {
             agents = new List<dynamic>();
@@ -169,17 +178,52 @@ WHERE CODE = @CODE";
             }
 
             cmd.Parameters.Clear();
-            cmd.CommandText = "SELECT CODE, COMPANYNAME FROM AR_CUSTOMER ORDER BY COMPANYNAME";
+            cmd.CommandText = @"
+SELECT c.CODE, c.COMPANYNAME, b.PHONE1, b.PHONE2, b.MOBILE
+FROM AR_CUSTOMER c
+LEFT JOIN AR_CUSTOMERBRANCH b ON b.CODE = c.CODE";
+
+            // Merge duplicate customer codes (multiple branch rows): prefer a row with any phone.
+            var byCode = new Dictionary<string, (string Name, string P1, string P2, string Mob)>(StringComparer.OrdinalIgnoreCase);
             using (var r = cmd.ExecuteReader())
             {
                 while (r.Read())
                 {
-                    customers.Add(new
+                    var code = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                    if (string.IsNullOrWhiteSpace(code)) continue;
+
+                    var name = r.IsDBNull(1) ? "" : r.GetString(1).Trim();
+                    var p1 = r.IsDBNull(2) ? "" : r.GetString(2).Trim();
+                    var p2 = r.IsDBNull(3) ? "" : r.GetString(3).Trim();
+                    var mob = r.IsDBNull(4) ? "" : r.GetString(4).Trim();
+
+                    if (!byCode.TryGetValue(code, out var existing))
                     {
-                        Code = r.IsDBNull(0) ? "" : r.GetString(0).Trim(),
-                        Name = r.IsDBNull(1) ? "" : r.GetString(1).Trim()
-                    });
+                        byCode[code] = (name, p1, p2, mob);
+                        continue;
+                    }
+
+                    var hadPhone = !string.IsNullOrWhiteSpace(PickCustomerBranchPhone(existing.P1, existing.P2, existing.Mob));
+                    var newPhone = !string.IsNullOrWhiteSpace(PickCustomerBranchPhone(p1, p2, mob));
+                    if (!hadPhone && newPhone)
+                        byCode[code] = (name, p1, p2, mob);
                 }
+            }
+
+            foreach (var kv in byCode.OrderBy(x => x.Value.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                var phone = PickCustomerBranchPhone(kv.Value.P1, kv.Value.P2, kv.Value.Mob);
+                var companyName = kv.Value.Name;
+                var displayName = string.IsNullOrWhiteSpace(phone)
+                    ? companyName
+                    : $"{companyName} ({phone})";
+
+                customers.Add(new
+                {
+                    Code = kv.Key,
+                    Name = companyName,
+                    DisplayName = displayName
+                });
             }
         }
 
