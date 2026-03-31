@@ -156,12 +156,47 @@ VALUES ('DEFAULT', 'Default Company', 'Welcome', 'Thank you', 1)
         {
             using var conn = _db.Open();
 
-            Log("Checking SL_SODTL.UDF_CLAIMED + SL_SODTL.UDF_PREV_CLAIMED ...");
+            Log("Checking SL_SODTL.UDF_CLAIMED + SL_SODTL.UDF_PREV_CLAIMED + SL_SODTL.UDF_TOTALCLAIMED ...");
 
             EnsureDecimalColumnWithDefaultZero(conn, tableName: "SL_SODTL", columnName: "UDF_CLAIMED");
             EnsureDecimalColumnWithDefaultZero(conn, tableName: "SL_SODTL", columnName: "UDF_PREV_CLAIMED");
+            EnsureDecimalColumnWithDefaultZero(conn, tableName: "SL_SODTL", columnName: "UDF_TOTALCLAIMED");
+
+            ExecNonQuery(conn, @"
+UPDATE SL_SODTL
+SET UDF_TOTALCLAIMED = COALESCE(UDF_PREV_CLAIMED, 0) + COALESCE(UDF_CLAIMED, 0)
+WHERE COALESCE(UDF_TOTALCLAIMED, 0) <> COALESCE(UDF_PREV_CLAIMED, 0) + COALESCE(UDF_CLAIMED, 0)");
 
             Log("SL_SODTL claim columns ensured OK.");
+        }
+
+        // =========================================================
+        // ✅ Keep SL_SODTL.UDF_TOTALCLAIMED synced by trigger
+        // =========================================================
+        public void EnsureSalesOrderDetailClaimTotalTrigger()
+        {
+            using var conn = _db.Open();
+
+            Log("Ensuring trigger BIU_SL_SODTL_TOTALCLAIMED ...");
+
+            EnsureDecimalColumnWithDefaultZero(conn, tableName: "SL_SODTL", columnName: "UDF_CLAIMED");
+            EnsureDecimalColumnWithDefaultZero(conn, tableName: "SL_SODTL", columnName: "UDF_PREV_CLAIMED");
+            EnsureDecimalColumnWithDefaultZero(conn, tableName: "SL_SODTL", columnName: "UDF_TOTALCLAIMED");
+
+            ExecNonQuery(conn, @"
+CREATE OR ALTER TRIGGER BIU_SL_SODTL_TOTALCLAIMED FOR SL_SODTL
+ACTIVE BEFORE INSERT OR UPDATE POSITION 0
+AS
+BEGIN
+    NEW.UDF_TOTALCLAIMED = COALESCE(NEW.UDF_PREV_CLAIMED, 0) + COALESCE(NEW.UDF_CLAIMED, 0);
+END");
+
+            ExecNonQuery(conn, @"
+UPDATE SL_SODTL
+SET UDF_TOTALCLAIMED = COALESCE(UDF_PREV_CLAIMED, 0) + COALESCE(UDF_CLAIMED, 0)
+WHERE COALESCE(UDF_TOTALCLAIMED, 0) <> COALESCE(UDF_PREV_CLAIMED, 0) + COALESCE(UDF_CLAIMED, 0)");
+
+            Log("Trigger BIU_SL_SODTL_TOTALCLAIMED ensured OK.");
         }
 
         // Adds DECIMAL(18,2) DEFAULT 0 and backfills NULLs to 0

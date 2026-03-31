@@ -79,6 +79,7 @@ using (var scope = app.Services.CreateScope())                  //@jasch_04
 
         // ✅ NEW: Sales Order Detail extra fields               //@jasch_04
         init.EnsureSalesOrderDetailClaimColumns();              //@jasch_04
+        init.EnsureSalesOrderDetailClaimTotalTrigger();
 
         // ✅ NEW: Appointment log table for audit/receipts      //@jasch_04
         init.EnsureAppointmentLogTable();                       //@jasch_04
