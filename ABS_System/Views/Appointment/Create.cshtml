@@ -35,16 +35,16 @@
 }
 
 .booking-form {
-  max-width: 420px;
+  max-width: 760px;
   margin: 0 auto;
   background: #f8f9fa;
   border-radius: 12px;
-  padding: 28px 24px 22px;
+  padding: 34px 32px 28px;
   box-shadow: 0 6px 18px rgba(0,0,0,0.08);
   border: 1px solid rgba(0,0,0,0.06);
 }
 
-.booking-form .field-block { margin-bottom: 16px; }
+.booking-form .field-block { margin-bottom: 20px; }
 
 .booking-form label {
   font-weight: 700;
@@ -71,6 +71,47 @@
 .booking-form select:focus {
   border-color: rgba(13,110,253,0.55);
   box-shadow: 0 0 0 0.18rem rgba(13,110,253,0.18);
+}
+
+.customer-picker{
+  position: relative;
+}
+
+.customer-dropdown{
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.18);
+  border-radius: 8px;
+  box-shadow: 0 10px 22px rgba(0,0,0,0.12);
+  display: none;
+  z-index: 1000;
+}
+
+.customer-option{
+  width: 100%;
+  border: none;
+  background: #fff;
+  text-align: left;
+  padding: 9px 11px;
+  cursor: pointer;
+  font-size: 0.96rem;
+}
+
+.customer-option:hover,
+.customer-option.is-selected{
+  background: #e9f2ff;
+}
+
+.customer-empty{
+  display: none;
+  padding: 9px 11px;
+  color: #6c757d;
+  font-size: 0.93rem;
 }
 
 .validation-summary {
@@ -192,17 +233,24 @@
   <div class="field-block two-col">
     <div>
       <label>Customer</label>
-      <select asp-for="CustomerCode" id="CustomerCode">
-        <option value="">-- Select Customer --</option>
-        @if (ViewBag.Customers != null)
-        {
-          foreach (var cust in (List<dynamic>)ViewBag.Customers)
+      <div class="customer-picker" id="CustomerPicker">
+        <input asp-for="CustomerCode" type="hidden" id="CustomerCode" />
+        <input type="text" id="CustomerSearch" placeholder="Select customer" autocomplete="off" />
+        <div class="customer-dropdown" id="CustomerDropdown">
+          @if (ViewBag.Customers != null)
           {
-            var selected = Model.CustomerCode == cust.Code ? "selected" : null;
-            <option value="@cust.Code" selected="@selected">@cust.DisplayName</option>
+            foreach (var cust in (List<dynamic>)ViewBag.Customers)
+            {
+              var isSelected = Model.CustomerCode == cust.Code;
+              <button type="button"
+                      class="customer-option@(isSelected ? " is-selected" : "")"
+                      data-code="@cust.Code"
+                      data-text="@cust.DisplayName">@cust.DisplayName</button>
+            }
           }
-        }
-      </select>
+          <div class="customer-empty" id="CustomerEmpty">No customers found</div>
+        </div>
+      </div>
     </div>
 
     <div>
@@ -287,6 +335,115 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+    }
+
+    function normalizeText(s) {
+      return (s || '').toString().trim().toLowerCase();
+    }
+
+    function initCustomerSearch() {
+      const picker = document.getElementById('CustomerPicker');
+      const searchBox = document.getElementById('CustomerSearch');
+      const custDd = document.getElementById('CustomerCode');
+      const dropdown = document.getElementById('CustomerDropdown');
+      const empty = document.getElementById('CustomerEmpty');
+      if (!picker || !searchBox || !custDd || !dropdown || !empty) return;
+
+      const options = Array.from(dropdown.querySelectorAll('.customer-option')).map(el => ({
+        code: (el.getAttribute('data-code') || '').trim(),
+        text: (el.getAttribute('data-text') || el.textContent || '').trim(),
+        el
+      }));
+
+      let selectedText = '';
+
+      function syncSelectedStyles() {
+        const currentCode = (custDd.value || '').trim().toLowerCase();
+        for (const opt of options) {
+          opt.el.classList.toggle('is-selected', opt.code.toLowerCase() === currentCode);
+        }
+      }
+
+      function setDropdownVisibility(isOpen) {
+        dropdown.style.display = isOpen ? 'block' : 'none';
+      }
+
+      function filterOptions(showAll) {
+        const query = showAll ? '' : normalizeText(searchBox.value);
+        let visibleCount = 0;
+
+        for (const opt of options) {
+          const matches = !query
+            || normalizeText(opt.text).includes(query)
+            || normalizeText(opt.code).includes(query);
+
+          opt.el.style.display = matches ? 'block' : 'none';
+          if (matches) visibleCount++;
+        }
+
+        empty.style.display = visibleCount === 0 ? 'block' : 'none';
+      }
+
+      function closeDropdown() {
+        setDropdownVisibility(false);
+      }
+
+      function openDropdown(showAll) {
+        filterOptions(showAll);
+        setDropdownVisibility(true);
+      }
+
+      function applySelected(code, triggerChange) {
+        const nextCode = (code || '').trim();
+        const previousCode = (custDd.value || '').trim();
+        const selected = options.find(opt => opt.code.toLowerCase() === nextCode.toLowerCase()) || null;
+
+        custDd.value = selected ? selected.code : '';
+        selectedText = selected ? selected.text : '';
+        searchBox.value = selectedText;
+        syncSelectedStyles();
+        closeDropdown();
+
+        if (triggerChange && previousCode !== custDd.value) {
+          custDd.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      }
+
+      const initialCode = (custDd.value || '').trim();
+      applySelected(initialCode, false);
+
+      searchBox.addEventListener('focus', function () {
+        openDropdown(true);
+      });
+
+      searchBox.addEventListener('click', function () {
+        openDropdown(true);
+      });
+
+      searchBox.addEventListener('input', function () {
+        openDropdown(false);
+      });
+
+      searchBox.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          searchBox.value = selectedText;
+          closeDropdown();
+        }
+      });
+
+      for (const opt of options) {
+        opt.el.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          applySelected(opt.code, true);
+        });
+      }
+
+      document.addEventListener('click', function (e) {
+        if (!picker.contains(e.target)) {
+          searchBox.value = selectedText;
+          closeDropdown();
+        }
+      });
     }
 
     function buildSelectHtml(selectedValue) {
@@ -397,6 +554,7 @@
     document.addEventListener('DOMContentLoaded', function () {
       // start
       syncApptStartHidden();
+      initCustomerSearch();
 
       const apptDate = document.getElementById('ApptDate');
       const apptTime = document.getElementById('ApptTime');
