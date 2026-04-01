@@ -1,3 +1,4 @@
+using System.Data.Common;
 using FirebirdSql.Data.FirebirdClient;
 using Microsoft.Extensions.Options;
 using YourApp.Models;
@@ -156,11 +157,35 @@ public sealed class ActivationValidationService : IActivationValidationService
                 TRIM(t.TENANT_CODE),
                 TRIM(t.COMPANY_NAME),
                 TRIM(p.PRODUCT_CODE),
-                TRIM(p.PRODUCT_NAME)
+                TRIM(p.PRODUCT_NAME),
+                TRIM(dbp.DB_SERVER_IP),
+                dbp.DB_PORT,
+                TRIM(dbp.DB_PATH_ENC),
+                TRIM(dbp.DB_USERNAME),
+                TRIM(dbp.DB_PASSWORD_ENC)
             FROM LICENSE_ACTIVATION la
             JOIN LICENSE l ON l.LICENSE_ID = la.LICENSE_ID
             JOIN TENANT t ON t.TENANT_ID = l.TENANT_ID
             JOIN PRODUCT p ON p.PRODUCT_ID = l.PRODUCT_ID
+            LEFT JOIN TENANT_DB_PROFILE dbp
+                ON dbp.TENANT_DB_PROFILE_ID = COALESCE(
+                    l.TENANT_DB_PROFILE_ID,
+                    (SELECT FIRST 1 tdp.TENANT_DB_PROFILE_ID
+                     FROM TENANT_DB_PROFILE tdp
+                     WHERE tdp.TENANT_ID = t.TENANT_ID
+                       AND tdp.IS_DEFAULT = 1
+                       AND tdp.STATUS = 'ACTIVE'
+                     ORDER BY tdp.TENANT_DB_PROFILE_ID),
+                    (SELECT FIRST 1 tdp.TENANT_DB_PROFILE_ID
+                     FROM TENANT_DB_PROFILE tdp
+                     WHERE tdp.TENANT_ID = t.TENANT_ID
+                       AND tdp.STATUS = 'ACTIVE'
+                     ORDER BY tdp.TENANT_DB_PROFILE_ID),
+                    (SELECT FIRST 1 tdp.TENANT_DB_PROFILE_ID
+                     FROM TENANT_DB_PROFILE tdp
+                     WHERE tdp.TENANT_ID = t.TENANT_ID
+                     ORDER BY tdp.TENANT_DB_PROFILE_ID)
+                )
             """;
 
         var whereParts = new List<string>(capacity: 2);
@@ -214,12 +239,34 @@ public sealed class ActivationValidationService : IActivationValidationService
                 return ActivationValidationResult.Fail(
                     "Activation not found or expired. Please activate your system.");
 
+            ClientDatabaseConnectionInfo? clientDb = null;
+            if (!reader.IsDBNull(17))
+            {
+                var dbPath = reader.GetString(17).Trim();
+                if (!string.IsNullOrEmpty(dbPath))
+                {
+                    clientDb = new ClientDatabaseConnectionInfo
+                    {
+                        DatabasePath = dbPath,
+                        DataSource = reader.IsDBNull(15) ? null : reader.GetString(15).Trim(),
+                        Port = ReadNullableInt32(reader, 16),
+                        User = reader.IsDBNull(18) ? null : reader.GetString(18).Trim(),
+                        Password = reader.IsDBNull(19) ? null : reader.GetString(19)
+                    };
+                }
+            }
+
+            if (clientDb == null || string.IsNullOrWhiteSpace(clientDb.DatabasePath))
+                return ActivationValidationResult.Fail(
+                    "No client database profile for this license. Set TENANT_DB_PROFILE.DB_PATH_ENC (and host/port) in the activation database.");
+
             var snap = new ActivationTenantSnapshot
             {
                 TenantCode = reader.IsDBNull(11) ? "" : reader.GetString(11).Trim(),
                 CompanyName = reader.IsDBNull(12) ? "" : reader.GetString(12).Trim(),
                 ProductCode = reader.IsDBNull(13) ? null : reader.GetString(13).Trim(),
-                ProductName = reader.IsDBNull(14) ? null : reader.GetString(14).Trim()
+                ProductName = reader.IsDBNull(14) ? null : reader.GetString(14).Trim(),
+                ClientDatabase = clientDb
             };
             lock (_sync)
                 _activatedTenant = snap;
@@ -250,6 +297,13 @@ public sealed class ActivationValidationService : IActivationValidationService
             Dialect = _opt.Dialect
         };
         return b.ConnectionString;
+    }
+
+    private static int? ReadNullableInt32(DbDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+            return null;
+        return Convert.ToInt32(reader.GetValue(ordinal), System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private static void AddVarcharParameter(FbCommand cmd, string name, string value)

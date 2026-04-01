@@ -2,45 +2,25 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using FirebirdSql.Data.FirebirdClient;
-using Microsoft.Extensions.Configuration;
+using YourApp.Services;
 
 namespace FirebirdWeb.Helpers
 {
     public class DbHelper
     {
-        private readonly string _connectionString;
+        private readonly IClientFirebirdConnectionProvider _clientFirebird;
 
-        // ✅ Read from appsettings.json
-        public DbHelper(IConfiguration config)
+        public DbHelper(IClientFirebirdConnectionProvider clientFirebird)
         {
-            var dbPath  = config["Firebird:Database"];
-            var server  = config["Firebird:Server"] ?? "localhost";
-            var port    = config["Firebird:Port"] ?? "3050";
-            var user    = config["Firebird:User"] ?? "SYSDBA";
-            var pass    = config["Firebird:Password"];
-            var charset = config["Firebird:Charset"] ?? "UTF8";
-
-            if (string.IsNullOrWhiteSpace(dbPath))
-                throw new InvalidOperationException("Firebird:Database is missing in appsettings.json");
-            if (string.IsNullOrWhiteSpace(pass) || pass == "masterkey")
-                throw new InvalidOperationException("Firebird:Password is missing or using insecure default. Please set a strong password in appsettings.json and never use 'masterkey' in production.");
-
-            var dbValue = $"{server}:{dbPath}";
-
-            _connectionString =
-                $"User={user};" +
-                $"Password={pass};" +
-                $"Database={dbValue};" +
-                $"Port={port};" +
-                $"Dialect=3;" +
-                $"Charset={charset};" +
-                $"Pooling=true;";
+            _clientFirebird = clientFirebird;
         }
+
+        private string ConnectionString => _clientFirebird.GetConnectionString();
 
         // Optional: open and return a connection (caller must dispose)
         public FbConnection GetConnection()
         {
-            var conn = new FbConnection(_connectionString);
+            var conn = new FbConnection(ConnectionString);
             conn.Open();
             return conn;
         }
@@ -50,7 +30,7 @@ namespace FirebirdWeb.Helpers
         {
             var results = new List<Dictionary<string, object>>();
 
-            using (var conn = new FbConnection(_connectionString))
+            using (var conn = new FbConnection(ConnectionString))
             {
                 conn.Open();
 
@@ -80,7 +60,7 @@ namespace FirebirdWeb.Helpers
                 // Do not log SQL with sensitive data
                 Console.WriteLine("[DB QUERY] Executing non-query.");
 
-                using (var conn = new FbConnection(_connectionString))
+                using (var conn = new FbConnection(ConnectionString))
                 {
                     conn.Open();
                     Console.WriteLine("[DB] Connection opened successfully");

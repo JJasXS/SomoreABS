@@ -41,7 +41,14 @@ namespace YourApp.Filters
             // Multi-tenant SaaS: detect tenantCode from subdomain, query, or cookie/session
             string tenantCode = DetectTenantCode(http);
 
-            var branding = LoadTenantBranding(tenantCode);
+            // When activation is not valid yet, client Firebird is intentionally unavailable.
+            // Do not query TENANT table in that state; keep the blocked page renderable.
+            var shouldSkipClientDb =
+                _activationOptions.Enabled && !_activation.IsActivationValid;
+
+            var branding = shouldSkipClientDb
+                ? BuildFallbackBranding(tenantCode)
+                : LoadTenantBranding(tenantCode);
             ApplyActivationTenantBranding(branding);
 
             if (context.Controller is Controller controller)
@@ -137,6 +144,18 @@ WHERE UPPER(TENANT_CODE) = @CODE
                 };
             }
 
+            return new TenantBrandingVm
+            {
+                TenantCode = tenantCode,
+                TenantName = "Default Company",
+                HeaderText1 = "Welcome",
+                FooterText1 = "Thank you for using our system."
+            };
+        }
+
+        private static TenantBrandingVm BuildFallbackBranding(string tenantCode)
+        {
+            tenantCode = NormalizeTenantCode(tenantCode);
             return new TenantBrandingVm
             {
                 TenantCode = tenantCode,

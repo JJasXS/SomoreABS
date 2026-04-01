@@ -1,21 +1,22 @@
 using System.Data;
 using FirebirdSql.Data.FirebirdClient;
+using YourApp.Services;
 
 namespace YourApp.Data
 {
     public class FirebirdDb
     {
-        private readonly string _cs;
+        private readonly IClientFirebirdConnectionProvider _connectionProvider;
 
-        public FirebirdDb(IConfiguration config)
+        public FirebirdDb(IClientFirebirdConnectionProvider connectionProvider)
         {
-            _cs = config.GetConnectionString("Firebird") 
-                  ?? throw new Exception("Missing ConnectionStrings:Firebird in appsettings.json");
+            _connectionProvider = connectionProvider;
         }
 
         public FbConnection Open()
         {
-            var conn = new FbConnection(_cs);
+            var cs = _connectionProvider.GetConnectionString();
+            var conn = new FbConnection(cs);
             conn.Open();
             return conn;
         }

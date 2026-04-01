@@ -17,6 +17,20 @@ namespace YourApp.Data
             _db = db;
         }
 
+        /// <summary>Same sequence as Program.cs startup (and after first successful activation from the blocked page).</summary>
+        public void EnsureAllStartupSchemas()
+        {
+            EnsureTenantSchema();
+            EnsureAgentEmailColumn();
+            EnsureAgentUdfBranchColumn();
+            EnsureAgentUdfBranchNoColumn();
+            EnsureAppointmentSchema();
+            EnsureApptSignatureSchema();
+            EnsureSalesOrderDetailClaimColumns();
+            EnsureSalesOrderDetailClaimTotalTrigger();
+            EnsureAppointmentLogTable();
+        }
+
         // =========================================================
         // Logging helper
         // =========================================================

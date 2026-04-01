@@ -43,6 +43,10 @@ builder.Services.AddDbContext<AppDbContext>(options =>          //@jasch_04
 // ✅ Existing helper                                           //@jasch_04
 builder.Services.AddSingleton<DbHelper>();                      //@jasch_04
 
+// ✅ Client Firebird: path from TENANT_DB_PROFILE when Activation is enabled; else ConnectionStrings:Firebird / Firebird:
+builder.Services.Configure<ClientFirebirdOptions>(builder.Configuration.GetSection(ClientFirebirdOptions.SectionName));
+builder.Services.AddSingleton<IClientFirebirdConnectionProvider, ClientFirebirdConnectionProvider>();
+
 // ✅ Firebird helper + schema initializer                       //@jasch_04
 builder.Services.AddSingleton<FirebirdDb>();                    //@jasch_04
 builder.Services.AddSingleton<DbInitializer>();                 //@jasch_04
@@ -63,53 +67,45 @@ using (var activationScope = app.Services.CreateScope())
 // =========================                                   //@jasch_04
 // Firebird schema init (runs once at startup)                  //@jasch_04
 // =========================                                   //@jasch_04
-using (var scope = app.Services.CreateScope())                  //@jasch_04
-{                                                               //@jasch_04
-    var init = scope.ServiceProvider.GetRequiredService<DbInitializer>(); //@jasch_04
+{
+    var activationEnabled = app.Configuration.GetValue<bool>("Activation:Enabled");
+    using var activationScope = app.Services.CreateScope();
+    var activation = activationScope.ServiceProvider.GetRequiredService<IActivationValidationService>();
+    var skipClientDbInit = activationEnabled && !activation.IsActivationValid;
 
-    Console.WriteLine("===================================================="); //@jasch_04
-    Console.WriteLine("[DBINIT] Firebird schema init starting...");        //@jasch_04
-    Console.WriteLine("===================================================="); //@jasch_04
+    if (skipClientDbInit)
+    {
+        Console.WriteLine("====================================================");
+        Console.WriteLine("[DBINIT] Skipped: activation is enabled but not yet valid (no client Firebird path).");
+        Console.WriteLine("====================================================");
+    }
+    else
+    {
+        using var scope = app.Services.CreateScope();
+        var init = scope.ServiceProvider.GetRequiredService<DbInitializer>();
 
-    try                                                        //@jasch_04
-    {                                                          //@jasch_04
+        Console.WriteLine("====================================================");
+        Console.WriteLine("[DBINIT] Firebird schema init starting...");
+        Console.WriteLine("====================================================");
 
-        // Branding / company header-footer                     //@jasch_04
-        init.EnsureTenantSchema();                              //@jasch_04
+        try
+        {
+            init.EnsureAllStartupSchemas();
 
-        // Columns / master tables                              //@jasch_04
-        init.EnsureAgentEmailColumn();                          //@jasch_04
-
-        // Branch filtering columns
-        init.EnsureAgentUdfBranchColumn();
-        init.EnsureAgentUdfBranchNoColumn();
-
-        // Appointment + detail table                            //@jasch_04
-        init.EnsureAppointmentSchema();                         //@jasch_04
-
-        // ✅ Customer signature proof table                     //@jasch_04
-        init.EnsureApptSignatureSchema();                       //@jasch_04
-
-        // ✅ NEW: Sales Order Detail extra fields               //@jasch_04
-        init.EnsureSalesOrderDetailClaimColumns();              //@jasch_04
-        init.EnsureSalesOrderDetailClaimTotalTrigger();
-
-        // ✅ NEW: Appointment log table for audit/receipts      //@jasch_04
-        init.EnsureAppointmentLogTable();                       //@jasch_04
-
-        Console.WriteLine("===================================================="); //@jasch_04
-        Console.WriteLine("[DBINIT] ✅ Firebird schema ensured successfully."); //@jasch_04
-        Console.WriteLine("===================================================="); //@jasch_04
-    }                                                          //@jasch_04
-    catch (Exception ex)                                       //@jasch_04
-    {                                                          //@jasch_04
-        Console.WriteLine("===================================================="); //@jasch_04
-        Console.WriteLine("[DBINIT] ❌ Firebird schema init FAILED:");          //@jasch_04
-        Console.WriteLine(ex.ToString());                        //@jasch_04
-        Console.WriteLine("===================================================="); //@jasch_04
-        throw;                                                   //@jasch_04
-    }                                                          //@jasch_04
-}                                                               //@jasch_04
+            Console.WriteLine("====================================================");
+            Console.WriteLine("[DBINIT] ✅ Firebird schema ensured successfully.");
+            Console.WriteLine("====================================================");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("====================================================");
+            Console.WriteLine("[DBINIT] ❌ Firebird schema init FAILED:");
+            Console.WriteLine(ex.ToString());
+            Console.WriteLine("====================================================");
+            throw;
+        }
+    }
+}
 
 // =========================                                   //@jasch_04
 // Middleware pipeline                                          //@jasch_04
