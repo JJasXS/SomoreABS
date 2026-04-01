@@ -1,0 +1,35 @@
+@{
+    ViewData["Title"] = "Activation required";
+    var msg = ViewBag.Message as string ?? "Activation not found or expired. Please activate your system.";
+    var showForm = ViewBag.ShowActivationForm as bool? ?? true;
+}
+
+<div class="container flex-fill d-flex align-items-center justify-content-center py-5">
+    <div class="card shadow border-0" style="max-width: 520px; width: 100%; border-radius: 16px;">
+        <div class="card-body p-4 p-md-5 text-center">
+            <h1 class="h4 mb-3" style="font-weight: 800;">Activation required</h1>
+            <p class="text-danger mb-0" style="font-size: 1.05rem;">@msg</p>
+
+            @if (showForm)
+            {
+                <form asp-controller="Activation" asp-action="Submit" method="post" class="text-start mt-4">
+                    <label for="activationCode" class="form-label small text-muted mb-1">Activation code</label>
+                    <input type="text"
+                           class="form-control form-control-lg"
+                           id="activationCode"
+                           name="activationCode"
+                           value=""
+                           autocomplete="off"
+                           placeholder="Enter your activation code"
+                           autofocus />
+                    <button type="submit" class="btn btn-primary w-100 mt-3">Activate</button>
+                </form>
+            }
+
+            <hr class="my-4" />
+            <p class="text-muted small mb-0">
+                Optional: set <code>Activation:ActivationCode</code> in <code>appsettings.json</code> so the app activates automatically on restart (no need to enter the code each time).
+            </p>
+        </div>
+    </div>
+</div>

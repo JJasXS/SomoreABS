@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;                 //@jasch_04
 using YourApp.Data;                                  //@jasch_04 // AppDbContext + FirebirdDb + DbInitializer
+using YourApp.Middleware;                            // activation gate
+using YourApp.Services;                              // activation validation
 using FirebirdWeb.Helpers;                           //@jasch_04 // DbHelper
 using Microsoft.AspNetCore.Authentication.Cookies;   //@jasch_04
 using QuestPDF.Infrastructure;                       //@jasch_04
@@ -45,7 +47,18 @@ builder.Services.AddSingleton<DbHelper>();                      //@jasch_04
 builder.Services.AddSingleton<FirebirdDb>();                    //@jasch_04
 builder.Services.AddSingleton<DbInitializer>();                 //@jasch_04
 
+// ✅ License activation (ACTIVATION.FDB — separate from main Firebird DB)
+builder.Services.Configure<ActivationOptions>(builder.Configuration.GetSection(ActivationOptions.SectionName));
+builder.Services.AddSingleton<IActivationValidationService, ActivationValidationService>();
+
 var app = builder.Build();                                      //@jasch_04
+
+// Validate activation once at startup (cached for process lifetime)
+using (var activationScope = app.Services.CreateScope())
+{
+    var activation = activationScope.ServiceProvider.GetRequiredService<IActivationValidationService>();
+    activation.ValidateAsync().GetAwaiter().GetResult();
+}
 
 // =========================                                   //@jasch_04
 // Firebird schema init (runs once at startup)                  //@jasch_04
@@ -112,6 +125,7 @@ app.UseStaticFiles();                                           //@jasch_04
 
 
 app.UseRouting();                                               //@jasch_04
+app.UseMiddleware<ActivationGateMiddleware>();
 app.UseSession();                                               //@jasch_04
 
 app.UseAuthentication();                                        //@jasch_04
