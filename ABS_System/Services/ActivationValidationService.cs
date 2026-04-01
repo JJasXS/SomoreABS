@@ -1,5 +1,6 @@
 using FirebirdSql.Data.FirebirdClient;
 using Microsoft.Extensions.Options;
+using YourApp.Models;
 
 namespace YourApp.Services;
 
@@ -13,6 +14,7 @@ public sealed class ActivationValidationService : IActivationValidationService
     private readonly object _sync = new();
     private ActivationValidationResult? _cached;
     private bool _validated;
+    private ActivationTenantSnapshot? _activatedTenant;
 
     public ActivationValidationService(IOptions<ActivationOptions> options, ILogger<ActivationValidationService> log)
     {
@@ -26,6 +28,15 @@ public sealed class ActivationValidationService : IActivationValidationService
     public string? LastFailureMessage =>
         _validated && _cached?.Success == false ? _cached.Message : null;
 
+    public ActivationTenantSnapshot? ActivatedTenant
+    {
+        get
+        {
+            lock (_sync)
+                return _activatedTenant;
+        }
+    }
+
     public async Task<ActivationValidationResult> ValidateAsync(CancellationToken cancellationToken = default)
     {
         if (!_opt.Enabled)
@@ -35,6 +46,7 @@ public sealed class ActivationValidationService : IActivationValidationService
             {
                 _cached = ok;
                 _validated = true;
+                _activatedTenant = null;
             }
             return ok;
         }
@@ -72,6 +84,7 @@ public sealed class ActivationValidationService : IActivationValidationService
             {
                 _cached = ok;
                 _validated = true;
+                _activatedTenant = null;
             }
             return ok;
         }
@@ -102,6 +115,9 @@ public sealed class ActivationValidationService : IActivationValidationService
         if (string.IsNullOrEmpty(code) && string.IsNullOrEmpty(fingerprint))
             return ActivationValidationResult.Fail(
                 "Activation is not configured: set Activation:ActivationCode or Activation:MachineFingerprint.");
+
+        lock (_sync)
+            _activatedTenant = null;
 
         string cs;
         try
@@ -197,6 +213,16 @@ public sealed class ActivationValidationService : IActivationValidationService
             if (endDate.HasValue && today > endDate.Value.Date)
                 return ActivationValidationResult.Fail(
                     "Activation not found or expired. Please activate your system.");
+
+            var snap = new ActivationTenantSnapshot
+            {
+                TenantCode = reader.IsDBNull(11) ? "" : reader.GetString(11).Trim(),
+                CompanyName = reader.IsDBNull(12) ? "" : reader.GetString(12).Trim(),
+                ProductCode = reader.IsDBNull(13) ? null : reader.GetString(13).Trim(),
+                ProductName = reader.IsDBNull(14) ? null : reader.GetString(14).Trim()
+            };
+            lock (_sync)
+                _activatedTenant = snap;
 
             return ActivationValidationResult.Ok();
         }

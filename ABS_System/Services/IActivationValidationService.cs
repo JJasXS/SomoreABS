@@ -1,9 +1,14 @@
+using YourApp.Models;
+
 namespace YourApp.Services;
 
 public interface IActivationValidationService
 {
     /// <summary>True when gate is disabled or last validation succeeded.</summary>
     bool IsActivationValid { get; }
+
+    /// <summary>Tenant/product from the activation DB after the last successful validation; null if none.</summary>
+    ActivationTenantSnapshot? ActivatedTenant { get; }
 
     /// <summary>Human-readable reason when invalid (or empty if valid / disabled).</summary>
     string? LastFailureMessage { get; }

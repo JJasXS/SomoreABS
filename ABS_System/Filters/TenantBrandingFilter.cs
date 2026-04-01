@@ -3,9 +3,11 @@ using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.Extensions.Options;
 using FirebirdSql.Data.FirebirdClient;
 using YourApp.Data;
 using YourApp.Models;
+using YourApp.Services;
 
 namespace YourApp.Filters
 {
@@ -14,15 +16,22 @@ namespace YourApp.Filters
     public class TenantBrandingFilter : IActionFilter
     {
         private readonly FirebirdDb _db;
+        private readonly IActivationValidationService _activation;
+        private readonly ActivationOptions _activationOptions;
         private static string NormalizeTenantCode(string? code)
         {
             code = (code ?? "").Trim();
             return string.IsNullOrEmpty(code) ? "DEFAULT" : code.ToUpperInvariant();
         }
 
-        public TenantBrandingFilter(FirebirdDb db)
+        public TenantBrandingFilter(
+            FirebirdDb db,
+            IActivationValidationService activation,
+            IOptions<ActivationOptions> activationOptions)
         {
             _db = db;
+            _activation = activation;
+            _activationOptions = activationOptions.Value;
         }
 
         public void OnActionExecuting(ActionExecutingContext context)
@@ -33,6 +42,7 @@ namespace YourApp.Filters
             string tenantCode = DetectTenantCode(http);
 
             var branding = LoadTenantBranding(tenantCode);
+            ApplyActivationTenantBranding(branding);
 
             if (context.Controller is Controller controller)
             {
@@ -134,6 +144,27 @@ WHERE UPPER(TENANT_CODE) = @CODE
                 HeaderText1 = "Welcome",
                 FooterText1 = "Thank you for using our system."
             };
+        }
+
+        /// <summary>
+        /// When license activation is valid, show TENANT.COMPANY_NAME (and code) from ACTIVATION.FDB on the header/login instead of the main DB default.
+        /// </summary>
+        private void ApplyActivationTenantBranding(TenantBrandingVm branding)
+        {
+            if (!_activationOptions.Enabled || !_activation.IsActivationValid)
+                return;
+
+            var snap = _activation.ActivatedTenant;
+            if (snap == null)
+                return;
+
+            if (!string.IsNullOrWhiteSpace(snap.CompanyName))
+                branding.TenantName = snap.CompanyName;
+            else if (!string.IsNullOrWhiteSpace(snap.TenantCode))
+                branding.TenantName = snap.TenantCode;
+
+            if (!string.IsNullOrWhiteSpace(snap.TenantCode))
+                branding.TenantCode = snap.TenantCode;
         }
     }
 }
