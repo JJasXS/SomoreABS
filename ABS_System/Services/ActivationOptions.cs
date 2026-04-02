@@ -16,16 +16,21 @@ public class ActivationOptions
         @"C:\eStream\SQLAccounting\DB\ACTIVATION.FDB";
 
     public string User { get; set; } = "SYSDBA";
-    public string Password { get; set; } = "masterkey";
+
+    /// <summary>Firebird password. Prefer environment variable <c>Activation__Password</c> or User Secrets — do not commit real passwords.</summary>
+    public string Password { get; set; } = "";
     public int Dialect { get; set; } = 3;
     public string Charset { get; set; } = "UTF8";
 
     /// <summary>Optional: full Firebird connection string. If set, Server/Port/Database/User/Password are ignored.</summary>
     public string? ConnectionString { get; set; }
 
-    /// <summary>Activation code to match LICENSE_ACTIVATION.ACTIVATION_CODE (trimmed).</summary>
+    /// <summary>Activation code to match LICENSE_ACTIVATION.ACTIVATION_CODE (trimmed). Requires <see cref="MachineFingerprint"/> when set.</summary>
     public string? ActivationCode { get; set; }
 
-    /// <summary>Optional: match LICENSE_ACTIVATION.MACHINE_FINGERPRINT if ActivationCode is not used.</summary>
+    /// <summary>
+    /// Machine identity for this deployment (must match LICENSE_ACTIVATION.MACHINE_FINGERPRINT when validating by code).
+    /// Fingerprint-only activation is supported when <see cref="ActivationCode"/> is empty.
+    /// </summary>
     public string? MachineFingerprint { get; set; }
 }

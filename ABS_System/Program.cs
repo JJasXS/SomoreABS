@@ -57,7 +57,7 @@ builder.Services.AddSingleton<IActivationValidationService, ActivationValidation
 
 var app = builder.Build();                                      //@jasch_04
 
-// Validate activation once at startup (cached for process lifetime)
+// Validate activation at startup (same rules as per-request gate; refreshes snapshot)
 using (var activationScope = app.Services.CreateScope())
 {
     var activation = activationScope.ServiceProvider.GetRequiredService<IActivationValidationService>();

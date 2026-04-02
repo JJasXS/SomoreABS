@@ -17,7 +17,15 @@ public sealed class ActivationGateMiddleware
 
     public async Task InvokeAsync(HttpContext context, IActivationValidationService activation)
     {
-        if (!_opt.Enabled || activation.IsActivationValid)
+        if (!_opt.Enabled)
+        {
+            await _next(context);
+            return;
+        }
+
+        // Revalidate every request (ActivationValidationService re-queries ACTIVATION.FDB; no stale cache).
+        await activation.ValidateAsync(context.RequestAborted).ConfigureAwait(false);
+        if (activation.IsActivationValid)
         {
             await _next(context);
             return;

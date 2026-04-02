@@ -28,7 +28,9 @@
 
             <hr class="my-4" />
             <p class="text-muted small mb-0">
-                Optional: set <code>Activation:ActivationCode</code> in <code>appsettings.json</code> so the app activates automatically on restart (no need to enter the code each time).
+                Configure <code>Activation:MachineFingerprint</code> (must match <code>LICENSE_ACTIVATION.MACHINE_FINGERPRINT</code>) and optionally
+                <code>Activation:ActivationCode</code> in appsettings, User Secrets, or environment variables so the app can activate automatically after restart.
+                Database passwords must not be committed — use <code>Activation__Password</code> and <code>Firebird__Password</code> environment variables or User Secrets.
             </p>
         </div>
     </div>

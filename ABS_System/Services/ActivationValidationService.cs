@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Globalization;
 using FirebirdSql.Data.FirebirdClient;
 using Microsoft.Extensions.Options;
 using YourApp.Models;
@@ -50,12 +51,6 @@ public sealed class ActivationValidationService : IActivationValidationService
                 _activatedTenant = null;
             }
             return ok;
-        }
-
-        lock (_sync)
-        {
-            if (_validated && _cached != null)
-                return _cached;
         }
 
         var code = (_opt.ActivationCode ?? "").Trim();
@@ -117,6 +112,10 @@ public sealed class ActivationValidationService : IActivationValidationService
             return ActivationValidationResult.Fail(
                 "Activation is not configured: set Activation:ActivationCode or Activation:MachineFingerprint.");
 
+        if (!string.IsNullOrEmpty(code) && string.IsNullOrEmpty(fingerprint))
+            return ActivationValidationResult.Fail(
+                "Machine fingerprint is required. Set Activation:MachineFingerprint to match LICENSE_ACTIVATION.MACHINE_FINGERPRINT for this deployment.");
+
         lock (_sync)
             _activatedTenant = null;
 
@@ -141,6 +140,9 @@ public sealed class ActivationValidationService : IActivationValidationService
                 $"Cannot connect to activation database: {ex.Message}");
         }
 
+        const string tenantMayActivate =
+            "AND (t.STATUS IS NULL OR UPPER(TRIM(t.STATUS)) = 'ACTIVE')";
+
         var sql = """
             SELECT
                 la.LICENSE_ACTIVATION_ID,
@@ -154,15 +156,20 @@ public sealed class ActivationValidationService : IActivationValidationService
                 TRIM(l.STATUS),
                 l.START_DATE,
                 l.END_DATE,
+                l.MAX_DEVICE_COUNT,
                 TRIM(t.TENANT_CODE),
                 TRIM(t.COMPANY_NAME),
                 TRIM(p.PRODUCT_CODE),
                 TRIM(p.PRODUCT_NAME),
                 TRIM(dbp.DB_SERVER_IP),
                 dbp.DB_PORT,
+                TRIM(dbp.DB_NAME),
+                TRIM(dbp.DB_FILE_REF),
                 TRIM(dbp.DB_PATH_ENC),
                 TRIM(dbp.DB_USERNAME),
-                TRIM(dbp.DB_PASSWORD_ENC)
+                TRIM(dbp.DB_PASSWORD_ENC),
+                CURRENT_TIMESTAMP,
+                CURRENT_DATE
             FROM LICENSE_ACTIVATION la
             JOIN LICENSE l ON l.LICENSE_ID = la.LICENSE_ID
             JOIN TENANT t ON t.TENANT_ID = l.TENANT_ID
@@ -188,88 +195,116 @@ public sealed class ActivationValidationService : IActivationValidationService
                 )
             """;
 
-        var whereParts = new List<string>(capacity: 2);
         if (!string.IsNullOrEmpty(code))
-            whereParts.Add("TRIM(la.ACTIVATION_CODE) = @code");
-        if (!string.IsNullOrEmpty(fingerprint))
-            whereParts.Add("TRIM(la.MACHINE_FINGERPRINT) = @fp");
-
-        sql += "\nWHERE " + string.Join("\n   OR ", whereParts);
+            sql += $"\nWHERE TRIM(la.ACTIVATION_CODE) = @code AND TRIM(la.MACHINE_FINGERPRINT) = @fp {tenantMayActivate}";
+        else
+            sql += $"\nWHERE TRIM(la.MACHINE_FINGERPRINT) = @fp {tenantMayActivate}";
 
         await using var cmd = new FbCommand(sql, conn);
         if (!string.IsNullOrEmpty(code))
             AddVarcharParameter(cmd, "@code", code);
-        if (!string.IsNullOrEmpty(fingerprint))
-            AddVarcharParameter(cmd, "@fp", fingerprint);
+        AddVarcharParameter(cmd, "@fp", fingerprint);
 
         try
         {
-            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            int licenseId;
+            int? maxDeviceCount;
 
-            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                return ActivationValidationResult.Fail(
-                    "Activation not found or expired. Please activate your system.");
-
-            var activationStatus = reader.IsDBNull(6) ? "" : reader.GetString(6);
-            var licenseStatus = reader.IsDBNull(8) ? "" : reader.GetString(8);
-            var expiredOn = reader.IsDBNull(5) ? (DateTime?)null : reader.GetDateTime(5);
-            var startDate = reader.IsDBNull(9) ? (DateTime?)null : reader.GetDateTime(9);
-            var endDate = reader.IsDBNull(10) ? (DateTime?)null : reader.GetDateTime(10);
-
-            var now = DateTime.UtcNow;
-            var today = DateTime.UtcNow.Date;
-
-            if (!string.Equals(activationStatus, "ACTIVE", StringComparison.OrdinalIgnoreCase))
-                return ActivationValidationResult.Fail(
-                    "Activation not found or expired. Please activate your system.");
-
-            if (!string.Equals(licenseStatus, "ACTIVE", StringComparison.OrdinalIgnoreCase))
-                return ActivationValidationResult.Fail(
-                    "Activation not found or expired. Please activate your system.");
-
-            if (expiredOn.HasValue && now > expiredOn.Value)
-                return ActivationValidationResult.Fail(
-                    "Activation not found or expired. Please activate your system.");
-
-            if (startDate.HasValue && today < startDate.Value.Date)
-                return ActivationValidationResult.Fail(
-                    "Activation not found or expired. Please activate your system.");
-
-            if (endDate.HasValue && today > endDate.Value.Date)
-                return ActivationValidationResult.Fail(
-                    "Activation not found or expired. Please activate your system.");
-
-            ClientDatabaseConnectionInfo? clientDb = null;
-            if (!reader.IsDBNull(17))
+            await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
             {
-                var dbPath = reader.GetString(17).Trim();
-                if (!string.IsNullOrEmpty(dbPath))
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    return ActivationValidationResult.Fail(
+                        "Activation not found or expired. Please activate your system.");
+
+                licenseId = reader.GetInt32(1);
+                maxDeviceCount = reader.IsDBNull(11) ? null : Convert.ToInt32(reader.GetValue(11), CultureInfo.InvariantCulture);
+
+                var activationStatus = reader.IsDBNull(6) ? "" : reader.GetString(6);
+                var licenseStatus = reader.IsDBNull(8) ? "" : reader.GetString(8);
+                var expiredOn = reader.IsDBNull(5) ? (DateTime?)null : reader.GetDateTime(5);
+                var startDate = reader.IsDBNull(9) ? (DateTime?)null : reader.GetDateTime(9);
+                var endDate = reader.IsDBNull(10) ? (DateTime?)null : reader.GetDateTime(10);
+
+                var now = reader.IsDBNull(23) ? DateTime.Now : reader.GetDateTime(23);
+                var today = reader.IsDBNull(24) ? DateTime.Today : reader.GetDateTime(24).Date;
+
+                if (expiredOn.HasValue && now >= expiredOn.Value)
+                    return ActivationValidationResult.Fail(
+                        $"Activation expired on {expiredOn.Value:yyyy-MM-dd HH:mm:ss}.");
+
+                if (startDate.HasValue && today < startDate.Value.Date)
+                    return ActivationValidationResult.Fail(
+                        $"License starts on {startDate.Value:yyyy-MM-dd}.");
+
+                if (endDate.HasValue && today >= endDate.Value.Date)
+                    return ActivationValidationResult.Fail(
+                        $"License expired on {endDate.Value:yyyy-MM-dd}.");
+
+                if (!string.Equals(activationStatus, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+                    return ActivationValidationResult.Fail(
+                        DescribeStatusFailure("Activation", activationStatus, expiredOn));
+
+                if (!string.Equals(licenseStatus, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+                    return ActivationValidationResult.Fail(
+                        DescribeStatusFailure("License", licenseStatus, endDate));
+
+                var dbName = reader.IsDBNull(18) ? null : reader.GetString(18).Trim();
+                var dbFileRef = reader.IsDBNull(19) ? null : reader.GetString(19).Trim();
+                var dbPath = reader.IsDBNull(20) ? null : reader.GetString(20).Trim();
+                var dbTarget = FirstNonEmpty(dbFileRef, dbName, dbPath);
+
+                ClientDatabaseConnectionInfo? clientDb = null;
+                if (!string.IsNullOrEmpty(dbTarget))
                 {
                     clientDb = new ClientDatabaseConnectionInfo
                     {
-                        DatabasePath = dbPath,
-                        DataSource = reader.IsDBNull(15) ? null : reader.GetString(15).Trim(),
-                        Port = ReadNullableInt32(reader, 16),
-                        User = reader.IsDBNull(18) ? null : reader.GetString(18).Trim(),
-                        Password = reader.IsDBNull(19) ? null : reader.GetString(19)
+                        DatabasePath = dbTarget,
+                        DataSource = reader.IsDBNull(16) ? null : reader.GetString(16).Trim(),
+                        Port = ReadNullableInt32(reader, 17),
+                        User = reader.IsDBNull(21) ? null : reader.GetString(21).Trim(),
+                        Password = reader.IsDBNull(22) ? null : reader.GetString(22)
                     };
                 }
+
+                if (clientDb == null || string.IsNullOrWhiteSpace(clientDb.DatabasePath))
+                    return ActivationValidationResult.Fail(
+                        "No client database target for this license. Set TENANT_DB_PROFILE.DB_FILE_REF (or DB_NAME / DB_PATH_ENC), plus host/port, in the activation database.");
+
+                var snap = new ActivationTenantSnapshot
+                {
+                    TenantCode = reader.IsDBNull(12) ? "" : reader.GetString(12).Trim(),
+                    CompanyName = reader.IsDBNull(13) ? "" : reader.GetString(13).Trim(),
+                    ProductCode = reader.IsDBNull(14) ? null : reader.GetString(14).Trim(),
+                    ProductName = reader.IsDBNull(15) ? null : reader.GetString(15).Trim(),
+                    ClientDatabase = clientDb
+                };
+                lock (_sync)
+                    _activatedTenant = snap;
             }
 
-            if (clientDb == null || string.IsNullOrWhiteSpace(clientDb.DatabasePath))
-                return ActivationValidationResult.Fail(
-                    "No client database profile for this license. Set TENANT_DB_PROFILE.DB_PATH_ENC (and host/port) in the activation database.");
-
-            var snap = new ActivationTenantSnapshot
+            if (maxDeviceCount.HasValue && maxDeviceCount.Value > 0)
             {
-                TenantCode = reader.IsDBNull(11) ? "" : reader.GetString(11).Trim(),
-                CompanyName = reader.IsDBNull(12) ? "" : reader.GetString(12).Trim(),
-                ProductCode = reader.IsDBNull(13) ? null : reader.GetString(13).Trim(),
-                ProductName = reader.IsDBNull(14) ? null : reader.GetString(14).Trim(),
-                ClientDatabase = clientDb
-            };
-            lock (_sync)
-                _activatedTenant = snap;
+                await using var countCmd = new FbCommand(
+                    """
+                    SELECT COUNT(*)
+                    FROM LICENSE_ACTIVATION
+                    WHERE LICENSE_ID = @lid
+                      AND UPPER(TRIM(STATUS)) = 'ACTIVE'
+                    """,
+                    conn);
+                countCmd.Parameters.Add(new FbParameter("@lid", FbDbType.Integer) { Value = licenseId });
+                var activeCountObj = await countCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                var activeCount = Convert.ToInt64(activeCountObj, CultureInfo.InvariantCulture);
+                if (activeCount > maxDeviceCount.Value)
+                {
+                    lock (_sync)
+                        _activatedTenant = null;
+                    return ActivationValidationResult.Fail(
+                        string.Format(CultureInfo.InvariantCulture,
+                            "This license allows at most {0} active device(s); the activation database reports {1}.",
+                            maxDeviceCount.Value, activeCount));
+                }
+            }
 
             return ActivationValidationResult.Ok();
         }
@@ -303,12 +338,33 @@ public sealed class ActivationValidationService : IActivationValidationService
     {
         if (reader.IsDBNull(ordinal))
             return null;
-        return Convert.ToInt32(reader.GetValue(ordinal), System.Globalization.CultureInfo.InvariantCulture);
+        return Convert.ToInt32(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                return value.Trim();
+        }
+        return null;
+    }
+
+    private static string DescribeStatusFailure(string label, string? status, DateTime? relevantDate)
+    {
+        status = (status ?? "").Trim();
+        if (string.Equals(status, "EXPIRED", StringComparison.OrdinalIgnoreCase) && relevantDate.HasValue)
+            return $"{label} expired on {relevantDate.Value:yyyy-MM-dd}.";
+        if (string.Equals(status, "PENDING", StringComparison.OrdinalIgnoreCase) && relevantDate.HasValue)
+            return $"{label} starts on {relevantDate.Value:yyyy-MM-dd}.";
+        if (string.IsNullOrWhiteSpace(status))
+            return $"{label} is not active.";
+        return $"{label} status is {status}.";
     }
 
     private static void AddVarcharParameter(FbCommand cmd, string name, string value)
     {
-        // Default FbParameter(string, object) uses a tiny buffer; long activation codes then fail with string right truncation.
         var p = new FbParameter(name, FbDbType.VarChar, FirebirdVarcharMax)
         {
             Value = value
