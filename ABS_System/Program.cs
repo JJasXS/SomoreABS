@@ -45,8 +45,11 @@ builder.Services.AddAuthorization();                            //@jasch_04
 builder.Services.AddSession();                                  //@jasch_04
 
 // ✅ SQL Server (EF Core)                                      //@jasch_04
-builder.Services.AddDbContext<AppDbContext>(options =>          //@jasch_04
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))); //@jasch_04
+var sqlConn = builder.Configuration.GetConnectionString("DefaultConnection");
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(sqlConn)); //@jasch_04
+builder.Services.AddDbContextFactory<AppDbContext>(options =>
+    options.UseSqlServer(sqlConn)); // activation fingerprint persistence (singleton service)
 
 // ✅ Existing helper                                           //@jasch_04
 builder.Services.AddSingleton<DbHelper>();                      //@jasch_04

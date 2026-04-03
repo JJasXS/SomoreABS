@@ -21,4 +21,9 @@ public interface IActivationValidationService
     /// On success, updates the last validation result so the activation gate allows access.
     /// </summary>
     Task<ActivationValidationResult> ValidateSubmittedCodeAsync(string? activationCode, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the machine fingerprint used for activation (config, SQL-persisted, or auto-computed). Empty if unavailable.
+    /// </summary>
+    Task<string> GetMachineFingerprintForDisplayAsync(CancellationToken cancellationToken = default);
 }

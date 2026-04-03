@@ -1,7 +1,10 @@
 using System.Data.Common;
 using System.Globalization;
+using System.Threading;
 using FirebirdSql.Data.FirebirdClient;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using YourApp.Data;
 using YourApp.Models;
 
 namespace YourApp.Services;
@@ -13,15 +16,22 @@ public sealed class ActivationValidationService : IActivationValidationService
 
     private readonly ActivationOptions _opt;
     private readonly ILogger<ActivationValidationService> _log;
+    private readonly IDbContextFactory<AppDbContext> _dbFactory;
     private readonly object _sync = new();
+    private readonly SemaphoreSlim _localDeploymentSchemaGate = new(1, 1);
+    private int _localDeploymentTableEnsured;
     private ActivationValidationResult? _cached;
     private bool _validated;
     private ActivationTenantSnapshot? _activatedTenant;
 
-    public ActivationValidationService(IOptions<ActivationOptions> options, ILogger<ActivationValidationService> log)
+    public ActivationValidationService(
+        IOptions<ActivationOptions> options,
+        ILogger<ActivationValidationService> log,
+        IDbContextFactory<AppDbContext> dbFactory)
     {
         _opt = options.Value;
         _log = log;
+        _dbFactory = dbFactory;
     }
 
     public bool IsActivationValid =>
@@ -54,7 +64,7 @@ public sealed class ActivationValidationService : IActivationValidationService
         }
 
         var code = (_opt.ActivationCode ?? "").Trim();
-        var fp = ResolveMachineFingerprint();
+        var fp = await ResolveMachineFingerprintAsync(cancellationToken).ConfigureAwait(false);
         var result = await ValidateCoreAsync(code, fp, cancellationToken).ConfigureAwait(false);
 
         lock (_sync)
@@ -86,7 +96,7 @@ public sealed class ActivationValidationService : IActivationValidationService
         }
 
         var code = (activationCode ?? "").Trim();
-        var fp = ResolveMachineFingerprint();
+        var fp = await ResolveMachineFingerprintAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrEmpty(code) && string.IsNullOrEmpty(fp))
             return ActivationValidationResult.Fail("Enter your activation code.");
 
@@ -106,20 +116,109 @@ public sealed class ActivationValidationService : IActivationValidationService
         return result;
     }
 
-    private string ResolveMachineFingerprint()
+    public Task<string> GetMachineFingerprintForDisplayAsync(CancellationToken cancellationToken = default) =>
+        ResolveMachineFingerprintAsync(cancellationToken);
+
+    private async Task<string> ResolveMachineFingerprintAsync(CancellationToken cancellationToken)
     {
         var manual = (_opt.MachineFingerprint ?? "").Trim().ToUpperInvariant();
         if (!string.IsNullOrEmpty(manual))
             return manual;
 
+        if (_opt.PersistMachineFingerprintInSqlServer)
+        {
+            try
+            {
+                var persisted = await GetOrCreatePersistedFingerprintAsync(cancellationToken).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(persisted))
+                {
+                    _log.LogInformation(
+                        "Activation using machine fingerprint from SQL Server (LocalDeploymentInfo).");
+                    return persisted;
+                }
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex,
+                    "Could not read or save machine fingerprint in SQL Server; falling back to auto-compute if enabled.");
+            }
+        }
+
         if (_opt.UseAutoMachineFingerprint)
         {
             var auto = MachineFingerprint.Compute().ToUpperInvariant();
-            _log.LogInformation("Activation using auto-computed machine fingerprint (Activation:MachineFingerprint is empty).");
+            _log.LogInformation(
+                "Activation using auto-computed machine fingerprint (Activation:MachineFingerprint is empty).");
             return auto;
         }
 
         return "";
+    }
+
+    private async Task<string> GetOrCreatePersistedFingerprintAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        await EnsureLocalDeploymentTableAsync(db, cancellationToken).ConfigureAwait(false);
+
+        var tracked = await db.LocalDeploymentInfos
+            .FirstOrDefaultAsync(x => x.Id == LocalDeploymentInfo.SingletonRowId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (tracked != null && !string.IsNullOrWhiteSpace(tracked.MachineFingerprintHex))
+            return tracked.MachineFingerprintHex.Trim().ToUpperInvariant();
+
+        var computed = MachineFingerprint.Compute().ToUpperInvariant();
+
+        if (tracked == null)
+        {
+            db.LocalDeploymentInfos.Add(new LocalDeploymentInfo
+            {
+                Id = LocalDeploymentInfo.SingletonRowId,
+                MachineFingerprintHex = computed,
+                UpdatedAtUtc = DateTime.UtcNow
+            });
+        }
+        else
+        {
+            tracked.MachineFingerprintHex = computed;
+            tracked.UpdatedAtUtc = DateTime.UtcNow;
+        }
+
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _log.LogInformation("Saved machine fingerprint to SQL Server table LocalDeploymentInfo (Id=1).");
+        return computed;
+    }
+
+    private async Task EnsureLocalDeploymentTableAsync(AppDbContext db, CancellationToken cancellationToken)
+    {
+        if (Volatile.Read(ref _localDeploymentTableEnsured) != 0)
+            return;
+
+        await _localDeploymentSchemaGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (Volatile.Read(ref _localDeploymentTableEnsured) != 0)
+                return;
+
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                IF OBJECT_ID(N'dbo.LocalDeploymentInfo', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.LocalDeploymentInfo (
+                        Id INT NOT NULL CONSTRAINT PK_LocalDeploymentInfo PRIMARY KEY,
+                        MachineFingerprintHex NVARCHAR(64) NOT NULL,
+                        UpdatedAtUtc DATETIME2 NOT NULL
+                    );
+                END
+                """,
+                cancellationToken).ConfigureAwait(false);
+
+            Volatile.Write(ref _localDeploymentTableEnsured, 1);
+        }
+        finally
+        {
+            _localDeploymentSchemaGate.Release();
+        }
     }
 
     private async Task<ActivationValidationResult> ValidateCoreAsync(string code, string fingerprint, CancellationToken cancellationToken)

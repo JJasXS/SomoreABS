@@ -28,11 +28,14 @@ public class ActivationController : Controller
 
     /// <summary>Shown when the system is not activated or validation failed.</summary>
     [HttpGet]
-    public IActionResult Blocked()
+    public async Task<IActionResult> Blocked(CancellationToken cancellationToken)
     {
         ViewBag.ShowActivationForm = _opt.Enabled;
         ViewBag.Message = _activation.LastFailureMessage
                           ?? "Activation not found or expired. Please activate your system.";
+        ViewBag.MachineFingerprintHex = await _activation
+            .GetMachineFingerprintForDisplayAsync(cancellationToken)
+            .ConfigureAwait(false);
         return View();
     }
 
@@ -56,6 +59,9 @@ public class ActivationController : Controller
                 ViewBag.ShowActivationForm = true;
                 ViewBag.Message =
                     "Activation succeeded but database setup failed. Check logs and the client Firebird path in TENANT_DB_PROFILE.";
+                ViewBag.MachineFingerprintHex = await _activation
+                    .GetMachineFingerprintForDisplayAsync(cancellationToken)
+                    .ConfigureAwait(false);
                 return View("Blocked");
             }
 
@@ -64,6 +70,9 @@ public class ActivationController : Controller
 
         ViewBag.ShowActivationForm = true;
         ViewBag.Message = result.Message;
+        ViewBag.MachineFingerprintHex = await _activation
+            .GetMachineFingerprintForDisplayAsync(cancellationToken)
+            .ConfigureAwait(false);
         return View("Blocked");
     }
 }
