@@ -45,11 +45,12 @@ builder.Services.AddAuthorization();                            //@jasch_04
 builder.Services.AddSession();                                  //@jasch_04
 
 // ✅ SQL Server (EF Core)                                      //@jasch_04
+// Factory is singleton; scoped AppDbContext is created from the factory so DbContextOptions stays singleton-compatible.
 var sqlConn = builder.Configuration.GetConnectionString("DefaultConnection");
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(sqlConn)); //@jasch_04
 builder.Services.AddDbContextFactory<AppDbContext>(options =>
-    options.UseSqlServer(sqlConn)); // activation fingerprint persistence (singleton service)
+    options.UseSqlServer(sqlConn));
+builder.Services.AddScoped(sp =>
+    sp.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext());
 
 // ✅ Existing helper                                           //@jasch_04
 builder.Services.AddSingleton<DbHelper>();                      //@jasch_04

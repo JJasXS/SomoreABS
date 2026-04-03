@@ -13,6 +13,14 @@ namespace YourApp.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<ST_ITEM>(e =>
+            {
+                e.HasKey(x => x.CODE);
+                e.Property(x => x.CODE).HasMaxLength(40);
+                e.Property(x => x.DESCRIPTION).HasMaxLength(200);
+                e.Property(x => x.STOCKGROUP).HasMaxLength(40);
+            });
+
             modelBuilder.Entity<LocalDeploymentInfo>(e =>
             {
                 e.ToTable("LocalDeploymentInfo");

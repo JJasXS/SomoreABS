@@ -8,7 +8,7 @@
 <div class="container flex-fill d-flex align-items-center justify-content-center py-5">
     <div class="card shadow border-0" style="max-width: 520px; width: 100%; border-radius: 16px;">
         <div class="card-body p-4 p-md-5 text-center">
-            <h1 class="h4 mb-3" style="font-weight: 800;">Activation required</h1>
+            <h1 class="h4 mb-3" style="font-weight: 800;">Activation required V1.4 - Improved Gate Test</h1>
             <p class="text-danger mb-0" style="font-size: 1.05rem;">@msg</p>
 
             @if (showForm)
@@ -33,7 +33,7 @@
                     <div class="small text-muted mb-1">Machine fingerprint (for <code>LICENSE_ACTIVATION.MACHINE_FINGERPRINT</code>)</div>
                     <code class="user-select-all d-block text-break" style="font-size: 0.85rem;">@fpHex</code>
                     <div class="small text-muted mt-2 mb-0">
-                        Stored in SQL Server table <code>dbo.LocalDeploymentInfo</code> (Id = 1) when <code>Activation:PersistMachineFingerprintInSqlServer</code> is true (default).
+                        If <code>Activation:PersistMachineFingerprintInSqlServer</code> is true, this value is stored in <code>dbo.LocalDeploymentInfo</code> (Id = 1). If false, the fingerprint is computed on the <strong>machine running the app</strong> (each app host differs; many browsers to the same deployment still see that host’s fingerprint).
                         Optional CLI: <code>dotnet run -- --print-machine-fingerprint</code>
                     </div>
                 </div>

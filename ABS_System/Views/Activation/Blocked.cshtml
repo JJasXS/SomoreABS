@@ -33,7 +33,7 @@
                     <div class="small text-muted mb-1">Machine fingerprint (for <code>LICENSE_ACTIVATION.MACHINE_FINGERPRINT</code>)</div>
                     <code class="user-select-all d-block text-break" style="font-size: 0.85rem;">@fpHex</code>
                     <div class="small text-muted mt-2 mb-0">
-                        Stored in SQL Server table <code>dbo.LocalDeploymentInfo</code> (Id = 1) when <code>Activation:PersistMachineFingerprintInSqlServer</code> is true (default).
+                        If <code>Activation:PersistMachineFingerprintInSqlServer</code> is true, this value is stored in <code>dbo.LocalDeploymentInfo</code> (Id = 1). If false, the fingerprint is computed on the <strong>machine running the app</strong> (each app host differs; many browsers to the same deployment still see that host’s fingerprint).
                         Optional CLI: <code>dotnet run -- --print-machine-fingerprint</code>
                     </div>
                 </div>
