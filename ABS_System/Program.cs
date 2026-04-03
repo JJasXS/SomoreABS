@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;                 //@jasch_04
+using Microsoft.Extensions.Logging;                  // startup logging (Windows Service)
 using YourApp.Data;                                  //@jasch_04 // AppDbContext + FirebirdDb + DbInitializer
 using YourApp.Middleware;                            // activation gate
 using YourApp.Services;                              // activation validation
@@ -64,52 +65,62 @@ builder.Services.AddSingleton<IActivationValidationService, ActivationValidation
 
 var app = builder.Build();                                      //@jasch_04
 
-// Validate activation at startup (same rules as per-request gate; refreshes snapshot)
-using (var activationScope = app.Services.CreateScope())
-{
-    var activation = activationScope.ServiceProvider.GetRequiredService<IActivationValidationService>();
-    activation.ValidateAsync().GetAwaiter().GetResult();
-}
-
 // =========================                                   //@jasch_04
-// Firebird schema init (runs once at startup)                  //@jasch_04
+// Startup: activation first, then client Firebird only if allowed (@jasch_04)
+// - Activation DB (ACTIVATION.FDB) is opened only inside IActivationValidationService.
+// - Tenant/client Firebird schema init must NOT run until IsActivationValid (or Activation disabled).
+// - No unhandled exceptions: Windows Service must not fail with 1053 during pending activation.
 // =========================                                   //@jasch_04
 {
-    var activationEnabled = app.Configuration.GetValue<bool>("Activation:Enabled");
-    using var activationScope = app.Services.CreateScope();
-    var activation = activationScope.ServiceProvider.GetRequiredService<IActivationValidationService>();
-    var skipClientDbInit = activationEnabled && !activation.IsActivationValid;
+    var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
+    var startupLogger = loggerFactory.CreateLogger("Startup");
 
-    if (skipClientDbInit)
+    try
+    {
+        using var activationScope = app.Services.CreateScope();
+        var activation = activationScope.ServiceProvider.GetRequiredService<IActivationValidationService>();
+        activation.ValidateAsync(CancellationToken.None).GetAwaiter().GetResult();
+    }
+    catch (Exception ex)
+    {
+        startupLogger.LogError(ex,
+            "Activation validation threw unexpectedly; continuing with activation treated as invalid.");
+    }
+
+    using var scope = app.Services.CreateScope();
+    var activationSvc = scope.ServiceProvider.GetRequiredService<IActivationValidationService>();
+    var dbInit = scope.ServiceProvider.GetRequiredService<DbInitializer>();
+
+    if (!activationSvc.IsActivationValid)
     {
         Console.WriteLine("====================================================");
-        Console.WriteLine("[DBINIT] Skipped: activation is enabled but not yet valid (no client Firebird path).");
+        Console.WriteLine("[DBINIT] Skipped: client Firebird — activation not valid (or validation error).");
         Console.WriteLine("====================================================");
+        startupLogger.LogInformation(
+            "Client Firebird schema init skipped. When Activation:Enabled, complete activation at /Activation/Blocked.");
     }
     else
     {
-        using var scope = app.Services.CreateScope();
-        var init = scope.ServiceProvider.GetRequiredService<DbInitializer>();
-
         Console.WriteLine("====================================================");
-        Console.WriteLine("[DBINIT] Firebird schema init starting...");
+        Console.WriteLine("[DBINIT] Client Firebird schema init starting...");
         Console.WriteLine("====================================================");
 
         try
         {
-            init.EnsureAllStartupSchemas();
-
+            dbInit.EnsureAllStartupSchemas();
             Console.WriteLine("====================================================");
-            Console.WriteLine("[DBINIT] ✅ Firebird schema ensured successfully.");
+            Console.WriteLine("[DBINIT] Firebird schema ensured successfully.");
             Console.WriteLine("====================================================");
+            startupLogger.LogInformation("Client Firebird schema initialization completed.");
         }
         catch (Exception ex)
         {
             Console.WriteLine("====================================================");
-            Console.WriteLine("[DBINIT] ❌ Firebird schema init FAILED:");
+            Console.WriteLine("[DBINIT] Client Firebird schema init failed (app continues):");
             Console.WriteLine(ex.ToString());
             Console.WriteLine("====================================================");
-            throw;
+            startupLogger.LogError(ex,
+                "Client Firebird schema initialization failed; app continues. Fix configuration and restart.");
         }
     }
 }

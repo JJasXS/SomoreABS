@@ -17,8 +17,8 @@ public class ActivationOptions
 
     public string User { get; set; } = "SYSDBA";
 
-    /// <summary>Firebird password. Prefer environment variable <c>Activation__Password</c> or User Secrets — do not commit real passwords.</summary>
-    public string Password { get; set; } = "";
+    /// <summary>Firebird SYSDBA password for ACTIVATION.FDB. Default matches typical local Firebird installs; override in config or <c>Activation__Password</c>.</summary>
+    public string Password { get; set; } = "masterkey";
     public int Dialect { get; set; } = 3;
     public string Charset { get; set; } = "UTF8";
 

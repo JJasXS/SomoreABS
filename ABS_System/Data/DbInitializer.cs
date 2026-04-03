@@ -1,25 +1,42 @@
 using System;
 using System.Collections.Generic;
 using FirebirdSql.Data.FirebirdClient;
+using Microsoft.Extensions.Options;
+using YourApp.Services;
 
 namespace YourApp.Data
 {
     /// <summary>
-    /// DbInitializer ensures required schema upgrades exist at app startup.
-    /// Call these methods once when your app boots (Program.cs / Startup).
+    /// Client/tenant Firebird schema upgrades (business database), not the activation license database (ACTIVATION.FDB).
     /// </summary>
     public class DbInitializer
     {
         private readonly FirebirdDb _db;
+        private readonly IActivationValidationService _activation;
+        private readonly ActivationOptions _activationOptions;
 
-        public DbInitializer(FirebirdDb db)
+        public DbInitializer(
+            FirebirdDb db,
+            IActivationValidationService activation,
+            IOptions<ActivationOptions> activationOptions)
         {
             _db = db;
+            _activation = activation;
+            _activationOptions = activationOptions.Value;
         }
 
-        /// <summary>Same sequence as Program.cs startup (and after first successful activation from the blocked page).</summary>
+        /// <summary>
+        /// Runs all client Firebird schema steps. Safe to call from Program after activation is valid, or from the activation
+        /// submit action after success. Does nothing when <c>Activation:Enabled</c> is true and license validation has not succeeded.
+        /// </summary>
         public void EnsureAllStartupSchemas()
         {
+            if (_activationOptions.Enabled && !_activation.IsActivationValid)
+            {
+                Log("Skipped: Activation:Enabled but license is not valid — client Firebird is not opened.");
+                return;
+            }
+
             EnsureTenantSchema();
             EnsureAgentEmailColumn();
             EnsureAgentUdfBranchColumn();

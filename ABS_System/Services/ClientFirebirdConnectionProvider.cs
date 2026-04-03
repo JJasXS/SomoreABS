@@ -44,6 +44,8 @@ public sealed class ClientFirebirdConnectionProvider : IClientFirebirdConnection
         var port = profile.Port ?? _clientFb.Port;
         var user = string.IsNullOrWhiteSpace(profile.User) ? _clientFb.User : profile.User.Trim();
         var password = string.IsNullOrWhiteSpace(profile.Password) ? _clientFb.Password : profile.Password;
+        if (string.IsNullOrWhiteSpace(user)) user = "SYSDBA";
+        if (string.IsNullOrWhiteSpace(password)) password = "masterkey";
 
         var b = new FbConnectionStringBuilder
         {
@@ -68,13 +70,16 @@ public sealed class ClientFirebirdConnectionProvider : IClientFirebirdConnection
             throw new InvalidOperationException(
                 "Set ConnectionStrings:Firebird or Firebird:Database when Activation:Enabled is false.");
 
+        var user = string.IsNullOrWhiteSpace(_clientFb.User) ? "SYSDBA" : _clientFb.User;
+        var password = string.IsNullOrWhiteSpace(_clientFb.Password) ? "masterkey" : _clientFb.Password;
+
         var b = new FbConnectionStringBuilder
         {
             DataSource = _clientFb.Server,
             Port = _clientFb.Port,
             Database = _clientFb.Database,
-            UserID = _clientFb.User,
-            Password = _clientFb.Password,
+            UserID = user,
+            Password = password,
             Charset = _clientFb.Charset,
             Dialect = _clientFb.Dialect
         };

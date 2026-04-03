@@ -108,13 +108,13 @@ public sealed class ActivationValidationService : IActivationValidationService
 
     private string ResolveMachineFingerprint()
     {
-        var manual = (_opt.MachineFingerprint ?? "").Trim();
+        var manual = (_opt.MachineFingerprint ?? "").Trim().ToUpperInvariant();
         if (!string.IsNullOrEmpty(manual))
             return manual;
 
         if (_opt.UseAutoMachineFingerprint)
         {
-            var auto = MachineFingerprint.Compute();
+            var auto = MachineFingerprint.Compute().ToUpperInvariant();
             _log.LogInformation("Activation using auto-computed machine fingerprint (Activation:MachineFingerprint is empty).");
             return auto;
         }
@@ -212,9 +212,9 @@ public sealed class ActivationValidationService : IActivationValidationService
             """;
 
         if (!string.IsNullOrEmpty(code))
-            sql += $"\nWHERE TRIM(la.ACTIVATION_CODE) = @code AND TRIM(la.MACHINE_FINGERPRINT) = @fp {tenantMayActivate}";
+            sql += $"\nWHERE TRIM(la.ACTIVATION_CODE) = @code AND UPPER(TRIM(la.MACHINE_FINGERPRINT)) = @fp {tenantMayActivate}";
         else
-            sql += $"\nWHERE TRIM(la.MACHINE_FINGERPRINT) = @fp {tenantMayActivate}";
+            sql += $"\nWHERE UPPER(TRIM(la.MACHINE_FINGERPRINT)) = @fp {tenantMayActivate}";
 
         await using var cmd = new FbCommand(sql, conn);
         if (!string.IsNullOrEmpty(code))
@@ -267,7 +267,8 @@ public sealed class ActivationValidationService : IActivationValidationService
                 var dbName = reader.IsDBNull(18) ? null : reader.GetString(18).Trim();
                 var dbFileRef = reader.IsDBNull(19) ? null : reader.GetString(19).Trim();
                 var dbPath = reader.IsDBNull(20) ? null : reader.GetString(20).Trim();
-                var dbTarget = FirstNonEmpty(dbFileRef, dbName, dbPath);
+                // Prefer the full resolved path when available; DB_FILE_REF / DB_NAME are metadata / fallback.
+                var dbTarget = FirstNonEmpty(dbPath, dbFileRef, dbName);
 
                 ClientDatabaseConnectionInfo? clientDb = null;
                 if (!string.IsNullOrEmpty(dbTarget))
@@ -337,13 +338,17 @@ public sealed class ActivationValidationService : IActivationValidationService
         if (!string.IsNullOrWhiteSpace(_opt.ConnectionString))
             return _opt.ConnectionString!;
 
+        // Empty strings in appsettings.json override POCO defaults; Firebird then reports credentials undefined.
+        var user = string.IsNullOrWhiteSpace(_opt.User) ? "SYSDBA" : _opt.User.Trim();
+        var password = string.IsNullOrWhiteSpace(_opt.Password) ? "masterkey" : _opt.Password;
+
         var b = new FbConnectionStringBuilder
         {
             DataSource = _opt.Server,
             Port = _opt.Port,
             Database = _opt.Database,
-            UserID = _opt.User,
-            Password = _opt.Password,
+            UserID = user,
+            Password = password,
             Charset = _opt.Charset,
             Dialect = _opt.Dialect
         };

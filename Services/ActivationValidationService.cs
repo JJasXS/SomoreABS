@@ -338,13 +338,17 @@ public sealed class ActivationValidationService : IActivationValidationService
         if (!string.IsNullOrWhiteSpace(_opt.ConnectionString))
             return _opt.ConnectionString!;
 
+        // Empty strings in appsettings.json override POCO defaults; Firebird then reports credentials undefined.
+        var user = string.IsNullOrWhiteSpace(_opt.User) ? "SYSDBA" : _opt.User.Trim();
+        var password = string.IsNullOrWhiteSpace(_opt.Password) ? "masterkey" : _opt.Password;
+
         var b = new FbConnectionStringBuilder
         {
             DataSource = _opt.Server,
             Port = _opt.Port,
             Database = _opt.Database,
-            UserID = _opt.User,
-            Password = _opt.Password,
+            UserID = user,
+            Password = password,
             Charset = _opt.Charset,
             Dialect = _opt.Dialect
         };
