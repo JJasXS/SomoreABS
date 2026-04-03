@@ -1,0 +1,43 @@
+
+@model YourApp.Models.TenantBrandingVm
+
+@{
+    ViewData["Title"] = "Home";
+}
+
+<div class="container" style="max-width: 980px; margin-top: 8px; margin-bottom: 8px;">
+    <div class="card shadow-sm" style="border-radius: 10px;">
+        <div class="card-body p-2 p-md-3 text-center">
+
+            @if (!string.IsNullOrWhiteSpace(Model?.HeaderLogoUrl))
+            {
+                 <img src="@Model.HeaderLogoUrl"
+                     alt="@Model.TenantName"
+                     style="width:480px; height:160px; object-fit:contain; background:#fff; margin-bottom: 12px;" />
+            }               <!-- Adjust logo width and height here -->
+
+
+            <h1 class="display-6 mb-2" style="font-weight: 700;">
+                @(string.IsNullOrWhiteSpace(Model?.HeaderText1) ? "Welcome" : Model!.HeaderText1)
+            </h1>
+
+            <p class="lead mb-2" style="opacity: .85;">
+                @(string.IsNullOrWhiteSpace(Model?.HeaderText2) ? "Appointment Booking System" : Model!.HeaderText2)
+            </p>
+
+            <div class="d-flex justify-content-center gap-2 flex-wrap">
+                <a class="btn btn-primary px-3" href="@Url.Action("Login", "Account")">
+                    Login with OTP
+                </a>
+            </div>
+
+            <hr class="my-3" />
+
+            <div class="text-muted" style="font-size: 12px;">
+                <div><b>@(string.IsNullOrWhiteSpace(Model?.TenantName) ? "Managed by ProAcc System Consulting." : Model!.TenantName)</b></div>
+                <div style="opacity:.8;">V1.3 - Gate Test</div>
+            </div>
+
+        </div>
+    </div>
+</div>
