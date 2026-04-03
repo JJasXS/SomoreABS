@@ -20,7 +20,11 @@ public interface IActivationValidationService
     /// Validates using a code entered in the UI (uses Activation:MachineFingerprint from configuration).
     /// On success, updates the last validation result so the activation gate allows access.
     /// </summary>
-    Task<ActivationValidationResult> ValidateSubmittedCodeAsync(string? activationCode, CancellationToken cancellationToken = default);
+    Task<ActivationValidationResult> ValidateSubmittedCodeAsync(
+        string? activationCode,
+        string? deviceFingerprint,
+        string? deviceId,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Returns the machine fingerprint used for activation (config, SQL-persisted, or auto-computed). Empty if unavailable.

@@ -3,17 +3,21 @@
     var msg = ViewBag.Message as string ?? "Activation not found or expired. Please activate your system.";
     var showForm = ViewBag.ShowActivationForm as bool? ?? true;
     var fpHex = ViewBag.MachineFingerprintHex as string ?? "";
+    var seatMode = ViewBag.SeatEnforcement as bool? ?? false;
+    /* Legacy (no LicenseId): middleware validates with the same server fingerprint shown below — do not use the in-browser SHA for that mode. */
+    var defaultDeviceFp = seatMode ? "" : fpHex;
 }
 
 <div class="container flex-fill d-flex align-items-center justify-content-center py-5">
     <div class="card shadow border-0" style="max-width: 520px; width: 100%; border-radius: 16px;">
         <div class="card-body p-4 p-md-5 text-center">
-            <h1 class="h4 mb-3" style="font-weight: 800;">Activation required V1.4 - Improved Gate Test</h1>
+            <h1 class="h4 mb-3" style="font-weight: 800;">Activation required V1.5 - Improved Gate Test</h1>
             <p class="text-danger mb-0" style="font-size: 1.05rem;">@msg</p>
 
             @if (showForm)
             {
                 <form asp-controller="Activation" asp-action="Submit" method="post" class="text-start mt-4">
+                    @Html.AntiForgeryToken()
                     <label for="activationCode" class="form-label small text-muted mb-1">Activation code</label>
                     <input type="text"
                            class="form-control form-control-lg"
@@ -23,6 +27,26 @@
                            autocomplete="off"
                            placeholder="Enter your activation code"
                            autofocus />
+
+                    <label for="deviceFingerprint" class="form-label small text-muted mt-3 mb-1">Device fingerprint</label>
+                    <input type="text"
+                           class="form-control form-control-lg"
+                           id="deviceFingerprint"
+                           name="deviceFingerprint"
+                           value="@defaultDeviceFp"
+                           autocomplete="off"
+                           placeholder="@(seatMode ? "Filled automatically in this browser (64 hex chars)" : "Must match LICENSE_ACTIVATION.MACHINE_FINGERPRINT (server value pre-filled)")" />
+                    <div class="form-text small text-muted mt-1">
+                        @if (seatMode)
+                        {
+                            <text>Per-device id: generated in-page (SHA-256). Same browser keeps the same value. For the licensing SDK hardware hash, run <code>dotnet run -- --print-machine-fingerprint</code> on that PC and paste over the field.</text>
+                        }
+                        else
+                        {
+                            <text><strong>Legacy activation</strong> (no <code>Activation:LicenseId</code>): background checks and this form use the <strong>server</strong> fingerprint (same as the box below). Create or update your <code>LICENSE_ACTIVATION</code> row to use this <code>MACHINE_FINGERPRINT</code>, and enter the matching <code>ACTIVATION_CODE</code> if your license requires it.</text>
+                        }
+                    </div>
+
                     <button type="submit" class="btn btn-primary w-100 mt-3">Activate</button>
                 </form>
             }
@@ -33,18 +57,92 @@
                     <div class="small text-muted mb-1">Machine fingerprint (for <code>LICENSE_ACTIVATION.MACHINE_FINGERPRINT</code>)</div>
                     <code class="user-select-all d-block text-break" style="font-size: 0.85rem;">@fpHex</code>
                     <div class="small text-muted mt-2 mb-0">
-                        If <code>Activation:PersistMachineFingerprintInSqlServer</code> is true, this value is stored in <code>dbo.LocalDeploymentInfo</code> (Id = 1). If false, the fingerprint is computed on the <strong>machine running the app</strong> (each app host differs; many browsers to the same deployment still see that host’s fingerprint).
-                        Optional CLI: <code>dotnet run -- --print-machine-fingerprint</code>
+                        @if (seatMode)
+                        {
+                            <text>Shown for reference when using cookies / manual config. Seat mode prefers the device fingerprint field above.</text>
+                        }
+                        else
+                        {
+                            <text>This is what the app uses for automatic validation until you activate. It is pre-filled in the field above. If <code>Activation:PersistMachineFingerprintInSqlServer</code> is true, it may come from <code>dbo.LocalDeploymentInfo</code>. CLI: <code>dotnet run -- --print-machine-fingerprint</code></text>
+                        }
                     </div>
                 </div>
             }
 
             <hr class="my-4" />
             <p class="text-muted small mb-0">
-                With <code>Activation:UseAutoMachineFingerprint</code> (default true), the app uses the same SHA-256 fingerprint as the Activation licensing SDK (leave <code>Activation:MachineFingerprint</code> empty unless overriding).
+                When <code>Activation:LicenseId</code> seat enforcement is enabled, the system tracks devices by <strong>Device fingerprint</strong> (auto-filled in the browser, or paste the CLI hardware fingerprint). <code>LICENSE.MAX_USER_COUNT</code> limits how many distinct ACTIVE device rows can exist in <code>LICENSE_ACTIVATION</code>.
+                Otherwise (legacy mode), the app validates using the server fingerprint computed by <code>Activation:UseAutoMachineFingerprint</code> (default true) / <code>Activation:MachineFingerprint</code>.
                 Optionally set <code>Activation:ActivationCode</code> for automatic validation after restart.
                 Database passwords must not be committed — use <code>Activation__Password</code> and <code>Firebird__Password</code> environment variables or User Secrets.
             </p>
         </div>
     </div>
 </div>
+
+@section Scripts {
+@if (seatMode)
+{
+<script>
+(function () {
+    async function sha256Hex(input) {
+        var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+        var bytes = new Uint8Array(buf);
+        var hex = '';
+        for (var i = 0; i < bytes.length; i++)
+            hex += bytes[i].toString(16).padStart(2, '0');
+        return hex.toUpperCase();
+    }
+    function canvasToken() {
+        try {
+            var c = document.createElement('canvas');
+            var ctx = c.getContext('2d');
+            if (!ctx) return 'nocanvas';
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.fillText('abs-device', 2, 2);
+            return c.toDataURL().slice(-80);
+        } catch (e) {
+            return 'nocanvas';
+        }
+    }
+    document.addEventListener('DOMContentLoaded', async function () {
+        var el = document.getElementById('deviceFingerprint');
+        if (!el || el.value.trim().length > 0) return;
+
+        var seed;
+        try {
+            seed = localStorage.getItem('abs_device_fp_seed');
+            if (!seed) {
+                seed = crypto.randomUUID();
+                localStorage.setItem('abs_device_fp_seed', seed);
+            }
+        } catch (e) {
+            seed = 'no-localstorage';
+        }
+
+        var tz = '';
+        try {
+            tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        } catch (e) { }
+
+        var parts = [
+            seed,
+            navigator.userAgent || '',
+            navigator.language || '',
+            navigator.platform || '',
+            (screen.width + 'x' + screen.height + '@@' + (screen.colorDepth || '')),
+            tz,
+            canvasToken()
+        ].join('|');
+
+        try {
+            el.value = await sha256Hex(parts);
+        } catch (e) {
+            el.placeholder = 'Could not generate fingerprint (try another browser)';
+        }
+    });
+})();
+</script>
+}
+}

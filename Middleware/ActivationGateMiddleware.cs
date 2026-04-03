@@ -24,8 +24,8 @@ public sealed class ActivationGateMiddleware
         }
 
         // Revalidate every request (ActivationValidationService re-queries ACTIVATION.FDB; no stale cache).
-        await activation.ValidateAsync(context.RequestAborted).ConfigureAwait(false);
-        if (activation.IsActivationValid)
+        var result = await activation.ValidateAsync(context.RequestAborted).ConfigureAwait(false);
+        if (result.Success)
         {
             await _next(context);
             return;

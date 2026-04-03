@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Nested ABS_System/ is a duplicate copy of sources; exclude it so the SDK glob does not compile everything twice. -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);ABS_System\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);ABS_System\**;ABS_System.IntegrationTests\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

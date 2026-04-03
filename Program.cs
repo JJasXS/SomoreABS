@@ -43,6 +43,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 
 builder.Services.AddAuthorization();                            //@jasch_04
 builder.Services.AddSession();                                  //@jasch_04
+builder.Services.AddHttpContextAccessor();                       //@jasch_04
 
 // ✅ SQL Server (EF Core)                                      //@jasch_04
 // Factory is singleton; scoped AppDbContext is created from the factory so DbContextOptions stays singleton-compatible.

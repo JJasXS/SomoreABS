@@ -21,4 +21,8 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\ABS_System.csproj" />
+  </ItemGroup>
+
 </Project>

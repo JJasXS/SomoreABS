@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using YourApp.Data;
@@ -33,6 +34,7 @@ public class ActivationController : Controller
         ViewBag.ShowActivationForm = _opt.Enabled;
         ViewBag.Message = _activation.LastFailureMessage
                           ?? "Activation not found or expired. Please activate your system.";
+        ViewBag.SeatEnforcement = _opt.LicenseId.HasValue;
         ViewBag.MachineFingerprintHex = await _activation
             .GetMachineFingerprintForDisplayAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -41,12 +43,18 @@ public class ActivationController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Submit([FromForm] string? activationCode, CancellationToken cancellationToken)
+    public async Task<IActionResult> Submit(
+        [FromForm] string? activationCode,
+        [FromForm] string? deviceFingerprint,
+        [FromForm] string? deviceId,
+        CancellationToken cancellationToken)
     {
         if (!_opt.Enabled)
             return RedirectToAction("Index", "Home");
 
-        var result = await _activation.ValidateSubmittedCodeAsync(activationCode, cancellationToken).ConfigureAwait(false);
+        var result = await _activation
+            .ValidateSubmittedCodeAsync(activationCode, deviceFingerprint, deviceId, cancellationToken)
+            .ConfigureAwait(false);
         if (result.Success)
         {
             try
@@ -57,6 +65,7 @@ public class ActivationController : Controller
             {
                 _log.LogError(ex, "Firebird schema init after activation failed.");
                 ViewBag.ShowActivationForm = true;
+                ViewBag.SeatEnforcement = _opt.LicenseId.HasValue;
                 ViewBag.Message =
                     "Activation succeeded but database setup failed. Check logs and the client Firebird path in TENANT_DB_PROFILE.";
                 ViewBag.MachineFingerprintHex = await _activation
@@ -65,10 +74,28 @@ public class ActivationController : Controller
                 return View("Blocked");
             }
 
+            if (!string.IsNullOrWhiteSpace(deviceFingerprint))
+            {
+                var fp = deviceFingerprint.Trim().ToUpperInvariant();
+                var cookieName = (_opt.DeviceFingerprintCookieName ?? "ABS_DeviceFingerprint").Trim();
+                if (!string.IsNullOrWhiteSpace(cookieName) && fp.Length > 0)
+                {
+                    Response.Cookies.Append(cookieName, fp, new CookieOptions
+                    {
+                        HttpOnly = true,
+                        Secure = true,
+                        SameSite = SameSiteMode.Strict,
+                        Path = "/",
+                        Expires = DateTimeOffset.UtcNow.AddDays(365)
+                    });
+                }
+            }
+
             return RedirectToAction("Index", "Home");
         }
 
         ViewBag.ShowActivationForm = true;
+        ViewBag.SeatEnforcement = _opt.LicenseId.HasValue;
         ViewBag.Message = result.Message;
         ViewBag.MachineFingerprintHex = await _activation
             .GetMachineFingerprintForDisplayAsync(cancellationToken)
