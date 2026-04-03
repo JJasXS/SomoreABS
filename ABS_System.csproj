@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Nested ABS_System/ is a duplicate copy of sources; exclude it so the SDK glob does not compile everything twice. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);ABS_System\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
