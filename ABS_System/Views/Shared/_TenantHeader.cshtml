@@ -1,0 +1,24 @@
+@model YourApp.Models.TenantBrandingVm
+@{
+    var m = Model ?? new YourApp.Models.TenantBrandingVm();
+}
+
+<header class="custom-header bg-light border-bottom mb-3">
+    <div class="container py-3">
+        <div class="d-flex flex-row align-items-center gap-3">
+            @* Logo commented out
+            @if (!string.IsNullOrWhiteSpace(m.HeaderLogoUrl))
+            {
+                <!-- <img src="@m.HeaderLogoUrl"
+                     alt="@m.TenantName"
+                     style="max-height:48px; max-width:160px; object-fit:contain; margin-right: 24px;" /> -->
+            } *@
+            <div class="d-flex flex-column align-items-center flex-grow-1 text-center">
+                <span class="h5 fw-bold mb-0" style="color: #000;">
+                    @(string.IsNullOrWhiteSpace(m.TenantName) ? "My Header Company" : m.TenantName)
+                </span>
+
+            </div>
+        </div>
+    </div>
+</header>

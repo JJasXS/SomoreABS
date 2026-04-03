@@ -1,0 +1,551 @@
+@model YourApp.Models.Appointment
+@{
+    ViewData["Title"] = "E-Sign Appointment";
+
+    bool hasSig = (bool)(ViewBag.HasSignature ?? false);
+    string sigUrl = (string)(ViewBag.SignatureUrl ?? "");
+    string defaultSignedBy = (string)(ViewBag.DefaultSignedBy ?? "");
+    string statementText = (string)(ViewBag.StatementText ?? "");
+}
+
+
+<div class="container" style="max-width: 980px; margin-top: 18px; margin-bottom: 24px;">
+    <div class="card shadow-sm" style="border-radius: 14px;">
+
+
+        <div class="card-body">
+            <div id="printArea">
+
+
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                <div>
+                    <h3 style="margin:0; font-weight:800;">E-Signature</h3>
+                    <div style="margin-top:4px; font-size:12px; opacity:.75;">
+                        Appointment ID: <b>@Model.ApptId</b>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+    <a class="btn btn-outline-secondary"
+       href="/Calendar/Index?year=@Model.ApptStart.Year&month=@Model.ApptStart.Month">
+        &larr; Back
+    </a>
+
+
+    @if (ViewBag.LogId != null)
+    {
+        <a class="btn btn-outline-primary"
+           target="_blank"
+           href="@Url.Action("PrintPdfByLog", "Appointment", new { logId = ViewBag.LogId })">
+            🖨️
+        </a>
+    }
+    else
+    {
+        <a class="btn btn-outline-secondary disabled" tabindex="-1" aria-disabled="true">
+            🖨️
+        </a>
+    }
+
+
+</div>
+
+
+            </div>
+
+            <hr />
+
+            @if (TempData["Err"] != null)
+            {
+                <div class="alert alert-danger" style="border-radius:12px;">
+                    @TempData["Err"]
+                </div>
+            }
+            @if (TempData["Ok"] != null)
+            {
+                <div class="alert alert-success" style="border-radius:12px;">
+                    @TempData["Ok"]
+                </div>
+            }
+
+            <!-- =========================
+                 Appointment summary
+                 ========================= -->
+            <div class="row" style="row-gap: 12px;">
+                <div class="col-md-7">
+                    <div class="card" style="border-radius:14px; border:1px solid rgba(0,0,0,0.08);">
+                        <div class="card-body">
+                            <div style="font-weight:800; margin-bottom:10px;">Appointment Details</div>
+
+                            <div class="row" style="row-gap:8px;">
+                                <div class="col-sm-6">
+                                    <div style="font-size:12px; opacity:.7;">Date/Time</div>
+                                    <div style="font-weight:700;">@Model.ApptStart.ToString("yyyy-MM-dd HH:mm")</div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div style="font-size:12px; opacity:.7;">Status</div>
+                                    <div style="font-weight:700;">@(Model.Status ?? "")</div>
+                                </div>
+
+                                <div class="col-sm-6">
+                                    <div style="font-size:12px; opacity:.7;">Customer Code</div>
+                                    <div style="font-weight:700;">@(Model.CustomerCode ?? "")</div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div style="font-size:12px; opacity:.7;">Agent Code</div>
+                                    <div style="font-weight:700;">@(Model.AgentCode ?? "")</div>
+                                </div>
+
+                                <div class="col-12">
+                                    <div style="font-size:12px; opacity:.7;">Title</div>
+                                    <div style="font-weight:700;">@(Model.Title ?? "")</div>
+                                </div>
+
+                                @if (!string.IsNullOrWhiteSpace(Model.Notes))
+                                {
+                                    <div class="col-12">
+                                        <div style="font-size:12px; opacity:.7;">Notes</div>
+                                        <div style="white-space:pre-wrap;">@Model.Notes</div>
+                                    </div>
+                                }
+                                @if (Model.Services != null && Model.Services.Count > 0)
+                                {
+                                    <div class="col-12" style="margin-top:12px;">
+                                        <div style="font-size:12px; opacity:.7;">Service Claims</div>
+                                        <table class="table table-sm table-bordered" style="margin-bottom:0; background:#ffffff;">
+                                            <thead>
+                                                <tr style="font-size:12px;">
+                                                    <th>Service Name</th>
+                                                    <th style="text-align:right;">Claims</th>
+                                                </tr>
+                                            </thead>""
+                                            <tbody>
+                                            @foreach (var svc in Model.Services) {
+                                                var totalClaimed = (svc.Claimed + svc.PrevClaimed);
+                                                <tr style="font-size:13px;">
+                                                    <td>@(string.IsNullOrWhiteSpace(svc.Description) ? svc.ServiceCode : svc.Description)</td>
+                                                    <td style="text-align:right;">@totalClaimed / @svc.Qty</td>
+                                                </tr>
+                                            }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }   
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-5">
+                    <div class="card" style="border-radius:14px; border:1px solid rgba(0,0,0,0.08);">
+                        <div class="card-body">
+                            <div style="font-weight:800; margin-bottom:10px;">Existing Signature</div>
+
+                            @if (hasSig && !string.IsNullOrWhiteSpace(sigUrl))
+                            {
+                                <div style="border:1px solid rgba(0,0,0,0.12); border-radius:12px; padding:10px; background:#fff;">
+                                    <img src="@sigUrl" alt="Signature" style="max-width:100%; height:auto;" />
+                                </div>
+                                <div style="margin-top:8px; font-size:12px; opacity:.75;">
+                                    Submitting again will <b>replace</b> the existing signature.
+                                </div>
+                            }
+                            else
+                            {
+                                <div style="font-size:12px; opacity:.75;">
+                                    No signature saved yet.
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="height: 14px;"></div>
+
+            <form method="post" action="/Appointment/SignSave" id="signForm">
+                @Html.AntiForgeryToken()
+
+                <input type="hidden" name="apptId" value="@Model.ApptId" />
+                <input type="hidden" name="signatureDataUrl" id="signatureDataUrl" value="" />
+                <input type="hidden" name="statementText" id="statementTextHidden" value="" />
+
+                <!-- =========================
+                     Statement + agree
+                     ========================= -->
+                <div class="card" style="border-radius:14px; border:1px solid rgba(0,0,0,0.08);">
+                    <div class="card-body">
+                        <div style="font-weight:800; margin-bottom:8px;">Statement</div>
+
+                        <div id="statementBox"
+                                style="background:#f8f9fa; border-radius:12px; padding:12px; border:1px solid rgba(0,0,0,0.08);  text-align:left; text-indent:0;">
+                            @statementText
+                        </div>
+
+                        <div class="form-check" style="margin-top:10px;">
+                            <input class="form-check-input" type="checkbox" value="1" id="agreeCb" checked>
+                            <label class="form-check-label" for="agreeCb" style="font-weight:700;">
+                                I agree to the statement above.
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="height: 12px;"></div>
+
+                <!-- =========================
+                     Signed By / Remarks
+                     ========================= -->
+                <div class="row" style="row-gap: 12px;">
+                    <div class="col-md-6">
+                        <label style="font-weight:700;">Signed By (Customer)</label>
+                        <input class="form-control" name="signedBy" value="@defaultSignedBy" placeholder="Enter name (optional)" />
+                        <div style="font-size:12px; opacity:.7; margin-top:4px;">
+                            Customer can type their name here (optional).
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label style="font-weight:700;">Remarks (Optional)</label>
+                        <input class="form-control" name="remarks" placeholder="Optional notes" />
+                    </div>
+                </div>
+
+                <div style="height: 12px;"></div>
+
+                <!-- =========================
+                     Signature Pad
+                     ========================= -->
+                <div class="card" style="border-radius:14px; border:1px solid rgba(0,0,0,0.08);">
+                    <div class="card-body">
+                        <div style="font-weight:800; margin-bottom:8px;">Signature</div>
+
+                        <div style="border:1px solid rgba(0,0,0,0.18); border-radius:12px; overflow:hidden; background:#fff;">
+                            <canvas id="sigCanvas" title="Click to sign" style="width:900px; max-width:96vw; height:350px; display:block; cursor:pointer;"></canvas>
+                        </div>
+
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap;">
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button type="button" class="btn btn-outline-secondary" id="clearBtn">Clear</button>
+    </div>
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-left:auto;">
+        <a class="btn btn-outline-secondary"
+           href="/Calendar/Index?year=@Model.ApptStart.Year&month=@Model.ApptStart.Month">
+            Back to Calendar
+        </a>
+
+        <button type="submit" class="btn btn-primary" id="submitBtn">Submit Signature</button>
+    </div>
+</div>
+
+
+                        <div style="font-size:12px; opacity:.75; margin-top:8px;">
+                            Click the box to open the signature pad. Press <b>Clear</b> to remove the saved signature.
+                        </div>
+                    </div>
+                </div>
+
+            </form>
+
+            <!-- Signature Modal Popup -->
+            <div id="signatureModal" class="modal" tabindex="-1" style="display:none; position:fixed; z-index:2000; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.45); align-items:center; justify-content:center;">
+              <div style="background:#fff; border-radius:16px; padding:24px; box-shadow:0 8px 40px rgba(0,0,0,0.18); max-width:99vw; max-height:98vh; display:flex; flex-direction:column; align-items:center;">
+                <div style="font-weight:800; font-size:1.2em; margin-bottom:10px;">Write Signature</div>
+                <canvas id="modalSigCanvas" style="width:900px; max-width:96vw; height:350px; border:1px solid #ccc; border-radius:10px; background:#fff;"></canvas>
+                <div style="margin-top:12px; display:flex; gap:10px;">
+                  <button type="button" class="btn btn-outline-secondary" id="modalClearBtn">Clear</button>
+                  <button type="button" class="btn btn-primary" id="modalSaveBtn">Save Signature</button>
+                  <button type="button" class="btn btn-secondary" id="modalCancelBtn">Cancel</button>
+                </div>
+              </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<style>
+@@media print {
+  /* Hide buttons */
+#submitBtn, #clearBtn, a.btn, button.btn { display:none !important; }
+
+
+  /* Remove shadow */
+  .card, .shadow-sm { box-shadow:none !important; }
+
+  /* Print only printArea */
+  body * { visibility:hidden !important; }
+  #printArea, #printArea * { visibility:visible !important; }
+
+  #printArea {
+    position:absolute;
+    left:0; top:0;
+    width:100% !important;
+  }
+
+  .container { max-width:100% !important; margin:0 !important; }
+  img { max-width:100% !important; height:auto !important; }
+
+  .card { break-inside:avoid; page-break-inside:avoid; }
+}
+
+html.theme-dark .container > .card,
+html.theme-dark .container .card {
+  background: #151923 !important;
+  border-color: rgba(255,255,255,0.10) !important;
+  color: #e9eef5 !important;
+}
+
+html.theme-dark .container h3,
+html.theme-dark .container label,
+html.theme-dark .container .card-body,
+html.theme-dark .container .card-body div,
+html.theme-dark .container .form-check-label {
+  color: #e9eef5 !important;
+}
+
+html.theme-dark #statementBox {
+  background: #1b2230 !important;
+  border-color: rgba(255,255,255,0.10) !important;
+  color: #d9e1ee !important;
+}
+
+html.theme-dark .container .form-control {
+  background: #121722 !important;
+  border-color: rgba(255,255,255,0.10) !important;
+  color: #e9eef5 !important;
+}
+
+html.theme-dark .container .form-control::placeholder {
+  color: #9aa8bc !important;
+}
+
+html.theme-dark .container .table,
+html.theme-dark .container .table th,
+html.theme-dark .container .table td {
+  background: #151923 !important;
+  color: #e9eef5 !important;
+  border-color: rgba(255,255,255,0.10) !important;
+}
+
+html.theme-dark .container .table thead tr {
+  background: #1b2230 !important;
+}
+
+html.theme-dark .container img[alt="Signature"] {
+  filter: invert(1) brightness(1.08);
+}
+
+html.theme-dark #sigCanvas,
+html.theme-dark #modalSigCanvas {
+  background: #101620 !important;
+}
+
+html.theme-dark #sigCanvas,
+html.theme-dark #modalSigCanvas,
+html.theme-dark #statementBox,
+html.theme-dark .container .form-control {
+  color-scheme: dark;
+}
+
+html.theme-dark #signatureModal > div {
+  background: #151923 !important;
+  color: #e9eef5 !important;
+}
+
+html.theme-dark #modalSigCanvas {
+  border-color: rgba(255,255,255,0.14) !important;
+}
+</style>
+
+
+<script>
+(function () {
+    const SIG_CANVAS_CSS_WIDTH = 900;
+    const SIG_CANVAS_CSS_HEIGHT = 350;
+    const sigCanvas = document.getElementById('sigCanvas');
+    const clearBtn = document.getElementById('clearBtn');
+    const form = document.getElementById('signForm');
+    const dataUrlInput = document.getElementById('signatureDataUrl');
+    const agreeCb = document.getElementById('agreeCb');
+    const statementBox = document.getElementById('statementBox');
+    const statementHidden = document.getElementById('statementTextHidden');
+
+    const signatureModal = document.getElementById('signatureModal');
+    const modalSigCanvas = document.getElementById('modalSigCanvas');
+    const modalClearBtn = document.getElementById('modalClearBtn');
+    const modalSaveBtn = document.getElementById('modalSaveBtn');
+    const modalCancelBtn = document.getElementById('modalCancelBtn');
+
+    window.modalSignatureSaved = false;
+
+    function getSignatureStrokeColor() {
+        return document.documentElement.classList.contains('theme-dark') ? '#f3f6fb' : '#111';
+    }
+
+    /** Main canvas: preview only (bitmap space). Drawing happens only in the modal. */
+    function resizeMainCanvas() {
+        const ratio = window.devicePixelRatio || 1;
+        sigCanvas.width = Math.floor(SIG_CANVAS_CSS_WIDTH * ratio);
+        sigCanvas.height = Math.floor(SIG_CANVAS_CSS_HEIGHT * ratio);
+        sigCanvas.style.width = `${SIG_CANVAS_CSS_WIDTH}px`;
+        sigCanvas.style.height = `${SIG_CANVAS_CSS_HEIGHT}px`;
+        const ctx = sigCanvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+    }
+
+    function clearMainCanvas() {
+        const ctx = sigCanvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+        window.modalSignatureSaved = false;
+    }
+
+    window.addEventListener('resize', function () {
+        resizeMainCanvas();
+        window.modalSignatureSaved = false;
+    });
+
+    setTimeout(resizeMainCanvas, 0);
+
+    clearBtn.addEventListener('click', function () {
+        clearMainCanvas();
+    });
+
+    form.addEventListener('submit', function (e) {
+        const statement = (statementBox ? statementBox.innerText : '').trim();
+        statementHidden.value = statement;
+
+        if (!agreeCb.checked) {
+            e.preventDefault();
+            alert('Please check the "I agree" box before submitting.');
+            return;
+        }
+
+        if (!window.modalSignatureSaved) {
+            e.preventDefault();
+            alert('Please click the signature box, sign in the popup, and click Save Signature before submitting.');
+            return;
+        }
+
+        const pngDataUrl = sigCanvas.toDataURL('image/png');
+        dataUrlInput.value = pngDataUrl;
+    });
+
+    // --- Modal: only place user draws ---
+    let modalDrawing = false;
+
+    function modalResizeCanvas() {
+        const ratio = window.devicePixelRatio || 1;
+        modalSigCanvas.width = Math.floor(SIG_CANVAS_CSS_WIDTH * ratio);
+        modalSigCanvas.height = Math.floor(SIG_CANVAS_CSS_HEIGHT * ratio);
+        modalSigCanvas.style.width = `${SIG_CANVAS_CSS_WIDTH}px`;
+        modalSigCanvas.style.height = `${SIG_CANVAS_CSS_HEIGHT}px`;
+        const ctx = modalSigCanvas.getContext('2d');
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = getSignatureStrokeColor();
+    }
+
+    function modalGetPos(e) {
+        const rect = modalSigCanvas.getBoundingClientRect();
+        const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+        const clientY = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
+        return { x: clientX - rect.left, y: clientY - rect.top };
+    }
+
+    function modalStartDraw(e) {
+        e.preventDefault();
+        modalDrawing = true;
+        const p = modalGetPos(e);
+        const ctx = modalSigCanvas.getContext('2d');
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+    }
+
+    function modalMoveDraw(e) {
+        if (!modalDrawing) return;
+        e.preventDefault();
+        const p = modalGetPos(e);
+        const ctx = modalSigCanvas.getContext('2d');
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+    }
+
+    function modalEndDraw(e) {
+        if (!modalDrawing) return;
+        e.preventDefault();
+        modalDrawing = false;
+    }
+
+    sigCanvas.addEventListener('click', function (e) {
+        e.preventDefault();
+        signatureModal.style.display = 'flex';
+        modalResizeCanvas();
+        const mctx = modalSigCanvas.getContext('2d');
+        mctx.setTransform(1, 0, 0, 1, 0, 0);
+        mctx.clearRect(0, 0, modalSigCanvas.width, modalSigCanvas.height);
+        if (sigCanvas.width > 0 && sigCanvas.height > 0) {
+            mctx.drawImage(sigCanvas, 0, 0, modalSigCanvas.width, modalSigCanvas.height);
+        }
+        const ratio = window.devicePixelRatio || 1;
+        mctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        mctx.lineWidth = 2;
+        mctx.lineCap = 'round';
+        mctx.strokeStyle = getSignatureStrokeColor();
+        window.modalSignatureSaved = false;
+    });
+
+    modalSigCanvas.addEventListener('mousedown', modalStartDraw);
+    modalSigCanvas.addEventListener('mousemove', modalMoveDraw);
+    modalSigCanvas.addEventListener('mouseup', modalEndDraw);
+    modalSigCanvas.addEventListener('mouseleave', modalEndDraw);
+    modalSigCanvas.addEventListener('touchstart', modalStartDraw, { passive: false });
+    modalSigCanvas.addEventListener('touchmove', modalMoveDraw, { passive: false });
+    modalSigCanvas.addEventListener('touchend', modalEndDraw, { passive: false });
+
+    modalClearBtn.addEventListener('click', function () {
+        modalResizeCanvas();
+    });
+
+    modalCancelBtn.addEventListener('click', function () {
+        signatureModal.style.display = 'none';
+    });
+
+    modalSaveBtn.addEventListener('click', function () {
+        const img = new window.Image();
+        img.onload = function () {
+            const bmpW = sigCanvas.width;
+            const bmpH = sigCanvas.height;
+            const mainCtx = sigCanvas.getContext('2d');
+            mainCtx.setTransform(1, 0, 0, 1, 0, 0);
+            mainCtx.clearRect(0, 0, bmpW, bmpH);
+            const nw = img.naturalWidth || img.width;
+            const nh = img.naturalHeight || img.height;
+            if (!nw || !nh) {
+                window.modalSignatureSaved = false;
+            } else {
+                const scale = Math.min(bmpW / nw, bmpH / nh);
+                const dw = nw * scale;
+                const dh = nh * scale;
+                const x = (bmpW - dw) / 2;
+                const y = (bmpH - dh) / 2;
+                mainCtx.drawImage(img, x, y, dw, dh);
+                window.modalSignatureSaved = true;
+            }
+            signatureModal.style.display = 'none';
+        };
+        img.onerror = function () {
+            window.modalSignatureSaved = false;
+            alert('Could not save signature. Please try again.');
+            signatureModal.style.display = 'none';
+        };
+        img.src = modalSigCanvas.toDataURL('image/png');
+    });
+})();
+</script>
+

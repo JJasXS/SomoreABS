@@ -1,0 +1,221 @@
+@model YourApp.Models.OtpViewModel
+
+@{
+    ViewData["Title"] = "Verify OTP";
+    var otpRemainingSeconds = (int)(ViewBag.OtpRemainingSeconds ?? 0);
+    var otpExpiresAtUnix = (long)(ViewBag.OtpExpiresAtUnix ?? 0L);
+}
+
+<div class="container flex-fill d-flex align-items-center justify-content-center py-4">
+    <div class="card shadow-sm border-0" style="max-width: 460px; width: 100%; border-radius: 16px;">
+        <div class="card-body p-4 p-md-5">
+
+            <div class="text-center mb-3">
+                <div class="mb-2">
+                    <span class="badge bg-primary-subtle text-primary" style="font-size: 12px; padding: 8px 10px; border-radius: 999px;">
+                        Secure Login
+                    </span>
+                </div>
+
+                <h1 class="h4 mb-1" style="font-weight: 800;">Verify OTP</h1>
+                <p class="text-muted mb-0">
+                    Enter the 6-digit code we sent you.
+                </p>
+            </div>
+
+            @* Optional message area *@
+            @if (TempData["Err"] != null)
+            {
+                <div class="alert alert-danger py-2" role="alert" style="border-radius: 12px;">
+                    @TempData["Err"]
+                </div>
+            }
+
+            <form asp-action="VerifyOtp" method="post" novalidate id="verifyOtpForm">
+                @Html.AntiForgeryToken()
+
+                <input type="hidden" asp-for="AgentCode" />
+                <input type="hidden" asp-for="Otp" id="Otp" />
+
+                <div class="mb-3">
+                    <label class="form-label d-block text-center mb-2" style="font-weight: 700;">OTP</label>
+
+                    <div class="d-flex justify-content-center gap-2 otp-input-group">
+                        @for (var i = 0; i < 6; i++)
+                        {
+                            <input type="text"
+                                   class="form-control text-center otp-box"
+                                   maxlength="1"
+                                   inputmode="numeric"
+                                   pattern="[0-9]*"
+                                   autocomplete="one-time-code"
+                                   aria-label="OTP digit @(i + 1)" />
+                        }
+                    </div>
+
+                    <div class="small text-center mt-3 otp-timer" id="otpTimer" data-expires-at="@otpExpiresAtUnix">
+                        OTP expires in <span id="otpCountdown">@otpRemainingSeconds</span>s
+                    </div>
+
+                    <span asp-validation-for="Otp" class="text-danger small d-block text-center mt-2"></span>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100" id="verifyOtpBtn" style="border-radius: 12px; padding: 10px 14px;">
+                    Verify
+                </button>
+
+                <div class="text-center mt-3">
+                    <small class="text-muted">
+                        Didn’t get it?
+                        <a href="@Url.Action("Login", "Account")" class="text-decoration-none" id="resendOtpLink">Resend OTP</a>
+                    </small>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Keep OTP boxes consistent */
+    .otp-box {
+        width: 62px;
+        height: 62px;
+        font-size: 1.55rem;
+        font-weight: 800;
+        border-radius: 12px;
+        padding: 0;
+    }
+
+    .otp-input-group {
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+    }
+
+    .otp-timer {
+        color: #6c757d;
+        font-weight: 600;
+    }
+
+    .otp-timer.is-expired {
+        color: #dc3545;
+    }
+
+    .otp-box:focus {
+        box-shadow: 0 0 0 .2rem rgba(13,110,253,.15);
+    }
+
+    @@media (max-width: 420px) {
+        .otp-box { width: 48px; height: 52px; font-size: 1.2rem; }
+    }
+</style>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        (function () {
+            var boxes = Array.prototype.slice.call(document.querySelectorAll('.otp-box'));
+            var hidden = document.getElementById('Otp');
+            var form = document.getElementById('verifyOtpForm');
+            var submitBtn = document.getElementById('verifyOtpBtn');
+            var timer = document.getElementById('otpTimer');
+            var countdown = document.getElementById('otpCountdown');
+            var expiresAt = parseInt((timer && timer.dataset.expiresAt) || '0', 10);
+            var isSubmitting = false;
+            if (!boxes.length || !hidden || !form) return;
+
+            function setExpiredState() {
+                boxes.forEach(function (box) { box.disabled = true; });
+                if (submitBtn) submitBtn.disabled = true;
+                if (timer) timer.classList.add('is-expired');
+                if (timer) timer.innerHTML = 'OTP expired. Please use <a href="@Url.Action("Login", "Account")" class="text-decoration-none">Resend OTP</a>.';
+            }
+
+            function startCountdown() {
+                if (!timer || !countdown || !expiresAt) return;
+
+                function tick() {
+                    var now = Math.floor(Date.now() / 1000);
+                    var remaining = Math.max(0, expiresAt - now);
+                    countdown.textContent = String(remaining);
+                    if (remaining <= 0) {
+                        window.clearInterval(intervalId);
+                        setExpiredState();
+                    }
+                }
+
+                tick();
+                var intervalId = window.setInterval(tick, 1000);
+            }
+
+            function updateHidden() {
+                hidden.value = boxes.map(function (b) { return (b.value || '').trim(); }).join('');
+            }
+
+            function tryAutoSubmit() {
+                updateHidden();
+                if (isSubmitting) return;
+                if (hidden.value.length !== 6) return;
+                if (submitBtn && submitBtn.disabled) return;
+                isSubmitting = true;
+                form.requestSubmit();
+            }
+
+            function focusBox(i) {
+                if (i < 0 || i >= boxes.length) return;
+                boxes[i].focus();
+                boxes[i].select();
+            }
+
+            boxes.forEach(function (box, idx) {
+                box.setAttribute('maxlength', '1');
+
+                box.addEventListener('input', function () {
+                    var v = (box.value || '').replace(/\D/g, '');
+                    box.value = v.slice(0, 1);
+
+                    if (v && idx < boxes.length - 1) focusBox(idx + 1);
+                    updateHidden();
+                    tryAutoSubmit();
+                });
+
+                box.addEventListener('keydown', function (e) {
+                    if (e.key === 'Backspace') {
+                        if (!box.value && idx > 0) {
+                            e.preventDefault();
+                            boxes[idx - 1].value = '';
+                            focusBox(idx - 1);
+                            updateHidden();
+                        }
+                    } else if (e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        focusBox(idx - 1);
+                    } else if (e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        focusBox(idx + 1);
+                    }
+                });
+            });
+
+            // Paste full OTP into first box
+            boxes[0].addEventListener('paste', function (e) {
+                var text = (e.clipboardData || window.clipboardData).getData('text') || '';
+                text = text.replace(/\D/g, '').slice(0, 6);
+                if (!text) return;
+
+                for (var i = 0; i < boxes.length; i++) {
+                    boxes[i].value = text[i] || '';
+                }
+                updateHidden();
+                focusBox(Math.min(text.length, boxes.length) - 1);
+                tryAutoSubmit();
+                e.preventDefault();
+            });
+
+            // Autofocus first
+            focusBox(0);
+            startCountdown();
+        })();
+    </script>
+}

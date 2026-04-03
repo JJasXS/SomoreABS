@@ -1,0 +1,40 @@
+
+@model IEnumerable<YourApp.Models.AppointmentLog>
+
+@{
+    ViewData["Title"] = "History";
+}
+
+<!-- Simple Hamburger Menu -->
+<div style="position:fixed;top:18px;left:18px;z-index:1000;">
+    <a href="/Home/Index" style="display:block;width:32px;height:32px;background:#007bff;border-radius:8px;text-align:center;line-height:32px;color:#fff;font-size:22px;box-shadow:0 2px 8px rgba(0,0,0,0.12);text-decoration:none;">
+        &#9776;
+    </a>
+</div>
+
+<div class="container" style="max-width: 900px; margin-top: 60px;">
+    <h2 class="mb-4">Appointment History</h2>
+    <table class="table table-bordered table-striped">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Action</th>
+                <th>User</th>
+                <th>Details</th>
+                <th>Service</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var log in Model)
+        {
+            <tr>
+                <td>@log.ActionTime.ToString("yyyy-MM-dd HH:mm")</td>
+                <td>@log.ActionType</td>
+                <td>@log.Username</td>
+                <td>@log.Details</td>
+                <td>@log.ServiceCode</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>
