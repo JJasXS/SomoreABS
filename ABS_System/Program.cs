@@ -6,6 +6,13 @@ using FirebirdWeb.Helpers;                           //@jasch_04 // DbHelper
 using Microsoft.AspNetCore.Authentication.Cookies;   //@jasch_04
 using QuestPDF.Infrastructure;                       //@jasch_04
 
+// CLI: dotnet run -- --print-machine-fingerprint (matches Activation LAAS Python SDK fingerprint)
+if (args.Any(a => string.Equals(a, "--print-machine-fingerprint", StringComparison.Ordinal)))
+{
+    Console.WriteLine(MachineFingerprint.Compute());
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);    //@jasch_04
 QuestPDF.Settings.License = LicenseType.Community;   //@jasch_04 // Set QuestPDF license type
 builder.Host.UseWindowsService();

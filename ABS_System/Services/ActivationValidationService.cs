@@ -54,7 +54,7 @@ public sealed class ActivationValidationService : IActivationValidationService
         }
 
         var code = (_opt.ActivationCode ?? "").Trim();
-        var fp = (_opt.MachineFingerprint ?? "").Trim();
+        var fp = ResolveMachineFingerprint();
         var result = await ValidateCoreAsync(code, fp, cancellationToken).ConfigureAwait(false);
 
         lock (_sync)
@@ -86,7 +86,7 @@ public sealed class ActivationValidationService : IActivationValidationService
         }
 
         var code = (activationCode ?? "").Trim();
-        var fp = (_opt.MachineFingerprint ?? "").Trim();
+        var fp = ResolveMachineFingerprint();
         if (string.IsNullOrEmpty(code) && string.IsNullOrEmpty(fp))
             return ActivationValidationResult.Fail("Enter your activation code.");
 
@@ -106,15 +106,31 @@ public sealed class ActivationValidationService : IActivationValidationService
         return result;
     }
 
+    private string ResolveMachineFingerprint()
+    {
+        var manual = (_opt.MachineFingerprint ?? "").Trim();
+        if (!string.IsNullOrEmpty(manual))
+            return manual;
+
+        if (_opt.UseAutoMachineFingerprint)
+        {
+            var auto = MachineFingerprint.Compute();
+            _log.LogInformation("Activation using auto-computed machine fingerprint (Activation:MachineFingerprint is empty).");
+            return auto;
+        }
+
+        return "";
+    }
+
     private async Task<ActivationValidationResult> ValidateCoreAsync(string code, string fingerprint, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(code) && string.IsNullOrEmpty(fingerprint))
             return ActivationValidationResult.Fail(
-                "Activation is not configured: set Activation:ActivationCode or Activation:MachineFingerprint.");
+                "Activation is not configured: set Activation:ActivationCode or Activation:MachineFingerprint, or enable Activation:UseAutoMachineFingerprint.");
 
         if (!string.IsNullOrEmpty(code) && string.IsNullOrEmpty(fingerprint))
             return ActivationValidationResult.Fail(
-                "Machine fingerprint is required. Set Activation:MachineFingerprint to match LICENSE_ACTIVATION.MACHINE_FINGERPRINT for this deployment.");
+                "Machine fingerprint is required. Set Activation:MachineFingerprint, or enable Activation:UseAutoMachineFingerprint (default), to match LICENSE_ACTIVATION.MACHINE_FINGERPRINT.");
 
         lock (_sync)
             _activatedTenant = null;

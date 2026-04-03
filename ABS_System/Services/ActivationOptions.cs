@@ -33,4 +33,10 @@ public class ActivationOptions
     /// Fingerprint-only activation is supported when <see cref="ActivationCode"/> is empty.
     /// </summary>
     public string? MachineFingerprint { get; set; }
+
+    /// <summary>
+    /// When true and <see cref="MachineFingerprint"/> is empty, compute SHA-256 fingerprint using the same rules as
+    /// the Activation LAAS Python SDK (<c>licensing_sdk.fingerprint</c>). Recommended for deployments activated via the API.
+    /// </summary>
+    public bool UseAutoMachineFingerprint { get; set; } = true;
 }
