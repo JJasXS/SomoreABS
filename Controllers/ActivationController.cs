@@ -35,9 +35,25 @@ public class ActivationController : Controller
         ViewBag.Message = _activation.LastFailureMessage
                           ?? "Activation not found or expired. Please activate your system.";
         ViewBag.SeatEnforcement = _opt.LicenseId.HasValue;
-        ViewBag.MachineFingerprintHex = await _activation
+        ViewBag.ConfiguredLicenseId = _opt.LicenseId;
+        ViewBag.SeatIdentityUsesMachineFingerprint = _opt.LicenseId.HasValue && _opt.SeatIdentityUsesMachineFingerprint;
+        ViewBag.DeviceIdCookieName = (_opt.DeviceIdCookieName ?? "ABS_DeviceLogicalId").Trim();
+        var fp = await _activation
             .GetMachineFingerprintForDisplayAsync(cancellationToken)
             .ConfigureAwait(false);
+        ViewBag.MachineFingerprintHex = fp;
+        ViewBag.SeatDeviceIdCookie = await _activation.GetSeatDeviceIdForDisplayAsync(cancellationToken).ConfigureAwait(false);
+        /* Seat: DEVICE_ID is only from the Blocked form script — never loaded from the activation DB for display. */
+        ViewBag.ResolvedDeviceIdFromDb = _opt.LicenseId.HasValue
+            ? null
+            : await _activation
+                .GetRegisteredDeviceIdForMachineFingerprintAsync(null, null, cancellationToken)
+                .ConfigureAwait(false);
+        ViewBag.SuggestedDeviceIdForLa = _activation.GetSuggestedDeviceIdForManualLaRow(fp);
+        ViewBag.PreviewNextLogicalDeviceId = _opt.LicenseId.HasValue
+            ? await _activation.GetPreviewNextLogicalDeviceIdAsync(cancellationToken).ConfigureAwait(false)
+            : "";
+        ViewBag.SeatClientNonce = _opt.LicenseId.HasValue ? EnsureSeatClientNonceCookie() : "";
         return View();
     }
 
@@ -47,10 +63,22 @@ public class ActivationController : Controller
         [FromForm] string? activationCode,
         [FromForm] string? deviceFingerprint,
         [FromForm] string? deviceId,
+        [FromForm] string? seatClientNonce,
         CancellationToken cancellationToken)
     {
         if (!_opt.Enabled)
             return RedirectToAction("Index", "Home");
+
+        if (_opt.LicenseId.HasValue && !ValidateSeatClientNonceFormMatchesCookie(seatClientNonce))
+        {
+            await PopulateBlockedViewForSeatErrorAsync(
+                "This activation session is out of date or came from another browser. Refresh the page and use the Device ID shown here.",
+                activationCode,
+                deviceFingerprint,
+                deviceId,
+                cancellationToken).ConfigureAwait(false);
+            return View("Blocked");
+        }
 
         var result = await _activation
             .ValidateSubmittedCodeAsync(activationCode, deviceFingerprint, deviceId, cancellationToken)
@@ -66,11 +94,31 @@ public class ActivationController : Controller
                 _log.LogError(ex, "Firebird schema init after activation failed.");
                 ViewBag.ShowActivationForm = true;
                 ViewBag.SeatEnforcement = _opt.LicenseId.HasValue;
+                ViewBag.ConfiguredLicenseId = _opt.LicenseId;
+                ViewBag.SeatIdentityUsesMachineFingerprint = _opt.LicenseId.HasValue && _opt.SeatIdentityUsesMachineFingerprint;
+                ViewBag.DeviceIdCookieName = (_opt.DeviceIdCookieName ?? "ABS_DeviceLogicalId").Trim();
                 ViewBag.Message =
                     "Activation succeeded but database setup failed. Check logs and the client Firebird path in TENANT_DB_PROFILE.";
-                ViewBag.MachineFingerprintHex = await _activation
+                var fpDisp = await _activation
                     .GetMachineFingerprintForDisplayAsync(cancellationToken)
                     .ConfigureAwait(false);
+                ViewBag.MachineFingerprintHex = fpDisp;
+                ViewBag.SeatDeviceIdCookie = await _activation.GetSeatDeviceIdForDisplayAsync(cancellationToken).ConfigureAwait(false);
+                ViewBag.ResolvedDeviceIdFromDb = _opt.LicenseId.HasValue
+                    ? null
+                    : await _activation
+                        .GetRegisteredDeviceIdForMachineFingerprintAsync(deviceFingerprint, deviceId, cancellationToken)
+                        .ConfigureAwait(false);
+                ViewBag.SuggestedDeviceIdForLa = _activation.GetSuggestedDeviceIdForManualLaRow(
+                    string.IsNullOrWhiteSpace(deviceFingerprint) ? fpDisp : deviceFingerprint);
+                ViewBag.PreviewNextLogicalDeviceId = _opt.LicenseId.HasValue
+                    ? await _activation.GetPreviewNextLogicalDeviceIdAsync(cancellationToken).ConfigureAwait(false)
+                    : "";
+                ViewBag.FormActivationCode = activationCode;
+                ViewBag.FormDeviceFingerprint = deviceFingerprint;
+                ViewBag.FormDeviceId = deviceId;
+                ViewBag.ActivationFormPostBack = true;
+                ViewBag.SeatClientNonce = _opt.LicenseId.HasValue ? EnsureSeatClientNonceCookie() : "";
                 return View("Blocked");
             }
 
@@ -80,10 +128,34 @@ public class ActivationController : Controller
                 var cookieName = (_opt.DeviceFingerprintCookieName ?? "ABS_DeviceFingerprint").Trim();
                 if (!string.IsNullOrWhiteSpace(cookieName) && fp.Length > 0)
                 {
+                    /* Secure must follow the request scheme or browsers drop cookies on http://localhost (device id never sticks). */
                     Response.Cookies.Append(cookieName, fp, new CookieOptions
                     {
                         HttpOnly = true,
-                        Secure = true,
+                        Secure = Request.IsHttps,
+                        SameSite = SameSiteMode.Strict,
+                        Path = "/",
+                        Expires = DateTimeOffset.UtcNow.AddDays(365)
+                    });
+                }
+            }
+
+            /* Seat gate: persist DEVICE_ID (submitted or derived from fingerprint) so later requests validate without a DB lookup. */
+            if (_opt.LicenseId.HasValue)
+            {
+                var didCookie = (_opt.DeviceIdCookieName ?? "ABS_DeviceLogicalId").Trim();
+                string? normalizedDid = null;
+                if (_opt.SeatIdentityUsesMachineFingerprint && !string.IsNullOrWhiteSpace(deviceFingerprint))
+                    normalizedDid = _activation.DeriveSeatDeviceIdFromFingerprint(deviceFingerprint.Trim().ToUpperInvariant());
+                else if (!string.IsNullOrWhiteSpace(deviceId))
+                    normalizedDid = deviceId.Trim().ToUpperInvariant();
+
+                if (!string.IsNullOrEmpty(didCookie) && !string.IsNullOrWhiteSpace(normalizedDid))
+                {
+                    Response.Cookies.Append(didCookie, normalizedDid, new CookieOptions
+                    {
+                        HttpOnly = true,
+                        Secure = Request.IsHttps,
                         SameSite = SameSiteMode.Strict,
                         Path = "/",
                         Expires = DateTimeOffset.UtcNow.AddDays(365)
@@ -96,10 +168,101 @@ public class ActivationController : Controller
 
         ViewBag.ShowActivationForm = true;
         ViewBag.SeatEnforcement = _opt.LicenseId.HasValue;
+        ViewBag.ConfiguredLicenseId = _opt.LicenseId;
+        ViewBag.SeatIdentityUsesMachineFingerprint = _opt.LicenseId.HasValue && _opt.SeatIdentityUsesMachineFingerprint;
+        ViewBag.DeviceIdCookieName = (_opt.DeviceIdCookieName ?? "ABS_DeviceLogicalId").Trim();
         ViewBag.Message = result.Message;
-        ViewBag.MachineFingerprintHex = await _activation
+        var fpDisp2 = await _activation
             .GetMachineFingerprintForDisplayAsync(cancellationToken)
             .ConfigureAwait(false);
+        ViewBag.MachineFingerprintHex = fpDisp2;
+        ViewBag.SeatDeviceIdCookie = await _activation.GetSeatDeviceIdForDisplayAsync(cancellationToken).ConfigureAwait(false);
+        ViewBag.ResolvedDeviceIdFromDb = _opt.LicenseId.HasValue
+            ? null
+            : await _activation
+                .GetRegisteredDeviceIdForMachineFingerprintAsync(deviceFingerprint, deviceId, cancellationToken)
+                .ConfigureAwait(false);
+        ViewBag.SuggestedDeviceIdForLa = _activation.GetSuggestedDeviceIdForManualLaRow(
+            string.IsNullOrWhiteSpace(deviceFingerprint) ? fpDisp2 : deviceFingerprint);
+        ViewBag.PreviewNextLogicalDeviceId = _opt.LicenseId.HasValue
+            ? await _activation.GetPreviewNextLogicalDeviceIdAsync(cancellationToken).ConfigureAwait(false)
+            : "";
+        ViewBag.FormActivationCode = activationCode;
+        ViewBag.FormDeviceFingerprint = deviceFingerprint;
+        ViewBag.FormDeviceId = deviceId;
+        ViewBag.ActivationFormPostBack = true;
+        ViewBag.SeatClientNonce = _opt.LicenseId.HasValue ? EnsureSeatClientNonceCookie() : "";
         return View("Blocked");
+    }
+
+    /// <summary>HttpOnly nonce per browser on this machine — not synced with other desktops like localStorage can be.</summary>
+    private string EnsureSeatClientNonceCookie()
+    {
+        var name = (_opt.SeatClientNonceCookieName ?? "ABS_SeatClientNonce").Trim();
+        if (string.IsNullOrEmpty(name))
+            return "";
+
+        var existing = Request.Cookies[name];
+        if (!string.IsNullOrWhiteSpace(existing) && existing.Length >= 8 && existing.Length <= 128)
+            return existing.Trim();
+
+        var nonce = Guid.NewGuid().ToString("N");
+        Response.Cookies.Append(name, nonce, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = Request.IsHttps,
+            SameSite = SameSiteMode.Strict,
+            Path = "/",
+            Expires = DateTimeOffset.UtcNow.AddDays(365)
+        });
+        return nonce;
+    }
+
+    private bool ValidateSeatClientNonceFormMatchesCookie(string? formNonce)
+    {
+        var name = (_opt.SeatClientNonceCookieName ?? "ABS_SeatClientNonce").Trim();
+        if (string.IsNullOrEmpty(name))
+            return true;
+
+        var cookieVal = Request.Cookies[name];
+        if (string.IsNullOrWhiteSpace(cookieVal))
+            return false;
+
+        return string.Equals((formNonce ?? "").Trim(), cookieVal.Trim(), StringComparison.Ordinal);
+    }
+
+    private async Task PopulateBlockedViewForSeatErrorAsync(
+        string message,
+        string? activationCode,
+        string? deviceFingerprint,
+        string? deviceId,
+        CancellationToken cancellationToken)
+    {
+        ViewBag.ShowActivationForm = true;
+        ViewBag.SeatEnforcement = _opt.LicenseId.HasValue;
+        ViewBag.ConfiguredLicenseId = _opt.LicenseId;
+        ViewBag.SeatIdentityUsesMachineFingerprint = _opt.LicenseId.HasValue && _opt.SeatIdentityUsesMachineFingerprint;
+        ViewBag.DeviceIdCookieName = (_opt.DeviceIdCookieName ?? "ABS_DeviceLogicalId").Trim();
+        ViewBag.Message = message;
+        var fpDisp2 = await _activation
+            .GetMachineFingerprintForDisplayAsync(cancellationToken)
+            .ConfigureAwait(false);
+        ViewBag.MachineFingerprintHex = fpDisp2;
+        ViewBag.SeatDeviceIdCookie = await _activation.GetSeatDeviceIdForDisplayAsync(cancellationToken).ConfigureAwait(false);
+        ViewBag.ResolvedDeviceIdFromDb = _opt.LicenseId.HasValue
+            ? null
+            : await _activation
+                .GetRegisteredDeviceIdForMachineFingerprintAsync(deviceFingerprint, deviceId, cancellationToken)
+                .ConfigureAwait(false);
+        ViewBag.SuggestedDeviceIdForLa = _activation.GetSuggestedDeviceIdForManualLaRow(
+            string.IsNullOrWhiteSpace(deviceFingerprint) ? fpDisp2 : deviceFingerprint);
+        ViewBag.PreviewNextLogicalDeviceId = _opt.LicenseId.HasValue
+            ? await _activation.GetPreviewNextLogicalDeviceIdAsync(cancellationToken).ConfigureAwait(false)
+            : "";
+        ViewBag.FormActivationCode = activationCode;
+        ViewBag.FormDeviceFingerprint = deviceFingerprint;
+        ViewBag.FormDeviceId = deviceId;
+        ViewBag.ActivationFormPostBack = true;
+        ViewBag.SeatClientNonce = _opt.LicenseId.HasValue ? EnsureSeatClientNonceCookie() : "";
     }
 }

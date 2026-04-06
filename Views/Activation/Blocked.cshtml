@@ -6,12 +6,32 @@
     var seatMode = ViewBag.SeatEnforcement as bool? ?? false;
     /* Legacy (no LicenseId): middleware validates with the same server fingerprint shown below — do not use the in-browser SHA for that mode. */
     var defaultDeviceFp = seatMode ? "" : fpHex;
+    var formActivationCode = ViewBag.FormActivationCode as string ?? "";
+    var formDeviceFp = ViewBag.FormDeviceFingerprint as string ?? defaultDeviceFp;
+    var resolvedDeviceIdFromDb = ViewBag.ResolvedDeviceIdFromDb as string ?? "";
+    var seatDeviceIdFromCookie = (ViewBag.SeatDeviceIdCookie as string ?? "").Trim();
+    var suggestedDeviceIdLa = ViewBag.SuggestedDeviceIdForLa as string ?? "";
+    var previewNextLogicalDeviceId = ViewBag.PreviewNextLogicalDeviceId as string ?? "";
+    var configuredLicenseId = ViewBag.ConfiguredLicenseId as int?;
+    var seatClientNonce = (ViewBag.SeatClientNonce as string ?? "").Trim();
+    /* Seat: DEVICE_ID from POST, HttpOnly cookie (after activate), or first-run localStorage in script. Legacy: DB as before. */
+    var formDeviceId = (ViewBag.FormDeviceId as string) ?? "";
+    if (string.IsNullOrWhiteSpace(formDeviceId))
+    {
+        if (seatMode)
+            formDeviceId = seatDeviceIdFromCookie;
+        else
+            formDeviceId = resolvedDeviceIdFromDb ?? "";
+    }
+    /* Only lock the field when we have an actual id (cookie, repost, etc.) — not merely "is postback" with empty deviceId. */
+    var preserveSeatDeviceId = seatMode && !string.IsNullOrWhiteSpace(formDeviceId);
+    var seatByFingerprint = seatMode && (ViewBag.SeatIdentityUsesMachineFingerprint as bool? ?? false);
 }
 
 <div class="container flex-fill d-flex align-items-center justify-content-center py-5">
     <div class="card shadow border-0" style="max-width: 520px; width: 100%; border-radius: 16px;">
         <div class="card-body p-4 p-md-5 text-center">
-            <h1 class="h4 mb-3" style="font-weight: 800;">Activation required V1.5 - Improved Gate Test</h1>
+            <h1 class="h4 mb-3" style="font-weight: 800;">V1.6 - DeviceID Testing</h1>
             <p class="text-danger mb-0" style="font-size: 1.05rem;">@msg</p>
 
             @if (showForm)
@@ -23,32 +43,147 @@
                            class="form-control form-control-lg"
                            id="activationCode"
                            name="activationCode"
-                           value=""
+                           value="@formActivationCode"
                            autocomplete="off"
                            placeholder="Enter your activation code"
                            autofocus />
 
-                    <label for="deviceFingerprint" class="form-label small text-muted mt-3 mb-1">Device fingerprint</label>
-                    <input type="text"
-                           class="form-control form-control-lg"
-                           id="deviceFingerprint"
-                           name="deviceFingerprint"
-                           value="@defaultDeviceFp"
-                           autocomplete="off"
-                           placeholder="@(seatMode ? "Filled automatically in this browser (64 hex chars)" : "Must match LICENSE_ACTIVATION.MACHINE_FINGERPRINT (server value pre-filled)")" />
-                    <div class="form-text small text-muted mt-1">
+                    @if (seatMode)
+                    {
+                        <span id="deviceIdLabel" class="form-label small text-muted mt-3 mb-1 d-block">@(seatByFingerprint ? "Device ID (first 64 chars of machine fingerprint)" : "Device ID (stable on this browser)")</span>
+                        <div class="input-group input-group-lg">
+                            <div id="deviceIdDisplay"
+                                 class="form-control font-monospace user-select-all bg-light d-flex align-items-center text-start text-break"
+                                 role="status"
+                                 aria-labelledby="deviceIdLabel"
+                                 style="min-height: 3rem;">—</div>
+                            <button type="button"
+                                    class="btn btn-outline-secondary px-3"
+                                    id="copyDeviceIdBtn"
+                                    title="Copy device ID"
+                                    aria-label="Copy device ID to clipboard">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                                    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <input type="hidden"
+                               name="deviceId"
+                               id="deviceId"
+                               value="@formDeviceId"
+                               data-preserve-device-id="@(preserveSeatDeviceId ? "true" : "false")" />
+                        <input type="hidden"
+                               name="seatClientNonce"
+                               id="seatClientNonce"
+                               value="@seatClientNonce"
+                               autocomplete="off" />
+                    }
+                    else
+                    {
+                        <label for="deviceId" class="form-label small text-muted mt-3 mb-1">Device ID (automatic — legacy)</label>
+                        <div class="input-group input-group-lg">
+                            <input type="text"
+                                   class="form-control font-monospace user-select-all bg-light"
+                                   id="deviceId"
+                                   name="deviceId"
+                                   value="@formDeviceId"
+                                   maxlength="64"
+                                   autocomplete="off"
+                                   readonly
+                                   placeholder="Generating…"
+                                   aria-describedby="deviceIdCopyHelp" />
+                            <button type="button"
+                                    class="btn btn-outline-secondary px-3"
+                                    id="copyDeviceIdBtn"
+                                    title="Copy device ID"
+                                    aria-label="Copy device ID to clipboard">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                                    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    }
+                    <div id="deviceIdCopyHelp" class="form-text small text-muted mt-1 mb-0">
                         @if (seatMode)
                         {
-                            <text>Per-device id: generated in-page (SHA-256). Same browser keeps the same value. For the licensing SDK hardware hash, run <code>dotnet run -- --print-machine-fingerprint</code> on that PC and paste over the field.</text>
+                            @if (seatByFingerprint)
+                            {
+                                <text><strong>Required for activation.</strong> <code>DEVICE_ID</code> is the first 64 characters of the machine fingerprint (same value stored in <code>LICENSE_ACTIVATION</code>). No separate browser-generated id — max device count follows distinct fingerprints. Copy for Firebird if needed.</text>
+                            }
+                            else
+                            {
+                                <text><strong>Required for activation.</strong> <code>DEVICE_ID</code> is independent of <code>MACHINE_FINGERPRINT</code>. The server issues a per-browser <strong>seat nonce</strong> (HttpOnly cookie, not synced to other desktops) and the page ties local storage to it so synced data alone cannot impose another PC’s id. After activate, device id is also in an HttpOnly cookie. Copy for Firebird if needed. <strong>Copy</strong> copies the activation value.</text>
+                            }
                         }
                         else
                         {
-                            <text><strong>Legacy activation</strong> (no <code>Activation:LicenseId</code>): background checks and this form use the <strong>server</strong> fingerprint (same as the box below). Create or update your <code>LICENSE_ACTIVATION</code> row to use this <code>MACHINE_FINGERPRINT</code>, and enter the matching <code>ACTIVATION_CODE</code> if your license requires it.</text>
+                            <text><strong>Automatic in the browser</strong> (saved in this browser’s storage). View only — use <strong>Copy</strong> to paste elsewhere. Legacy validation uses <code>MACHINE_FINGERPRINT</code> and activation code.</text>
+                        }
+                    </div>
+
+                    <label for="deviceFingerprint" class="form-label small text-muted mt-3 mb-1">Machine fingerprint</label>
+                    <div class="input-group input-group-lg">
+                        <input type="text"
+                               class="form-control font-monospace user-select-all bg-light"
+                               id="deviceFingerprint"
+                               name="deviceFingerprint"
+                               value="@formDeviceFp"
+                               autocomplete="off"
+                               readonly
+                               placeholder="@(seatMode ? "Generating…" : "Server / config fingerprint")"
+                               aria-describedby="fingerprintCopyHelp" />
+                        <button type="button"
+                                class="btn btn-outline-secondary px-3"
+                                id="copyFingerprintBtn"
+                                title="Copy machine fingerprint"
+                                aria-label="Copy machine fingerprint to clipboard">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                                <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="fingerprintCopyHelp" class="form-text small text-muted mt-1">
+                        @if (seatMode)
+                        {
+                            <text>Stored as <code>MACHINE_FINGERPRINT</code>. Generated or supplied for this client — <strong>view only</strong>; use <strong>Copy</strong> to paste. Seat limits use distinct <strong>Device ID</strong> per desktop when the fingerprint is shared.</text>
+                        }
+                        else
+                        {
+                            <text><strong>Legacy activation</strong> (no <code>Activation:LicenseId</code>): <code>ACTIVATION_CODE</code> must match, and <strong>both</strong> the fingerprint and device id you submit must each match one of the two columns (<code>MACHINE_FINGERPRINT</code> / <code>DEVICE_ID</code>) on the same row — they can be swapped between columns or form fields.</text>
                         }
                     </div>
 
                     <button type="submit" class="btn btn-primary w-100 mt-3">Activate</button>
                 </form>
+            }
+
+            @if (seatMode && configuredLicenseId.HasValue)
+            {
+                <div class="text-start mt-3 p-3 rounded border border-secondary bg-white">
+                    <div class="small fw-semibold mb-2">Manual LA row (Activation app / Firebird)</div>
+                    <div class="small text-muted mb-1"><code>LICENSE_ID</code> (from <code>Activation:LicenseId</code>)</div>
+                    <code class="user-select-all d-block text-break mb-2" style="font-size: 0.9rem;">@configuredLicenseId.Value</code>
+                    <div class="small text-muted mb-1"><code>MACHINE_FINGERPRINT</code> — use the same value as the field above</div>
+                    <code class="user-select-all d-block text-break mb-2" id="manualLaMachineFp" style="font-size: 0.85rem;">@formDeviceFp</code>
+                    <div class="small text-muted mb-1"><code>DEVICE_ID</code> (required — local desktop identity)</div>
+                    @if (!string.IsNullOrWhiteSpace(previewNextLogicalDeviceId))
+                    {
+                        <code class="user-select-all d-block text-break" id="suggestedDeviceIdLa" data-server-assigned="1" style="font-size: 0.85rem;">@previewNextLogicalDeviceId</code>
+                        <div class="form-text small mt-1 mb-0">Optional manual label suggestion (<code>DEV-####</code>) if you insert the row in Firebird. Use the same <code>DEVICE_ID</code> as the Device ID field above (not loaded from the database here).</div>
+                    }
+                    else if (seatByFingerprint && !string.IsNullOrWhiteSpace(suggestedDeviceIdLa))
+                    {
+                        <code class="user-select-all d-block text-break" id="suggestedDeviceIdLa" data-server-assigned="1" style="font-size: 0.85rem;">@suggestedDeviceIdLa</code>
+                        <div class="form-text small mt-1 mb-0">Use this <code>DEVICE_ID</code> (fingerprint prefix) if you insert the row manually — it must match the Device ID field above.</div>
+                    }
+                    else
+                    {
+                        <div class="form-text small mt-1 mb-0">Use the Device ID field above (or your desktop app). It must match <code>LICENSE_ACTIVATION.DEVICE_ID</code> for this license — that value is the seat key, not optional in seat mode.</div>
+                    }
+                </div>
             }
 
             @if (!string.IsNullOrWhiteSpace(fpHex))
@@ -59,7 +194,7 @@
                     <div class="small text-muted mt-2 mb-0">
                         @if (seatMode)
                         {
-                            <text>Shown for reference when using cookies / manual config. Seat mode prefers the device fingerprint field above.</text>
+                            <text>Reference only. Seat enforcement uses the Machine fingerprint field above together with Device ID; max devices uses <code>LICENSE.MAX_DEVICE_COUNT</code> against active seats for the license.</text>
                         }
                         else
                         {
@@ -71,17 +206,29 @@
 
             <hr class="my-4" />
             <p class="text-muted small mb-0">
-                When <code>Activation:LicenseId</code> seat enforcement is enabled, the system tracks devices by <strong>Device fingerprint</strong> (auto-filled in the browser, or paste the CLI hardware fingerprint). <code>LICENSE.MAX_USER_COUNT</code> limits how many distinct ACTIVE device rows can exist in <code>LICENSE_ACTIVATION</code>.
-                Otherwise (legacy mode), the app validates using the server fingerprint computed by <code>Activation:UseAutoMachineFingerprint</code> (default true) / <code>Activation:MachineFingerprint</code>.
-                Optionally set <code>Activation:ActivationCode</code> for automatic validation after restart.
-                Database passwords must not be committed — use <code>Activation__Password</code> and <code>Firebird__Password</code> environment variables or User Secrets.
+                @if (seatMode)
+                {
+                    @if (seatByFingerprint)
+                    {
+                        <text><strong>Seat mode (fingerprint identity)</strong> (<code>Activation:LicenseId</code> + <code>Activation:SeatIdentityUsesMachineFingerprint</code>): each seat is <code>LICENSE_ID</code> + <code>DEVICE_ID</code>, where <code>DEVICE_ID</code> is the first 64 characters of <code>MACHINE_FINGERPRINT</code>. <code>LICENSE.MAX_DEVICE_COUNT</code> limits how many distinct fingerprints can activate. Two users on the same PC/browser profile share one seat.</text>
+                    }
+                    else
+                    {
+                        <text><strong>Seat mode</strong> (<code>Activation:LicenseId</code>): each seat is <code>LICENSE_ID</code> + <code>DEVICE_ID</code>. <code>DEVICE_ID</code> is not derived from the machine fingerprint; local storage is keyed with a machine signature so a <strong>second physical PC</strong> does not keep another computer’s id when browser data syncs. HttpOnly cookie after a successful activate. Display is not loaded from the activation database.</text>
+                    }
+                }
+                else
+                {
+                    <text><strong>Legacy mode</strong> (no <code>Activation:LicenseId</code>): <code>DEVICE_ID</code> is <strong>auto-filled</strong> in the browser for convenience; validation uses <code>MACHINE_FINGERPRINT</code> and activation code against <code>LICENSE_ACTIVATION</code> (not per-seat locking).</text>
+                }
+                <span class="d-block mt-2">Database passwords must not be committed — use <code>Activation__Password</code> and <code>Firebird__Password</code> environment variables or User Secrets.</span>
             </p>
         </div>
     </div>
 </div>
 
 @section Scripts {
-@if (seatMode)
+@if (seatMode && seatByFingerprint)
 {
 <script>
 (function () {
@@ -106,43 +253,383 @@
             return 'nocanvas';
         }
     }
+    function syncSeatIdFromFingerprint(fpInput) {
+        var raw = (fpInput && fpInput.value ? fpInput.value : '').trim().toUpperCase();
+        if (!raw.length) return;
+        var shortDid = raw.length <= 64 ? raw : raw.substring(0, 64);
+        var hid = document.getElementById('deviceId');
+        var disp = document.getElementById('deviceIdDisplay');
+        if (hid) hid.value = shortDid;
+        if (disp) disp.textContent = shortDid;
+    }
+    function syncManualLaPanel(fpInput) {
+        var manualFp = document.getElementById('manualLaMachineFp');
+        var sug = document.getElementById('suggestedDeviceIdLa');
+        var v = fpInput && fpInput.value ? fpInput.value.trim().toUpperCase() : '';
+        if (manualFp) manualFp.textContent = v;
+        if (sug && !sug.getAttribute('data-server-assigned')) {
+            sug.textContent = v.length <= 64 ? v : v.substring(0, 64);
+        }
+    }
     document.addEventListener('DOMContentLoaded', async function () {
         var el = document.getElementById('deviceFingerprint');
-        if (!el || el.value.trim().length > 0) return;
-
-        var seed;
-        try {
-            seed = localStorage.getItem('abs_device_fp_seed');
-            if (!seed) {
-                seed = crypto.randomUUID();
-                localStorage.setItem('abs_device_fp_seed', seed);
+        if (!el) return;
+        if (el.value.trim().length === 0) {
+            var tz = '';
+            try {
+                tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+            } catch (e) { }
+            var parts = [
+                navigator.userAgent || '',
+                navigator.language || '',
+                navigator.platform || '',
+                (screen.width + 'x' + screen.height + '@@' + (screen.colorDepth || '')),
+                tz,
+                canvasToken()
+            ].join('|');
+            try {
+                el.value = await sha256Hex(parts);
+            } catch (e) {
+                el.placeholder = 'Could not generate fingerprint (try another browser)';
             }
-        } catch (e) {
-            seed = 'no-localstorage';
         }
-
-        var tz = '';
-        try {
-            tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-        } catch (e) { }
-
-        var parts = [
-            seed,
-            navigator.userAgent || '',
-            navigator.language || '',
-            navigator.platform || '',
-            (screen.width + 'x' + screen.height + '@@' + (screen.colorDepth || '')),
-            tz,
-            canvasToken()
-        ].join('|');
-
-        try {
-            el.value = await sha256Hex(parts);
-        } catch (e) {
-            el.placeholder = 'Could not generate fingerprint (try another browser)';
-        }
+        syncSeatIdFromFingerprint(el);
+        syncManualLaPanel(el);
     });
 })();
 </script>
 }
+@if (seatMode && !seatByFingerprint)
+{
+<script>
+(function () {
+    async function sha256Hex(input) {
+        var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+        var bytes = new Uint8Array(buf);
+        var hex = '';
+        for (var i = 0; i < bytes.length; i++)
+            hex += bytes[i].toString(16).padStart(2, '0');
+        return hex.toUpperCase();
+    }
+    function canvasToken() {
+        try {
+            var c = document.createElement('canvas');
+            var ctx = c.getContext('2d');
+            if (!ctx) return 'nocanvas';
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.fillText('abs-device', 2, 2);
+            return c.toDataURL().slice(-80);
+        } catch (e) {
+            return 'nocanvas';
+        }
+    }
+    function newSeatDeviceId() {
+        return (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID()
+            : ('ABS-' + Math.random().toString(36).slice(2, 14) + '-' + Date.now().toString(36).toUpperCase());
+    }
+    /** Not the LA fingerprint hash — used only to detect when localStorage was copied from another PC. */
+    var webglSessionCacheKey = 'abs_seat_webgl_vendor_renderer';
+    /** Cache in sessionStorage so the v2 bind string does not flip between refreshes when WebGL ext loads late (would look like a different PC). */
+    function webglVendorRenderer() {
+        try {
+            var cached = sessionStorage.getItem(webglSessionCacheKey);
+            if (cached !== null)
+                return cached === '__NONE__' ? '' : cached;
+            var c = document.createElement('canvas');
+            var gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+            if (!gl) {
+                sessionStorage.setItem(webglSessionCacheKey, '__NONE__');
+                return '';
+            }
+            var dbg = gl.getExtension('WEBGL_debug_renderer_info');
+            if (!dbg) {
+                sessionStorage.setItem(webglSessionCacheKey, '__NONE__');
+                return '';
+            }
+            var s = String(gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || '') + '/' + String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '');
+            sessionStorage.setItem(webglSessionCacheKey, s.length ? s : '__NONE__');
+            return s;
+        } catch (e) {
+            try {
+                sessionStorage.setItem(webglSessionCacheKey, '__NONE__');
+            } catch (e2) { }
+            return '';
+        }
+    }
+    /** Original bind string — still accepted for one load so we can migrate to v2 without changing DEVICE_ID on refresh. */
+    function coarseMachineSignatureV1() {
+        var tz = '';
+        try {
+            tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        } catch (e) { }
+        return [
+            navigator.userAgent || '',
+            navigator.platform || '',
+            String(screen.width || 0) + 'x' + String(screen.height || 0),
+            String(screen.colorDepth || ''),
+            String(window.devicePixelRatio || ''),
+            tz,
+            String(navigator.hardwareConcurrency || ''),
+            String(navigator.deviceMemory || ''),
+            String(navigator.maxTouchPoints || '')
+        ].join('|');
+    }
+    /** v2: extra traits (GPU, avail area, languages) so two desktops are less likely to collide. */
+    function coarseMachineSignature() {
+        var tz = '';
+        var loc = '';
+        try {
+            var ro = Intl.DateTimeFormat().resolvedOptions();
+            tz = ro.timeZone || '';
+            loc = ro.locale || '';
+        } catch (e) { }
+        var langs = '';
+        try {
+            langs = (navigator.languages && navigator.languages.length) ? navigator.languages.join(',') : (navigator.language || '');
+        } catch (e2) { }
+        var uaBrands = '';
+        try {
+            if (navigator.userAgentData && navigator.userAgentData.brands && navigator.userAgentData.brands.length)
+                uaBrands = navigator.userAgentData.brands.map(function (b) {
+                    return (b.brand || '') + '/' + (b.version || '');
+                }).join(',');
+        } catch (e3) { }
+        return [
+            coarseMachineSignatureV1(),
+            String(screen.availWidth || 0) + 'x' + String(screen.availHeight || 0),
+            loc,
+            langs,
+            webglVendorRenderer(),
+            uaBrands
+        ].join('||');
+    }
+    var seatBundleStorageKey = 'abs_seat_device_bundle';
+    var seatDidLegacyKey = 'abs_seat_device_logical_id';
+    function getServerSeatNonce() {
+        var el = document.getElementById('seatClientNonce');
+        return el ? (el.value || '').trim() : '';
+    }
+    function readSeatBundle() {
+        try {
+            var raw = localStorage.getItem(seatBundleStorageKey);
+            if (raw) {
+                var o = JSON.parse(raw);
+                if (o && typeof o.id === 'string' && typeof o.bind === 'string') {
+                    var id = o.id.trim().toUpperCase();
+                    if (id.length > 0 && id.length <= 64)
+                        return { id: id, bind: o.bind, sn: typeof o.sn === 'string' ? o.sn : '' };
+                }
+            }
+        } catch (e) { }
+        return null;
+    }
+    /** Stored bind key: coarse + server seat nonce so two PCs cannot share one bundle even if coarse strings collide. */
+    function seatBindKey(coarse, serverSn) {
+        var sn = (serverSn || '').trim();
+        if (!sn.length) return coarse;
+        return coarse + '||SN||' + sn;
+    }
+    /** Second arg is coarse machine signature (not pre-formatted bind). */
+    function writeSeatBundle(id, coarse, serverSn) {
+        if (!id) return;
+        try {
+            var u = id.trim().toUpperCase();
+            if (u.length === 0 || u.length > 64) return;
+            var sn = (serverSn || '').trim();
+            var bindStored = seatBindKey(coarse, serverSn);
+            localStorage.setItem(seatBundleStorageKey, JSON.stringify({
+                id: u,
+                bind: bindStored,
+                v: 2,
+                sn: sn
+            }));
+            try {
+                localStorage.removeItem(seatDidLegacyKey);
+            } catch (e2) { }
+        } catch (e) { }
+    }
+    function bundleMatchesThisSeat(bundle, coarse, coarseV1, serverSn) {
+        if (!bundle) return false;
+        var sn = (serverSn || '').trim();
+        if (!sn.length) return false;
+        var expected = seatBindKey(coarse, serverSn);
+        if (bundle.bind === expected) return true;
+        /* Legacy: bind was raw coarse only; sn field must match this browser's cookie. */
+        if ((bundle.bind === coarse || bundle.bind === coarseV1) && bundle.sn === sn) return true;
+        return false;
+    }
+    function resolveSeatDeviceIdForDisplay(coarse) {
+        var coarseV1 = coarseMachineSignatureV1();
+        var serverSn = getServerSeatNonce();
+        var hidden = document.getElementById('deviceId');
+        var display = document.getElementById('deviceIdDisplay');
+        if (!hidden) return;
+        var wantPreserve = hidden.getAttribute('data-preserve-device-id') === 'true';
+        var existing = hidden.value.trim();
+        if (wantPreserve && existing.length > 0) {
+            var v = existing.toUpperCase();
+            hidden.value = v;
+            writeSeatBundle(v, coarse, serverSn);
+            if (display) display.textContent = v;
+            return;
+        }
+        var bundle = readSeatBundle();
+        /* Without a seat nonce we cannot anchor storage to this browser — ignore localStorage (stops coarse-only collisions). */
+        if (!serverSn || serverSn.length === 0) {
+            try {
+                localStorage.removeItem(seatBundleStorageKey);
+            } catch (e) { }
+            bundle = null;
+        }
+        if (bundle && serverSn.length > 0 && bundle.sn && bundle.sn !== serverSn) {
+            try {
+                localStorage.removeItem(seatBundleStorageKey);
+            } catch (e) { }
+            bundle = null;
+        }
+        /* Older script stored v1 bind only — migrate to current coarse + nonce-keyed bind. */
+        if (bundle && bundle.bind === coarseV1 && serverSn.length > 0) {
+            writeSeatBundle(bundle.id, coarse, serverSn);
+            hidden.value = bundle.id;
+            if (display) display.textContent = bundle.id;
+            return;
+        }
+        if (bundle && bundleMatchesThisSeat(bundle, coarse, coarseV1, serverSn)) {
+            hidden.value = bundle.id;
+            if (display) display.textContent = bundle.id;
+            if (bundle.bind !== seatBindKey(coarse, serverSn))
+                writeSeatBundle(bundle.id, coarse, serverSn);
+            return;
+        }
+        if (bundle) {
+            try {
+                localStorage.removeItem(seatBundleStorageKey);
+            } catch (e) { }
+        }
+        try {
+            localStorage.removeItem(seatDidLegacyKey);
+        } catch (e) { }
+        var id = newSeatDeviceId().toUpperCase();
+        writeSeatBundle(id, coarse, serverSn);
+        hidden.value = id;
+        if (display) display.textContent = id;
+    }
+    document.addEventListener('DOMContentLoaded', async function () {
+        var coarse = coarseMachineSignature();
+        resolveSeatDeviceIdForDisplay(coarse);
+
+        var el = document.getElementById('deviceFingerprint');
+        if (!el) return;
+
+        if (el.value.trim().length === 0) {
+            var tz = '';
+            try {
+                tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+            } catch (e) { }
+
+            var parts = [
+                navigator.userAgent || '',
+                navigator.language || '',
+                navigator.platform || '',
+                (screen.width + 'x' + screen.height + '@@' + (screen.colorDepth || '')),
+                tz,
+                canvasToken()
+            ].join('|');
+
+            try {
+                el.value = await sha256Hex(parts);
+            } catch (e) {
+                el.placeholder = 'Could not generate fingerprint (try another browser)';
+            }
+        }
+
+        syncManualLaPanel(el);
+    });
+    function syncManualLaPanel(fpInput) {
+        var manualFp = document.getElementById('manualLaMachineFp');
+        var sug = document.getElementById('suggestedDeviceIdLa');
+        var v = fpInput && fpInput.value ? fpInput.value.trim().toUpperCase() : '';
+        if (manualFp) manualFp.textContent = v;
+        if (sug && !sug.getAttribute('data-server-assigned')) {
+            sug.textContent = v.length <= 64 ? v : v.substring(0, 64);
+        }
+    }
+})();
+</script>
+}
+@if (!seatMode)
+{
+<script>
+(function () {
+    var legacyStorageKey = 'abs_legacy_device_logical_id';
+    function ensureLegacyDeviceId() {
+        var input = document.getElementById('deviceId');
+        if (!input) return;
+        if (input.value.trim().length > 0)
+            return;
+        var id = '';
+        try {
+            id = localStorage.getItem(legacyStorageKey) || '';
+            if (!id) {
+                id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID()
+                    : ('LEG-' + Math.random().toString(36).slice(2, 14) + '-' + Date.now().toString(36).toUpperCase());
+                localStorage.setItem(legacyStorageKey, id);
+            }
+        } catch (e) {
+            id = 'LEG-' + Math.random().toString(36).slice(2, 14) + '-' + Date.now().toString(36).toUpperCase();
+        }
+        input.value = id.toUpperCase();
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+        ensureLegacyDeviceId();
+    });
+})();
+</script>
+}
+<script>
+(function () {
+    function wireCopy(btnId, inputId, copiedTitle) {
+        var btn = document.getElementById(btnId);
+        var inp = document.getElementById(inputId);
+        if (!btn || !inp) return;
+        var origTitle = btn.getAttribute('title') || 'Copy';
+        btn.addEventListener('click', function () {
+            var t = (inp.value || '').trim();
+            /* Seat mode: hidden can lag; display node is authoritative for what the user sees. */
+            if (!t && inputId === 'deviceId') {
+                var disp = document.getElementById('deviceIdDisplay');
+                if (disp) t = (disp.textContent || '').trim();
+            }
+            if (t === '—') t = '';
+            if (!t) return;
+            function markDone() {
+                btn.setAttribute('title', copiedTitle);
+                setTimeout(function () { btn.setAttribute('title', origTitle); }, 1600);
+            }
+            function fallback() {
+                try {
+                    inp.removeAttribute('readonly');
+                    inp.focus();
+                    inp.select();
+                    if (inp.setSelectionRange) inp.setSelectionRange(0, t.length);
+                    document.execCommand('copy');
+                } catch (e) { }
+                finally {
+                    inp.setAttribute('readonly', 'readonly');
+                }
+                markDone();
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText)
+                navigator.clipboard.writeText(t).then(markDone).catch(fallback);
+            else
+                fallback();
+        });
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+        wireCopy('copyDeviceIdBtn', 'deviceId', 'Copied!');
+        wireCopy('copyFingerprintBtn', 'deviceFingerprint', 'Copied!');
+    });
+})();
+</script>
 }

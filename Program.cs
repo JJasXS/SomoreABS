@@ -36,7 +36,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.ExpireTimeSpan = TimeSpan.FromHours(8);                                //@jasch_04
         options.SlidingExpiration = true;                                              //@jasch_04
         options.Cookie.HttpOnly = true; // Prevent JS access
-        options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.Always; // Only send over HTTPS
+        /* Same as activation cookies: http://localhost dev uses HTTP — Always drops the auth cookie. */
+        options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest;
         options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Strict; // Prevent CSRF
     });                                                                                //@jasch_04
 

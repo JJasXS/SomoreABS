@@ -50,19 +50,47 @@ public class ActivationOptions
     public bool PersistMachineFingerprintInSqlServer { get; set; } = true;
 
     /// <summary>
-    /// Optional: when set, ABS_System can auto-register new client devices (based on a per-client fingerprint cookie)
-    /// into <c>LICENSE_ACTIVATION</c> under this specific <c>LICENSE_ID</c>.
+    /// When set, enables seat licensing: each activated device is a row keyed by <c>LICENSE_ID</c> + local <c>DEVICE_ID</c>
+    /// (see <see cref="DeviceIdCookieName"/>). <c>LICENSE.MAX_DEVICE_COUNT</c> limits active seats (seat mode ignores
+    /// <c>LICENSE.MAX_USER_COUNT</c> for this cap). Not legacy mode.
     /// </summary>
     public int? LicenseId { get; set; }
 
     /// <summary>
-    /// When <see cref="LicenseId"/> is set, enables automatic insertion of a new <c>LICENSE_ACTIVATION</c> row
-    /// for the current device fingerprint (if under <c>LICENSE.MAX_USER_COUNT</c>).
+    /// When <see cref="LicenseId"/> is set, allows automatic insert of a new <c>LICENSE_ACTIVATION</c> seat for this
+    /// local <c>DEVICE_ID</c> when under <c>LICENSE.MAX_DEVICE_COUNT</c>.
     /// </summary>
     public bool AutoRegisterNewDevices { get; set; } = true;
 
     /// <summary>
-    /// Cookie name that stores the per-device fingerprint used for seat counting. Only used when <see cref="LicenseId"/> is set.
+    /// When <see cref="LicenseId"/> is set and this is true, each seat is keyed by <c>MACHINE_FINGERPRINT</c> alone:
+    /// <c>DEVICE_ID</c> in the database is the first 64 characters of the fingerprint (same as legacy fallback).
+    /// Use when browser-generated Device IDs are unreliable (sync, collisions). Trade-off: two users on the same PC/browser profile share one seat.
+    /// </summary>
+    public bool SeatIdentityUsesMachineFingerprint { get; set; }
+
+    /// <summary>
+    /// Cookie name for <c>MACHINE_FINGERPRINT</c> sent by the client (seat mode). May match other users if the host shares one fingerprint.
     /// </summary>
     public string DeviceFingerprintCookieName { get; set; } = "ABS_DeviceFingerprint";
+
+    /// <summary>
+    /// Cookie name for the required local desktop / workstation <c>DEVICE_ID</c> (distinct from <see cref="DeviceFingerprintCookieName"/>).
+    /// Seat identity for counting; set by the Blocked page script and on successful activation.
+    /// </summary>
+    public string DeviceIdCookieName { get; set; } = "ABS_DeviceLogicalId";
+
+    /// <summary>
+    /// HttpOnly cookie set on <c>/Activation/Blocked</c> (seat mode): random per browser profile on this machine.
+    /// Not synced across desktops; bundled with <c>localStorage</c> device id so synced storage from another PC is rejected.
+    /// </summary>
+    public string SeatClientNonceCookieName { get; set; } = "ABS_SeatClientNonce";
+
+    /// <summary>
+    /// Seat mode: if lookup by <c>DEVICE_ID</c> fails but the request includes an activation code and the HttpOnly
+    /// fingerprint + device id cookies match the submitted form values (same browser session as a prior success),
+    /// find the active row by <c>LICENSE_ID</c> + <c>ACTIVATION_CODE</c>, update <c>MACHINE_FINGERPRINT</c>/<c>DEVICE_ID</c>
+    /// to match this browser, then validate. Allows re-binding when fingerprint/device identity changes without editing Firebird by hand.
+    /// </summary>
+    public bool SeatTrustBrowserCookiesWithActivationCode { get; set; } = true;
 }
