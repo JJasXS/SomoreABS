@@ -37,6 +37,8 @@ public class ActivationController : Controller
         ViewBag.SeatEnforcement = _opt.LicenseId.HasValue;
         ViewBag.ConfiguredLicenseId = _opt.LicenseId;
         ViewBag.SeatIdentityUsesMachineFingerprint = _opt.LicenseId.HasValue && _opt.SeatIdentityUsesMachineFingerprint;
+        ViewBag.SeatSwapFingerprintAndDeviceIdColumns = _opt.LicenseId.HasValue && _opt.SeatSwapFingerprintAndDeviceIdColumns;
+        ViewBag.SeatRequireLicenseKey = _opt.LicenseId.HasValue && _opt.RequireSeatLicenseKey;
         ViewBag.DeviceIdCookieName = (_opt.DeviceIdCookieName ?? "ABS_DeviceLogicalId").Trim();
         var fp = await _activation
             .GetMachineFingerprintForDisplayAsync(cancellationToken)
@@ -96,6 +98,8 @@ public class ActivationController : Controller
                 ViewBag.SeatEnforcement = _opt.LicenseId.HasValue;
                 ViewBag.ConfiguredLicenseId = _opt.LicenseId;
                 ViewBag.SeatIdentityUsesMachineFingerprint = _opt.LicenseId.HasValue && _opt.SeatIdentityUsesMachineFingerprint;
+                ViewBag.SeatSwapFingerprintAndDeviceIdColumns = _opt.LicenseId.HasValue && _opt.SeatSwapFingerprintAndDeviceIdColumns;
+                ViewBag.SeatRequireLicenseKey = _opt.LicenseId.HasValue && _opt.RequireSeatLicenseKey;
                 ViewBag.DeviceIdCookieName = (_opt.DeviceIdCookieName ?? "ABS_DeviceLogicalId").Trim();
                 ViewBag.Message =
                     "Activation succeeded but database setup failed. Check logs and the client Firebird path in TENANT_DB_PROFILE.";
@@ -122,46 +126,7 @@ public class ActivationController : Controller
                 return View("Blocked");
             }
 
-            if (!string.IsNullOrWhiteSpace(deviceFingerprint))
-            {
-                var fp = deviceFingerprint.Trim().ToUpperInvariant();
-                var cookieName = (_opt.DeviceFingerprintCookieName ?? "ABS_DeviceFingerprint").Trim();
-                if (!string.IsNullOrWhiteSpace(cookieName) && fp.Length > 0)
-                {
-                    /* Secure must follow the request scheme or browsers drop cookies on http://localhost (device id never sticks). */
-                    Response.Cookies.Append(cookieName, fp, new CookieOptions
-                    {
-                        HttpOnly = true,
-                        Secure = Request.IsHttps,
-                        SameSite = SameSiteMode.Strict,
-                        Path = "/",
-                        Expires = DateTimeOffset.UtcNow.AddDays(365)
-                    });
-                }
-            }
-
-            /* Seat gate: persist DEVICE_ID (submitted or derived from fingerprint) so later requests validate without a DB lookup. */
-            if (_opt.LicenseId.HasValue)
-            {
-                var didCookie = (_opt.DeviceIdCookieName ?? "ABS_DeviceLogicalId").Trim();
-                string? normalizedDid = null;
-                if (_opt.SeatIdentityUsesMachineFingerprint && !string.IsNullOrWhiteSpace(deviceFingerprint))
-                    normalizedDid = _activation.DeriveSeatDeviceIdFromFingerprint(deviceFingerprint.Trim().ToUpperInvariant());
-                else if (!string.IsNullOrWhiteSpace(deviceId))
-                    normalizedDid = deviceId.Trim().ToUpperInvariant();
-
-                if (!string.IsNullOrEmpty(didCookie) && !string.IsNullOrWhiteSpace(normalizedDid))
-                {
-                    Response.Cookies.Append(didCookie, normalizedDid, new CookieOptions
-                    {
-                        HttpOnly = true,
-                        Secure = Request.IsHttps,
-                        SameSite = SameSiteMode.Strict,
-                        Path = "/",
-                        Expires = DateTimeOffset.UtcNow.AddDays(365)
-                    });
-                }
-            }
+            AppendActivationIdentityCookies(deviceFingerprint, deviceId);
 
             return RedirectToAction("Index", "Home");
         }
@@ -170,6 +135,8 @@ public class ActivationController : Controller
         ViewBag.SeatEnforcement = _opt.LicenseId.HasValue;
         ViewBag.ConfiguredLicenseId = _opt.LicenseId;
         ViewBag.SeatIdentityUsesMachineFingerprint = _opt.LicenseId.HasValue && _opt.SeatIdentityUsesMachineFingerprint;
+        ViewBag.SeatSwapFingerprintAndDeviceIdColumns = _opt.LicenseId.HasValue && _opt.SeatSwapFingerprintAndDeviceIdColumns;
+        ViewBag.SeatRequireLicenseKey = _opt.LicenseId.HasValue && _opt.RequireSeatLicenseKey;
         ViewBag.DeviceIdCookieName = (_opt.DeviceIdCookieName ?? "ABS_DeviceLogicalId").Trim();
         ViewBag.Message = result.Message;
         var fpDisp2 = await _activation
@@ -193,6 +160,74 @@ public class ActivationController : Controller
         ViewBag.ActivationFormPostBack = true;
         ViewBag.SeatClientNonce = _opt.LicenseId.HasValue ? EnsureSeatClientNonceCookie() : "";
         return View("Blocked");
+    }
+
+    /// <summary>
+    /// Sets HttpOnly fingerprint / device-id cookies from the Blocked page script (same values as a successful <see cref="Submit"/>).
+    /// JavaScript cannot set HttpOnly cookies, so the browser POSTs here after generating fingerprint + device id so <c>ValidateAsync</c>
+    /// can run against the activation database on the next navigation without requiring an extra Activate click.
+    /// Activation rules are still enforced by Firebird on each request; this only mirrors client identity into cookies.
+    /// </summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult SyncClientCookies(
+        [FromForm] string? deviceFingerprint,
+        [FromForm] string? deviceId,
+        [FromForm] string? seatClientNonce)
+    {
+        if (!_opt.Enabled)
+            return Json(new { ok = true });
+
+        if (_opt.LicenseId.HasValue && !ValidateSeatClientNonceFormMatchesCookie(seatClientNonce))
+            return BadRequest(new { ok = false, error = "invalid_nonce" });
+
+        AppendActivationIdentityCookies(deviceFingerprint, deviceId);
+        return Json(new { ok = true });
+    }
+
+    private void AppendActivationIdentityCookies(string? deviceFingerprint, string? deviceId)
+    {
+        if (!string.IsNullOrWhiteSpace(deviceFingerprint))
+        {
+            var fp = deviceFingerprint.Trim().ToUpperInvariant();
+            var cookieName = (_opt.DeviceFingerprintCookieName ?? "ABS_DeviceFingerprint").Trim();
+            if (!string.IsNullOrWhiteSpace(cookieName) && fp.Length > 0)
+            {
+                /* Secure must follow the request scheme or browsers drop cookies on http://localhost (device id never sticks). */
+                Response.Cookies.Append(cookieName, fp, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = Request.IsHttps,
+                    SameSite = SameSiteMode.Strict,
+                    Path = "/",
+                    Expires = DateTimeOffset.UtcNow.AddDays(365)
+                });
+            }
+        }
+
+        /* Seat gate: persist DEVICE_ID (submitted or derived from fingerprint) so later requests validate with cookies. */
+        if (!_opt.LicenseId.HasValue)
+            return;
+
+        var didCookie = (_opt.DeviceIdCookieName ?? "ABS_DeviceLogicalId").Trim();
+        string? normalizedDid = null;
+        if (_opt.SeatIdentityUsesMachineFingerprint && !_opt.SeatSwapFingerprintAndDeviceIdColumns
+            && !string.IsNullOrWhiteSpace(deviceFingerprint))
+            normalizedDid = _activation.DeriveSeatDeviceIdFromFingerprint(deviceFingerprint.Trim().ToUpperInvariant());
+        else if (!string.IsNullOrWhiteSpace(deviceId))
+            normalizedDid = deviceId.Trim().ToUpperInvariant();
+
+        if (!string.IsNullOrEmpty(didCookie) && !string.IsNullOrWhiteSpace(normalizedDid))
+        {
+            Response.Cookies.Append(didCookie, normalizedDid, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = Request.IsHttps,
+                SameSite = SameSiteMode.Strict,
+                Path = "/",
+                Expires = DateTimeOffset.UtcNow.AddDays(365)
+            });
+        }
     }
 
     /// <summary>HttpOnly nonce per browser on this machine — not synced with other desktops like localStorage can be.</summary>
@@ -242,6 +277,8 @@ public class ActivationController : Controller
         ViewBag.SeatEnforcement = _opt.LicenseId.HasValue;
         ViewBag.ConfiguredLicenseId = _opt.LicenseId;
         ViewBag.SeatIdentityUsesMachineFingerprint = _opt.LicenseId.HasValue && _opt.SeatIdentityUsesMachineFingerprint;
+        ViewBag.SeatSwapFingerprintAndDeviceIdColumns = _opt.LicenseId.HasValue && _opt.SeatSwapFingerprintAndDeviceIdColumns;
+        ViewBag.SeatRequireLicenseKey = _opt.LicenseId.HasValue && _opt.RequireSeatLicenseKey;
         ViewBag.DeviceIdCookieName = (_opt.DeviceIdCookieName ?? "ABS_DeviceLogicalId").Trim();
         ViewBag.Message = message;
         var fpDisp2 = await _activation

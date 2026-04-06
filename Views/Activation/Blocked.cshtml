@@ -26,6 +26,8 @@
     /* Only lock the field when we have an actual id (cookie, repost, etc.) — not merely "is postback" with empty deviceId. */
     var preserveSeatDeviceId = seatMode && !string.IsNullOrWhiteSpace(formDeviceId);
     var seatByFingerprint = seatMode && (ViewBag.SeatIdentityUsesMachineFingerprint as bool? ?? false);
+    var seatSwapColumns = seatMode && (ViewBag.SeatSwapFingerprintAndDeviceIdColumns as bool? ?? false);
+    var seatRequireLicenseKey = seatMode && (ViewBag.SeatRequireLicenseKey as bool? ?? false);
 }
 
 <div class="container flex-fill d-flex align-items-center justify-content-center py-5">
@@ -38,7 +40,7 @@
             {
                 <form asp-controller="Activation" asp-action="Submit" method="post" class="text-start mt-4">
                     @Html.AntiForgeryToken()
-                    <label for="activationCode" class="form-label small text-muted mb-1">Activation code</label>
+                    <label for="activationCode" class="form-label small text-muted mb-1">@(seatRequireLicenseKey ? "License key (must match LICENSE.LICENSE_KEY)" : "Activation code")</label>
                     <input type="text"
                            class="form-control form-control-lg"
                            id="activationCode"
@@ -189,7 +191,7 @@
             @if (!string.IsNullOrWhiteSpace(fpHex))
             {
                 <div class="text-start mt-3 p-3 rounded border bg-light">
-                    <div class="small text-muted mb-1">Machine fingerprint (for <code>LICENSE_ACTIVATION.MACHINE_FINGERPRINT</code>)</div>
+                    <div class="small text-muted mb-1">Machine fingerprint @(seatSwapColumns ? "(stored in LICENSE_ACTIVATION.DEVICE_ID)" : "(for LICENSE_ACTIVATION.MACHINE_FINGERPRINT)")</div>
                     <code class="user-select-all d-block text-break" style="font-size: 0.85rem;">@fpHex</code>
                     <div class="small text-muted mt-2 mb-0">
                         @if (seatMode)
@@ -208,7 +210,11 @@
             <p class="text-muted small mb-0">
                 @if (seatMode)
                 {
-                    @if (seatByFingerprint)
+                    @if (seatSwapColumns)
+                    {
+                        <text><strong>Seat mode (swapped columns)</strong> (<code>Activation:SeatSwapFingerprintAndDeviceIdColumns</code>): validation requires <strong>Device ID</strong> = <code>LICENSE_ACTIVATION.MACHINE_FINGERPRINT</code> and <strong>machine fingerprint</strong> (first 64 chars) = <code>LICENSE_ACTIVATION.DEVICE_ID</code> on an active row for this license.</text>
+                    }
+                    else if (seatByFingerprint)
                     {
                         <text><strong>Seat mode (fingerprint identity)</strong> (<code>Activation:LicenseId</code> + <code>Activation:SeatIdentityUsesMachineFingerprint</code>): each seat is <code>LICENSE_ID</code> + <code>DEVICE_ID</code>, where <code>DEVICE_ID</code> is the first 64 characters of <code>MACHINE_FINGERPRINT</code>. <code>LICENSE.MAX_DEVICE_COUNT</code> limits how many distinct fingerprints can activate. Two users on the same PC/browser profile share one seat.</text>
                     }
@@ -228,6 +234,37 @@
 </div>
 
 @section Scripts {
+@if (showForm)
+{
+<script>
+(function () {
+    var syncUrl = '@Url.Action("SyncClientCookies", "Activation")';
+    /** Mirrors fingerprint + device id into HttpOnly cookies so the server can run ValidateAsync on the next navigation (Firebird still decides pass/fail). */
+    window.absSyncActivationCookies = function () {
+        var fpEl = document.getElementById('deviceFingerprint');
+        var didEl = document.getElementById('deviceId');
+        var nonceEl = document.getElementById('seatClientNonce');
+        if (!fpEl) return;
+        var fp = (fpEl.value || '').trim();
+        var did = didEl ? (didEl.value || '').trim() : '';
+        if (!fp.length) return;
+        var tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+        if (!tokenInput || !tokenInput.value) return;
+        var body = new URLSearchParams();
+        body.set('deviceFingerprint', fp);
+        body.set('deviceId', did);
+        body.set('seatClientNonce', nonceEl ? (nonceEl.value || '') : '');
+        body.set('__RequestVerificationToken', tokenInput.value);
+        fetch(syncUrl, {
+            method: 'POST',
+            body: body,
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        }).catch(function () { });
+    };
+})();
+</script>
+}
 @if (seatMode && seatByFingerprint)
 {
 <script>
@@ -295,6 +332,7 @@
         }
         syncSeatIdFromFingerprint(el);
         syncManualLaPanel(el);
+        if (window.absSyncActivationCookies) window.absSyncActivationCookies();
     });
 })();
 </script>
@@ -545,6 +583,7 @@
         }
 
         syncManualLaPanel(el);
+        if (window.absSyncActivationCookies) window.absSyncActivationCookies();
     });
     function syncManualLaPanel(fpInput) {
         var manualFp = document.getElementById('manualLaMachineFp');
@@ -583,6 +622,7 @@
     }
     document.addEventListener('DOMContentLoaded', function () {
         ensureLegacyDeviceId();
+        if (window.absSyncActivationCookies) window.absSyncActivationCookies();
     });
 })();
 </script>

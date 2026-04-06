@@ -161,7 +161,7 @@ WHERE UPPER(TENANT_CODE) = @CODE
                 TenantCode = tenantCode,
                 TenantName = "Default Company",
                 HeaderText1 = "Welcome",
-                FooterText1 = "Thank you for using our system."
+                FooterText1 = "Thank you for using our system. "
             };
         }
 

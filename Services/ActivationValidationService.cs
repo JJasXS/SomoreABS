@@ -105,7 +105,9 @@ public sealed class ActivationValidationService : IActivationValidationService
             return ok;
         }
 
-        var code = (activationCode ?? "").Trim();
+        var code = _opt.LicenseId.HasValue
+            ? (string.IsNullOrWhiteSpace(activationCode) ? (_opt.ActivationCode ?? "") : activationCode).Trim()
+            : (activationCode ?? "").Trim();
         var fpOverride = string.IsNullOrWhiteSpace(deviceFingerprint)
             ? null
             : deviceFingerprint.Trim().ToUpperInvariant();
@@ -139,7 +141,7 @@ public sealed class ActivationValidationService : IActivationValidationService
     {
         if (_opt.LicenseId.HasValue)
         {
-            if (_opt.SeatIdentityUsesMachineFingerprint)
+            if (_opt.SeatIdentityUsesMachineFingerprint && !_opt.SeatSwapFingerprintAndDeviceIdColumns)
                 return DeriveSeatDeviceIdFromFingerprint(machineFingerprint);
             return "";
         }
@@ -160,7 +162,7 @@ public sealed class ActivationValidationService : IActivationValidationService
         if (!_opt.LicenseId.HasValue)
             return "";
 
-        if (_opt.SeatIdentityUsesMachineFingerprint)
+        if (_opt.SeatIdentityUsesMachineFingerprint && !_opt.SeatSwapFingerprintAndDeviceIdColumns)
             return "";
 
         string cs;
@@ -189,6 +191,7 @@ public sealed class ActivationValidationService : IActivationValidationService
                 conn,
                 tx: null,
                 _opt.LicenseId.Value,
+                _opt.SeatSwapFingerprintAndDeviceIdColumns,
                 cancellationToken).ConfigureAwait(false);
         }
         catch (FbException ex)
@@ -265,12 +268,20 @@ public sealed class ActivationValidationService : IActivationValidationService
         }
 
         var sql = _opt.LicenseId.HasValue
-            ? """
-              SELECT FIRST 1 TRIM(la.DEVICE_ID)
-              FROM LICENSE_ACTIVATION la
-              WHERE la.LICENSE_ID = @lid
-                AND UPPER(TRIM(la.DEVICE_ID)) = @did
-              """
+            ? _opt.SeatSwapFingerprintAndDeviceIdColumns
+                ? """
+                  SELECT FIRST 1 TRIM(la.MACHINE_FINGERPRINT)
+                  FROM LICENSE_ACTIVATION la
+                  WHERE la.LICENSE_ID = @lid
+                    AND UPPER(TRIM(la.MACHINE_FINGERPRINT)) = @did
+                    AND UPPER(TRIM(la.DEVICE_ID)) = @fp
+                  """
+                : """
+                  SELECT FIRST 1 TRIM(la.DEVICE_ID)
+                  FROM LICENSE_ACTIVATION la
+                  WHERE la.LICENSE_ID = @lid
+                    AND UPPER(TRIM(la.DEVICE_ID)) = @did
+                  """
             : """
               SELECT FIRST 1 TRIM(la.DEVICE_ID)
               FROM LICENSE_ACTIVATION la
@@ -285,6 +296,8 @@ public sealed class ActivationValidationService : IActivationValidationService
             {
                 cmd.Parameters.Add(new FbParameter("@lid", FbDbType.Integer) { Value = _opt.LicenseId.Value });
                 AddVarcharParameter(cmd, "@did", did!);
+                if (_opt.SeatSwapFingerprintAndDeviceIdColumns)
+                    AddVarcharParameter(cmd, "@fp", FingerprintForLaDeviceIdColumn(fp));
             }
             else
                 AddVarcharParameter(cmd, "@fp", fp);
@@ -311,7 +324,7 @@ public sealed class ActivationValidationService : IActivationValidationService
         string resolvedFingerprint,
         CancellationToken cancellationToken)
     {
-        if (_opt.LicenseId.HasValue && _opt.SeatIdentityUsesMachineFingerprint)
+        if (_opt.LicenseId.HasValue && _opt.SeatIdentityUsesMachineFingerprint && !_opt.SeatSwapFingerprintAndDeviceIdColumns)
         {
             var fp = (resolvedFingerprint ?? "").Trim().ToUpperInvariant();
             if (string.IsNullOrEmpty(fp))
@@ -714,6 +727,50 @@ public sealed class ActivationValidationService : IActivationValidationService
         }
     }
 
+    private static async Task<string?> LoadTrimmedLicenseKeyFromLicenseAsync(
+        FbConnection conn,
+        int licenseId,
+        CancellationToken cancellationToken)
+    {
+        await using var cmd = new FbCommand(
+            """
+            SELECT TRIM(l.LICENSE_KEY)
+            FROM LICENSE l
+            WHERE l.LICENSE_ID = @lid
+            """,
+            conn);
+        cmd.Parameters.Add(new FbParameter("@lid", FbDbType.Integer) { Value = licenseId });
+        var o = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        if (o == null || o == DBNull.Value)
+            return null;
+        var s = Convert.ToString(o, CultureInfo.InvariantCulture)?.Trim();
+        return string.IsNullOrEmpty(s) ? null : s;
+    }
+
+    /// <summary>
+    /// Seat mode gate: true if some <c>LICENSE_ACTIVATION</c> row for <paramref name="licenseId"/> has
+    /// <c>MACHINE_FINGERPRINT</c> equal to <paramref name="normalizedDeviceId"/> (trim, upper).
+    /// </summary>
+    private static async Task<bool> DeviceIdExistsAsMachineFingerprintForLicenseAsync(
+        FbConnection conn,
+        int licenseId,
+        string normalizedDeviceId,
+        CancellationToken cancellationToken)
+    {
+        await using var cmd = new FbCommand(
+            """
+            SELECT COUNT(*)
+            FROM LICENSE_ACTIVATION la
+            WHERE la.LICENSE_ID = @lid
+              AND UPPER(TRIM(la.MACHINE_FINGERPRINT)) = @did
+            """,
+            conn);
+        cmd.Parameters.Add(new FbParameter("@lid", FbDbType.Integer) { Value = licenseId });
+        AddVarcharParameter(cmd, "@did", normalizedDeviceId);
+        var obj = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return Convert.ToInt64(obj, CultureInfo.InvariantCulture) > 0;
+    }
+
     private async Task<ActivationValidationResult> ValidateCoreByLicenseSeatModelAsync(
         string? activationCode,
         string fingerprint,
@@ -757,10 +814,48 @@ public sealed class ActivationValidationService : IActivationValidationService
             return ActivationValidationResult.Fail($"Cannot connect to activation database: {ex.Message}");
         }
 
+        if (_opt.RequireSeatLicenseKey)
+        {
+            var dbKey = await LoadTrimmedLicenseKeyFromLicenseAsync(conn, licenseId, cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrEmpty(dbKey))
+            {
+                return ActivationValidationResult.Fail(
+                    "License key validation is required but LICENSE.LICENSE_KEY is empty for this license in the activation database.");
+            }
+
+            var submittedKey = (string.IsNullOrWhiteSpace(activationCode) ? _opt.ActivationCode : activationCode)?.Trim() ?? "";
+            if (string.IsNullOrEmpty(submittedKey))
+            {
+                return ActivationValidationResult.Fail(
+                    "Enter the license key (activation code) that matches LICENSE.LICENSE_KEY for this license, or set Activation:ActivationCode in configuration.");
+            }
+
+            if (!string.Equals(submittedKey, dbKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return ActivationValidationResult.Fail(
+                    "The license key does not match LICENSE.LICENSE_KEY for this license in the activation database.");
+            }
+        }
+
+        // Submitted Device ID must already appear as MACHINE_FINGERPRINT on some row for this license (unless auto-register will create a new row).
+        if (_opt.RequireDeviceIdRegisteredAsMachineFingerprint && !_opt.AutoRegisterNewDevices)
+        {
+            var registeredAsFp = await DeviceIdExistsAsMachineFingerprintForLicenseAsync(
+                conn,
+                licenseId,
+                did,
+                cancellationToken).ConfigureAwait(false);
+            if (!registeredAsFp)
+            {
+                return ActivationValidationResult.Fail(
+                    "This Device ID is not registered: no LICENSE_ACTIVATION row for this license has MACHINE_FINGERPRINT matching the submitted Device ID. Contact your administrator or ensure the device is provisioned before activating.");
+            }
+        }
+
         const string tenantMayActivate =
             "AND (t.STATUS IS NULL OR UPPER(TRIM(t.STATUS)) = 'ACTIVE')";
 
-        const string lookupSql = """
+        var lookupSql = """
             SELECT
                 la.LICENSE_ACTIVATION_ID,
                 la.LICENSE_ID,
@@ -810,19 +905,29 @@ public sealed class ActivationValidationService : IActivationValidationService
                      WHERE tdp.TENANT_ID = t.TENANT_ID
                      ORDER BY tdp.TENANT_DB_PROFILE_ID)
                 )
+            """ + (_opt.SeatSwapFingerprintAndDeviceIdColumns
+                ? """
+            WHERE la.LICENSE_ID = @lid
+              AND UPPER(TRIM(la.MACHINE_FINGERPRINT)) = @did
+              AND UPPER(TRIM(la.DEVICE_ID)) = @fp
+              AND UPPER(TRIM(la.STATUS)) = 'ACTIVE'
+            """
+                : """
             WHERE la.LICENSE_ID = @lid
               AND UPPER(TRIM(la.DEVICE_ID)) = @did
               AND UPPER(TRIM(la.STATUS)) = 'ACTIVE'
-            """;
+            """);
 
         try
         {
-            // 1) Active seat row = LICENSE_ID + DEVICE_ID (local desktop identity). MACHINE_FINGERPRINT is stored/updated on the row but may match other seats if the host shares one fingerprint.
+            // 1) Active seat: default maps form Device ID → la.DEVICE_ID and fingerprint → la.MACHINE_FINGERPRINT; swapped mode reverses those columns (see Activation:SeatSwapFingerprintAndDeviceIdColumns).
             var validated = await TryValidateSeatLookupAsync(
                 conn,
                 lookupSql + $" {tenantMayActivate}",
                 licenseId,
                 did,
+                fingerprint,
+                _opt.SeatSwapFingerprintAndDeviceIdColumns,
                 cancellationToken).ConfigureAwait(false);
 
             if (validated.Success)
@@ -865,6 +970,8 @@ public sealed class ActivationValidationService : IActivationValidationService
                 lookupSql + $" {tenantMayActivate}",
                 licenseId,
                 did,
+                fingerprint,
+                _opt.SeatSwapFingerprintAndDeviceIdColumns,
                 cancellationToken).ConfigureAwait(false);
         }
         catch (FbException ex)
@@ -947,18 +1054,37 @@ public sealed class ActivationValidationService : IActivationValidationService
                 "Activation code does not match an active seat for this license. Clear cookies and use the registered Device ID, or check the code in the activation database.");
         }
 
+        var fpStore = FingerprintForLaDeviceIdColumn(fingerprint);
+        var swap = _opt.SeatSwapFingerprintAndDeviceIdColumns;
         await using (var upd = new FbCommand(
-            """
-            UPDATE LICENSE_ACTIVATION
-            SET MACHINE_FINGERPRINT = @fp,
-                DEVICE_ID = @did
-            WHERE LICENSE_ACTIVATION_ID = @laId
-              AND LICENSE_ID = @lid
-            """,
+            swap
+                ? """
+                  UPDATE LICENSE_ACTIVATION
+                  SET MACHINE_FINGERPRINT = @did,
+                      DEVICE_ID = @fp
+                  WHERE LICENSE_ACTIVATION_ID = @laId
+                    AND LICENSE_ID = @lid
+                  """
+                : """
+                  UPDATE LICENSE_ACTIVATION
+                  SET MACHINE_FINGERPRINT = @fp,
+                      DEVICE_ID = @did
+                  WHERE LICENSE_ACTIVATION_ID = @laId
+                    AND LICENSE_ID = @lid
+                  """,
             conn))
         {
-            AddVarcharParameter(upd, "@fp", fingerprint);
-            AddVarcharParameter(upd, "@did", deviceId);
+            if (swap)
+            {
+                AddVarcharParameter(upd, "@did", deviceId);
+                AddVarcharParameter(upd, "@fp", fpStore);
+            }
+            else
+            {
+                AddVarcharParameter(upd, "@fp", fingerprint);
+                AddVarcharParameter(upd, "@did", deviceId);
+            }
+
             upd.Parameters.Add(new FbParameter("@laId", FbDbType.Integer) { Value = laId.Value });
             upd.Parameters.Add(new FbParameter("@lid", FbDbType.Integer) { Value = licenseId });
             var n = await upd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -975,6 +1101,8 @@ public sealed class ActivationValidationService : IActivationValidationService
             lookupSql + $" {tenantMayActivate}",
             licenseId,
             deviceId,
+            fingerprint,
+            swap,
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -983,11 +1111,15 @@ public sealed class ActivationValidationService : IActivationValidationService
         string sql,
         int licenseId,
         string deviceId,
+        string fingerprint,
+        bool seatSwapFingerprintAndDeviceIdColumns,
         CancellationToken cancellationToken)
     {
         await using var cmd = new FbCommand(sql, conn);
         cmd.Parameters.Add(new FbParameter("@lid", FbDbType.Integer) { Value = licenseId });
         AddVarcharParameter(cmd, "@did", deviceId);
+        if (seatSwapFingerprintAndDeviceIdColumns)
+            AddVarcharParameter(cmd, "@fp", FingerprintForLaDeviceIdColumn(fingerprint));
 
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -1091,6 +1223,51 @@ public sealed class ActivationValidationService : IActivationValidationService
         return ActivationValidationResult.Ok();
     }
 
+    /// <summary>
+    /// Seat cap policy: deactivate the oldest active row so a new device can register when <see cref="ActivationOptions.SeatEvictOldestWhenAtDeviceCap"/> is true.
+    /// </summary>
+    private static async Task<bool> TryDeactivateOldestActiveSeatAsync(
+        FbConnection conn,
+        int licenseId,
+        FbTransaction tx,
+        CancellationToken cancellationToken)
+    {
+        int? laId = null;
+        await using (var sel = new FbCommand(
+            """
+            SELECT FIRST 1 la.LICENSE_ACTIVATION_ID
+            FROM LICENSE_ACTIVATION la
+            WHERE la.LICENSE_ID = @lid
+              AND UPPER(TRIM(la.STATUS)) = 'ACTIVE'
+            ORDER BY la.ACTIVATED_AT ASC
+            """,
+            conn,
+            tx))
+        {
+            sel.Parameters.Add(new FbParameter("@lid", FbDbType.Integer) { Value = licenseId });
+            var o = await sel.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (o != null && o != DBNull.Value)
+                laId = Convert.ToInt32(o, CultureInfo.InvariantCulture);
+        }
+
+        if (!laId.HasValue)
+            return false;
+
+        await using var upd = new FbCommand(
+            """
+            UPDATE LICENSE_ACTIVATION
+            SET STATUS = 'INACTIVE'
+            WHERE LICENSE_ACTIVATION_ID = @laId
+              AND LICENSE_ID = @lid
+            """,
+            conn,
+            tx);
+        upd.Parameters.Add(new FbParameter("@laId", FbDbType.Integer) { Value = laId.Value });
+        upd.Parameters.Add(new FbParameter("@lid", FbDbType.Integer) { Value = licenseId });
+        var n = await upd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        return n > 0;
+    }
+
     private async Task<ActivationValidationResult> TryRegisterSeatDeviceAsync(
         FbConnection conn,
         int licenseId,
@@ -1153,38 +1330,86 @@ public sealed class ActivationValidationService : IActivationValidationService
         var registerCap = maxDeviceCount is > 0 ? maxDeviceCount : null;
         if (registerCap.HasValue && activeCount >= registerCap.Value)
         {
-            tx.Rollback();
-            return ActivationValidationResult.Fail(
-                string.Format(CultureInfo.InvariantCulture,
-                    "This license allows at most {0} active device seat(s) (LICENSE.MAX_DEVICE_COUNT); the activation database already has {1}. Add seats or deactivate a device before activating another.",
-                    registerCap.Value, activeCount));
+            if (_opt.SeatEvictOldestWhenAtDeviceCap)
+            {
+                var safety = 0;
+                while (activeCount >= registerCap.Value && safety++ < 64)
+                {
+                    var evicted = await TryDeactivateOldestActiveSeatAsync(
+                        conn,
+                        licenseId,
+                        tx,
+                        cancellationToken).ConfigureAwait(false);
+                    if (!evicted)
+                        break;
+                    activeCount--;
+                }
+            }
+
+            if (registerCap.HasValue && activeCount >= registerCap.Value)
+            {
+                tx.Rollback();
+                return ActivationValidationResult.Fail(
+                    string.Format(CultureInfo.InvariantCulture,
+                        "This license allows at most {0} active device seat(s) (LICENSE.MAX_DEVICE_COUNT); the activation database already has {1}. Add seats or deactivate a device before activating another.",
+                        registerCap.Value, activeCount));
+            }
         }
 
         // 3) Compute EXPIRED_ON using the same rules as the LAAS licensing service.
         var activatedAtUtc = DateTime.UtcNow;
         var expiredOn = ComputeExpiredOn(activatedAtUtc, licenseType ?? "", licenseStartDate, licenseEndDate);
 
-        // 4) One seat per (LICENSE_ID, DEVICE_ID) — local desktop identity; MACHINE_FINGERPRINT may match other seats if the host shares one fingerprint.
-        int? existingLaId = null;
-        await using (var compositeCmd = new FbCommand(
-            """
-            SELECT FIRST 1 la.LICENSE_ACTIVATION_ID
-            FROM LICENSE_ACTIVATION la
-            WHERE la.LICENSE_ID = @lid
-              AND UPPER(TRIM(la.DEVICE_ID)) = @did
-            """,
-            conn,
-            tx))
-        {
-            compositeCmd.Parameters.Add(new FbParameter("@lid", FbDbType.Integer) { Value = licenseId });
-            AddVarcharParameter(compositeCmd, "@did", did);
+        // 4) One seat per license + identity: default keys DEVICE_ID; swapped mode keys MACHINE_FINGERPRINT (Device ID) + DEVICE_ID (fingerprint prefix).
+        var fpForDeviceIdCol = FingerprintForLaDeviceIdColumn(fingerprint);
+        var swapCols = _opt.SeatSwapFingerprintAndDeviceIdColumns;
 
-            var existingObj = await compositeCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            if (existingObj != null && existingObj != DBNull.Value)
-                existingLaId = Convert.ToInt32(existingObj, CultureInfo.InvariantCulture);
+        int? existingLaId = null;
+        if (swapCols)
+        {
+            await using (var compositeCmd = new FbCommand(
+                """
+                SELECT FIRST 1 la.LICENSE_ACTIVATION_ID
+                FROM LICENSE_ACTIVATION la
+                WHERE la.LICENSE_ID = @lid
+                  AND UPPER(TRIM(la.MACHINE_FINGERPRINT)) = @did
+                  AND UPPER(TRIM(la.DEVICE_ID)) = @fp
+                """,
+                conn,
+                tx))
+            {
+                compositeCmd.Parameters.Add(new FbParameter("@lid", FbDbType.Integer) { Value = licenseId });
+                AddVarcharParameter(compositeCmd, "@did", did);
+                AddVarcharParameter(compositeCmd, "@fp", fpForDeviceIdCol);
+
+                var existingObj = await compositeCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                if (existingObj != null && existingObj != DBNull.Value)
+                    existingLaId = Convert.ToInt32(existingObj, CultureInfo.InvariantCulture);
+            }
+        }
+        else
+        {
+            await using (var compositeCmd = new FbCommand(
+                """
+                SELECT FIRST 1 la.LICENSE_ACTIVATION_ID
+                FROM LICENSE_ACTIVATION la
+                WHERE la.LICENSE_ID = @lid
+                  AND UPPER(TRIM(la.DEVICE_ID)) = @did
+                """,
+                conn,
+                tx))
+            {
+                compositeCmd.Parameters.Add(new FbParameter("@lid", FbDbType.Integer) { Value = licenseId });
+                AddVarcharParameter(compositeCmd, "@did", did);
+
+                var existingObj = await compositeCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                if (existingObj != null && existingObj != DBNull.Value)
+                    existingLaId = Convert.ToInt32(existingObj, CultureInfo.InvariantCulture);
+            }
         }
 
-        var deviceId = did;
+        var deviceIdColValue = swapCols ? fpForDeviceIdCol : did;
+        var machineFingerprintColValue = swapCols ? did : fingerprint;
 
         // Multi-seat: config override → reuse first seat's ACTIVATION_CODE → random only for the first device.
         var activationCode = await ResolveSharedActivationCodeForSeatAsync(
@@ -1212,9 +1437,9 @@ public sealed class ActivationValidationService : IActivationValidationService
                 """,
                 conn,
                 tx);
-            updateCmd.Parameters.Add(new FbParameter("@deviceId", FbDbType.VarChar, FirebirdVarcharMax) { Value = deviceId });
+            updateCmd.Parameters.Add(new FbParameter("@deviceId", FbDbType.VarChar, FirebirdVarcharMax) { Value = deviceIdColValue });
             updateCmd.Parameters.Add(new FbParameter("@actCode", FbDbType.VarChar, FirebirdVarcharMax) { Value = activationCode });
-            updateCmd.Parameters.Add(new FbParameter("@fp", FbDbType.VarChar, FirebirdVarcharMax) { Value = fingerprint });
+            updateCmd.Parameters.Add(new FbParameter("@fp", FbDbType.VarChar, FirebirdVarcharMax) { Value = machineFingerprintColValue });
             updateCmd.Parameters.Add(new FbParameter("@expiredOn", FbDbType.TimeStamp) { Value = expiredOn });
             updateCmd.Parameters.Add(new FbParameter("@remarks", FbDbType.VarChar, FirebirdVarcharMax) { Value = remarks });
             updateCmd.Parameters.Add(new FbParameter("@laId", FbDbType.Integer) { Value = existingLaId.Value });
@@ -1253,9 +1478,9 @@ public sealed class ActivationValidationService : IActivationValidationService
                 conn,
                 tx);
             insertCmd.Parameters.Add(new FbParameter("@lid", FbDbType.Integer) { Value = licenseId });
-            insertCmd.Parameters.Add(new FbParameter("@deviceId", FbDbType.VarChar, FirebirdVarcharMax) { Value = deviceId });
+            insertCmd.Parameters.Add(new FbParameter("@deviceId", FbDbType.VarChar, FirebirdVarcharMax) { Value = deviceIdColValue });
             insertCmd.Parameters.Add(new FbParameter("@actCode", FbDbType.VarChar, FirebirdVarcharMax) { Value = activationCode });
-            insertCmd.Parameters.Add(new FbParameter("@fp", FbDbType.VarChar, FirebirdVarcharMax) { Value = fingerprint });
+            insertCmd.Parameters.Add(new FbParameter("@fp", FbDbType.VarChar, FirebirdVarcharMax) { Value = machineFingerprintColValue });
             insertCmd.Parameters.Add(new FbParameter("@expiredOn", FbDbType.TimeStamp) { Value = expiredOn });
             insertCmd.Parameters.Add(new FbParameter("@remarks", FbDbType.VarChar, FirebirdVarcharMax) { Value = remarks });
 
@@ -1273,6 +1498,10 @@ public sealed class ActivationValidationService : IActivationValidationService
             return "";
         return fingerprint.Length <= 64 ? fingerprint : fingerprint[..64];
     }
+
+    /// <summary>Machine fingerprint value as stored in <c>LICENSE_ACTIVATION.DEVICE_ID</c> when columns are swapped (64 chars max).</summary>
+    private static string FingerprintForLaDeviceIdColumn(string fingerprint) =>
+        TrimSeatDeviceIdColumn((fingerprint ?? "").Trim().ToUpperInvariant());
 
     private static string TrimSeatDeviceIdColumn(string s)
     {
@@ -1292,17 +1521,19 @@ public sealed class ActivationValidationService : IActivationValidationService
         FbConnection conn,
         FbTransaction? tx,
         int licenseId,
+        bool devPrefixStoredInMachineFingerprintColumn,
         CancellationToken cancellationToken)
     {
+        var col = devPrefixStoredInMachineFingerprintColumn ? "la.MACHINE_FINGERPRINT" : "la.DEVICE_ID";
         await using var cmd = new FbCommand(
-            """
+            $"""
             SELECT COALESCE(MAX(
-                CAST(TRIM(SUBSTRING(TRIM(la.DEVICE_ID) FROM 5 FOR 20)) AS INTEGER)
+                CAST(TRIM(SUBSTRING(TRIM({col}) FROM 5 FOR 20)) AS INTEGER)
             ), 0)
             FROM LICENSE_ACTIVATION la
             WHERE la.LICENSE_ID = @lid
-              AND UPPER(TRIM(la.DEVICE_ID)) STARTING WITH 'DEV-'
-              AND TRIM(SUBSTRING(TRIM(la.DEVICE_ID) FROM 5 FOR 20)) SIMILAR TO '[0-9]+'
+              AND UPPER(TRIM({col})) STARTING WITH 'DEV-'
+              AND TRIM(SUBSTRING(TRIM({col}) FROM 5 FOR 20)) SIMILAR TO '[0-9]+'
             """,
             conn,
             tx);

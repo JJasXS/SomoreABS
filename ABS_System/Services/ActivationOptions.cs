@@ -44,5 +44,5 @@ public class ActivationOptions
     /// When true (default), the fingerprint is written to SQL Server table <c>LocalDeploymentInfo</c> (singleton row) on first use
     /// and reused across restarts—queryable for <c>LICENSE_ACTIVATION.MACHINE_FINGERPRINT</c> without using the CLI.
     /// </summary>
-    public bool PersistMachineFingerprintInSqlServer { get; set; } = false;
+    public bool PersistMachineFingerprintInSqlServer { get; set; } = true;
 }

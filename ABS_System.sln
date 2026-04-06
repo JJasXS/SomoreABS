@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ABS_System", "ABS_System.cs
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ABS_System.IntegrationTests", "ABS_System.IntegrationTests\ABS_System.IntegrationTests.csproj", "{5D9EFC08-4011-449C-A87C-43C4A19FCF77}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ABS_System.MachineIdHelper", "ABS_System.MachineIdHelper\ABS_System.MachineIdHelper.csproj", "{ECDEE782-7032-4615-A340-60D306D8BB6E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -41,6 +43,18 @@ Global
 		{5D9EFC08-4011-449C-A87C-43C4A19FCF77}.Release|x64.Build.0 = Release|Any CPU
 		{5D9EFC08-4011-449C-A87C-43C4A19FCF77}.Release|x86.ActiveCfg = Release|Any CPU
 		{5D9EFC08-4011-449C-A87C-43C4A19FCF77}.Release|x86.Build.0 = Release|Any CPU
+		{ECDEE782-7032-4615-A340-60D306D8BB6E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ECDEE782-7032-4615-A340-60D306D8BB6E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ECDEE782-7032-4615-A340-60D306D8BB6E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{ECDEE782-7032-4615-A340-60D306D8BB6E}.Debug|x64.Build.0 = Debug|Any CPU
+		{ECDEE782-7032-4615-A340-60D306D8BB6E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{ECDEE782-7032-4615-A340-60D306D8BB6E}.Debug|x86.Build.0 = Debug|Any CPU
+		{ECDEE782-7032-4615-A340-60D306D8BB6E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ECDEE782-7032-4615-A340-60D306D8BB6E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ECDEE782-7032-4615-A340-60D306D8BB6E}.Release|x64.ActiveCfg = Release|Any CPU
+		{ECDEE782-7032-4615-A340-60D306D8BB6E}.Release|x64.Build.0 = Release|Any CPU
+		{ECDEE782-7032-4615-A340-60D306D8BB6E}.Release|x86.ActiveCfg = Release|Any CPU
+		{ECDEE782-7032-4615-A340-60D306D8BB6E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

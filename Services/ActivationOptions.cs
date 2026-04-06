@@ -66,8 +66,16 @@ public class ActivationOptions
     /// When <see cref="LicenseId"/> is set and this is true, each seat is keyed by <c>MACHINE_FINGERPRINT</c> alone:
     /// <c>DEVICE_ID</c> in the database is the first 64 characters of the fingerprint (same as legacy fallback).
     /// Use when browser-generated Device IDs are unreliable (sync, collisions). Trade-off: two users on the same PC/browser profile share one seat.
+    /// Ignored when <see cref="SeatSwapFingerprintAndDeviceIdColumns"/> is true (submitted Device ID and fingerprint must both match distinct columns).
     /// </summary>
     public bool SeatIdentityUsesMachineFingerprint { get; set; }
+
+    /// <summary>
+    /// Seat mode: validate and store the Blocked page <strong>Device ID</strong> in <c>LICENSE_ACTIVATION.MACHINE_FINGERPRINT</c> and the
+    /// <strong>machine fingerprint</strong> in <c>LICENSE_ACTIVATION.DEVICE_ID</c> (first 64 chars, upper-trimmed). Default is the opposite mapping.
+    /// Use when your activation database rows follow this convention.
+    /// </summary>
+    public bool SeatSwapFingerprintAndDeviceIdColumns { get; set; }
 
     /// <summary>
     /// Cookie name for <c>MACHINE_FINGERPRINT</c> sent by the client (seat mode). May match other users if the host shares one fingerprint.
@@ -93,4 +101,24 @@ public class ActivationOptions
     /// to match this browser, then validate. Allows re-binding when fingerprint/device identity changes without editing Firebird by hand.
     /// </summary>
     public bool SeatTrustBrowserCookiesWithActivationCode { get; set; } = true;
+
+    /// <summary>
+    /// Seat mode: require the submitted <c>DEVICE_ID</c> to appear as <c>LICENSE_ACTIVATION.MACHINE_FINGERPRINT</c> on at least one row
+    /// for <see cref="LicenseId"/> before activation can succeed. When <see cref="AutoRegisterNewDevices"/> is true, this check is skipped
+    /// so a new seat row can be inserted (the row will receive <c>MACHINE_FINGERPRINT</c> from the client on insert).
+    /// </summary>
+    public bool RequireDeviceIdRegisteredAsMachineFingerprint { get; set; } = true;
+
+    /// <summary>
+    /// Seat mode: require the activation / license key (form field + optional <see cref="ActivationCode"/> config) to match
+    /// <c>LICENSE.LICENSE_KEY</c> in the activation database for <see cref="LicenseId"/>. Ongoing requests use
+    /// <see cref="ActivationCode"/> in configuration — set it to the same key users enter, or rely on the Blocked form + cookies after first success.
+    /// </summary>
+    public bool RequireSeatLicenseKey { get; set; }
+
+    /// <summary>
+    /// Seat mode: when registering a new device and active seat count is already at <c>LICENSE.MAX_DEVICE_COUNT</c>,
+    /// deactivate the oldest active <c>LICENSE_ACTIVATION</c> row (by <c>ACTIVATED_AT</c>) instead of rejecting. Default is reject without eviction.
+    /// </summary>
+    public bool SeatEvictOldestWhenAtDeviceCap { get; set; }
 }
