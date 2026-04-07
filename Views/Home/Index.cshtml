@@ -16,11 +16,11 @@
                 <img src="@Url.Content(logoVirtualPath)"
                      alt="@(string.IsNullOrWhiteSpace(Model?.TenantName) ? "Logo" : Model!.TenantName.Trim())"
                      class="mb-3"
-                     style="max-height: 160px; width: auto; max-width: 100%; object-fit: contain;" />
+                     style="max-height: 160px; width: auto; max-width: 20%; object-fit: contain;" />
 
-                <h1 class="display-6 mb-2" style="font-weight: 700;">
+                <h4 class="display-6 mb-2" style="font-weight: 500, font-size: 200px;">
                     @(string.IsNullOrWhiteSpace(Model?.HeaderText1) ? "Appointment Management System" : Model!.HeaderText1)
-                </h1>
+                </h4>
 
                 <p class="lead mb-3" style="opacity: .85;">
                     @(string.IsNullOrWhiteSpace(Model?.HeaderText2) ? "Make appointment bookings here!" : Model!.HeaderText2)
