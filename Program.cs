@@ -92,6 +92,9 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Static files: only wwwroot (e.g. wwwroot/images/somore_logo1.png → /images/somore_logo1.png).
+// Do not add a second /images mapping from the project folder — it hides wwwroot/images.
 app.UseStaticFiles();
 
 app.UseRouting();

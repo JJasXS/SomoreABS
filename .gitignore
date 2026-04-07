@@ -68,3 +68,6 @@ scripts/.env
 
 # Node
 node_modules/
+
+# Removed duplicate nested app tree (same sources as repo root). Ignore if a local copy remains.
+/ABS_System/
