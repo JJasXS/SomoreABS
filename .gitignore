@@ -49,6 +49,12 @@ StyleCopReport.xml
 *.coverage
 *.coveragexml
 
+# Secrets (Keygen CLI, local env files)
+.env
+.env.*
+!.env.example
+scripts/.env
+
 # Others
 *.log
 

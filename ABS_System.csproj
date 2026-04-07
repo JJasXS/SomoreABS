@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Nested ABS_System/ is a legacy duplicate tree (see ABS_System.sln — it now builds this file at repo root). Excluded so SDK globs do not compile it twice. -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);ABS_System\**;ABS_System.IntegrationTests\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);ABS_System\**;ABS_System.IntegrationTests\**;ABS_System.MachineIdHelper\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
