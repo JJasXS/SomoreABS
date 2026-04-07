@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;                 //@jasch_04
+using Microsoft.Extensions.FileProviders;            // PhysicalFileProvider for /images → project images folder
 using YourApp.Data;                                  //@jasch_04 // AppDbContext + FirebirdDb + DbInitializer
 using FirebirdWeb.Helpers;                           //@jasch_04 // DbHelper
 using Microsoft.AspNetCore.Authentication.Cookies;   //@jasch_04
@@ -61,9 +62,6 @@ using (var scope = app.Services.CreateScope())                  //@jasch_04
     try                                                        //@jasch_04
     {                                                          //@jasch_04
 
-        // Branding / company header-footer                     //@jasch_04
-        init.EnsureTenantSchema();                              //@jasch_04
-
         // Columns / master tables                              //@jasch_04
         init.EnsureAgentEmailColumn();                          //@jasch_04
 
@@ -108,6 +106,18 @@ if (!app.Environment.IsDevelopment())                           //@jasch_04
 }                                                               //@jasch_04
 
 app.UseHttpsRedirection();                                      //@jasch_04
+
+// /images/* is served from the project "images" folder (e.g. images/somore_logo1.png), not only wwwroot
+var imagesPath = Path.Combine(app.Environment.ContentRootPath, "images");
+if (Directory.Exists(imagesPath))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(imagesPath),
+        RequestPath = "/images"
+    });
+}
+
 app.UseStaticFiles();                                           //@jasch_04
 
 

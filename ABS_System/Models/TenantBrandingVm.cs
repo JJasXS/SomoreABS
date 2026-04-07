@@ -3,8 +3,7 @@ using System;
 namespace YourApp.Models
 {
     /// <summary>
-    /// Simple view model for tenant-specific branding (header/footer).
-    /// Backed by the TENANT table in Firebird.
+    /// View model for site branding (header/footer). Values are set in <see cref="YourApp.Filters.TenantBrandingFilter"/>.
     /// </summary>
     public class TenantBrandingVm
     {

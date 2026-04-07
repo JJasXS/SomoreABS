@@ -7,81 +7,93 @@
 <style>
   /* Page wrapper: center inside main content area */
   .login-wrap {
-    padding: 0 4px;
+    padding: 0 8px;
   }
 
-  /* Card styling */
+  /* Card styling — sized to match Home landing */
   .login-card {
-    max-width: 420px;
+    max-width: 640px;
     width: 100%;
     border: 1px solid rgba(0,0,0,0.08);
     border-radius: 14px;
-    box-shadow: 0 10px 24px rgba(0,0,0,0.08);
+    box-shadow: 0 12px 28px rgba(0,0,0,0.1);
     overflow: hidden;
     background: #fff;
   }
 
   .login-card .card-body {
-    padding: 10px 8px;
+    padding: 2rem 1.75rem;
+  }
+
+  @@media (min-width: 768px) {
+    .login-card .card-body {
+      padding: 2.5rem 2.75rem;
+    }
   }
 
   .login-title {
     font-weight: 800;
     letter-spacing: .2px;
-    margin-bottom: 8px;
+    margin-bottom: 0.75rem;
   }
 
   .login-subtitle {
     color: #6c757d;
-    margin-bottom: 8px;
+    margin-bottom: 1.25rem;
   }
 
-  /* Input: nicer + centered */
+  /* Input: large + centered */
   .login-input {
-    height: 46px;
-    border-radius: 10px;
+    height: 58px;
+    border-radius: 12px;
     text-align: center;
+    font-size: 1.15rem;
   }
 
   .login-input:focus {
     border-color: rgba(13,110,253,0.55);
-    box-shadow: 0 0 0 0.18rem rgba(13,110,253,0.18);
+    box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.18);
   }
 
   /* Button */
   .login-btn {
-    height: 46px;
-    border-radius: 10px;
+    min-height: 58px;
+    border-radius: 12px;
     font-weight: 800;
+    font-size: 1.15rem;
   }
 
-  /* Little helper note */
   .login-note {
-    margin-top: 12px;
-    font-size: 0.92rem;
+    margin-top: 1.25rem;
+    font-size: 1.05rem;
     color: #6c757d;
+  }
+
+  .login-label {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
   }
 </style>
 
-<div class="login-wrap d-flex justify-content-center align-items-center min-vh-80" style="min-height:70vh;">
+<div class="login-wrap flex-grow-1 d-flex justify-content-center align-items-center w-100 px-2 py-3">
   <div class="login-card">
     <div class="card-body">
 
-      <h2 class="h4 mb-2 text-center login-title">Agent Login</h2>
-      <p class="text-center login-subtitle">
+      <h2 class="display-6 mb-2 text-center login-title">Agent Login</h2>
+      <p class="text-center login-subtitle fs-5">
         Enter your email to receive a one-time password.
       </p>
 
       <form asp-action="Login" method="post" novalidate>
         @Html.AntiForgeryToken()
 
-        <div class="mb-3 text-center">
-          <label asp-for="Email" class="form-label fw-bold text-center w-100"></label>
-          <input asp-for="Email" class="form-control login-input" autocomplete="email" />
-          <span asp-validation-for="Email" class="text-danger small"></span>
+        <div class="mb-4 text-center">
+          <label asp-for="Email" class="form-label fw-bold text-center w-100 login-label"></label>
+          <input asp-for="Email" class="form-control form-control-lg login-input" autocomplete="email" />
+          <span asp-validation-for="Email" class="text-danger d-block mt-2"></span>
         </div>
 
-        <button type="submit" class="btn btn-primary w-100 login-btn">
+        <button type="submit" class="btn btn-primary btn-lg w-100 login-btn py-3">
           Send OTP
         </button>
 

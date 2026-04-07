@@ -6,19 +6,19 @@
     var otpExpiresAtUnix = (long)(ViewBag.OtpExpiresAtUnix ?? 0L);
 }
 
-<div class="container flex-fill d-flex align-items-center justify-content-center py-4">
-    <div class="card shadow-sm border-0" style="max-width: 460px; width: 100%; border-radius: 16px;">
+<div class="flex-grow-1 d-flex align-items-center justify-content-center w-100 px-2 py-3">
+    <div class="card shadow border-0" style="max-width: 720px; width: 100%; border-radius: 16px;">
         <div class="card-body p-4 p-md-5">
 
-            <div class="text-center mb-3">
-                <div class="mb-2">
-                    <span class="badge bg-primary-subtle text-primary" style="font-size: 12px; padding: 8px 10px; border-radius: 999px;">
+            <div class="text-center mb-4">
+                <div class="mb-3">
+                    <span class="badge bg-primary-subtle text-primary" style="font-size: 0.95rem; padding: 10px 16px; border-radius: 999px;">
                         Secure Login
                     </span>
                 </div>
 
-                <h1 class="h4 mb-1" style="font-weight: 800;">Verify OTP</h1>
-                <p class="text-muted mb-0">
+                <h1 class="display-6 mb-2" style="font-weight: 800;">Verify OTP</h1>
+                <p class="text-muted mb-0 fs-5">
                     Enter the 6-digit code we sent you.
                 </p>
             </div>
@@ -26,7 +26,7 @@
             @* Optional message area *@
             @if (TempData["Err"] != null)
             {
-                <div class="alert alert-danger py-2" role="alert" style="border-radius: 12px;">
+                <div class="alert alert-danger py-3 px-3 fs-6" role="alert" style="border-radius: 12px;">
                     @TempData["Err"]
                 </div>
             }
@@ -37,10 +37,10 @@
                 <input type="hidden" asp-for="AgentCode" />
                 <input type="hidden" asp-for="Otp" id="Otp" />
 
-                <div class="mb-3">
-                    <label class="form-label d-block text-center mb-2" style="font-weight: 700;">OTP</label>
+                <div class="mb-4">
+                    <label class="form-label d-block text-center mb-3 fs-5" style="font-weight: 700;">OTP</label>
 
-                    <div class="d-flex justify-content-center gap-2 otp-input-group">
+                    <div class="d-flex justify-content-center gap-3 otp-input-group flex-wrap">
                         @for (var i = 0; i < 6; i++)
                         {
                             <input type="text"
@@ -53,22 +53,22 @@
                         }
                     </div>
 
-                    <div class="small text-center mt-3 otp-timer" id="otpTimer" data-expires-at="@otpExpiresAtUnix">
+                    <div class="fs-6 text-center mt-4 otp-timer" id="otpTimer" data-expires-at="@otpExpiresAtUnix">
                         OTP expires in <span id="otpCountdown">@otpRemainingSeconds</span>s
                     </div>
 
-                    <span asp-validation-for="Otp" class="text-danger small d-block text-center mt-2"></span>
+                    <span asp-validation-for="Otp" class="text-danger d-block text-center mt-3"></span>
                 </div>
 
-                <button type="submit" class="btn btn-primary w-100" id="verifyOtpBtn" style="border-radius: 12px; padding: 10px 14px;">
+                <button type="submit" class="btn btn-primary btn-lg w-100 py-3" id="verifyOtpBtn" style="border-radius: 12px; font-size: 1.15rem; font-weight: 700;">
                     Verify
                 </button>
 
-                <div class="text-center mt-3">
-                    <small class="text-muted">
+                <div class="text-center mt-4">
+                    <span class="text-muted fs-6">
                         Didn’t get it?
-                        <a href="@Url.Action("Login", "Account")" class="text-decoration-none" id="resendOtpLink">Resend OTP</a>
-                    </small>
+                        <a href="@Url.Action("Login", "Account")" class="text-decoration-none fw-semibold" id="resendOtpLink">Resend OTP</a>
+                    </span>
                 </div>
             </form>
         </div>
@@ -76,13 +76,13 @@
 </div>
 
 <style>
-    /* Keep OTP boxes consistent */
+    /* OTP boxes — large, matches scaled home */
     .otp-box {
-        width: 62px;
-        height: 62px;
-        font-size: 1.55rem;
+        width: 76px;
+        height: 76px;
+        font-size: 1.85rem;
         font-weight: 800;
-        border-radius: 12px;
+        border-radius: 14px;
         padding: 0;
     }
 
@@ -105,8 +105,9 @@
         box-shadow: 0 0 0 .2rem rgba(13,110,253,.15);
     }
 
-    @@media (max-width: 420px) {
-        .otp-box { width: 48px; height: 52px; font-size: 1.2rem; }
+    @@media (max-width: 576px) {
+        .otp-box { width: 52px; height: 56px; font-size: 1.35rem; }
+        .otp-input-group { gap: 0.5rem !important; }
     }
 </style>
 
