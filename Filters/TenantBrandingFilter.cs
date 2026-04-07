@@ -12,11 +12,11 @@ namespace YourApp.Filters
         public static TenantBrandingVm DefaultBranding { get; } = new TenantBrandingVm
         {
             TenantCode = "",
-            TenantName = " SOMORE Hair Growth Head Spa Scalp Care ",
-            HeaderLogoUrl = "~/images/somore_logo1.png",
+            TenantName = " ",
+            
             HeaderText1 = "Appointment Management System",
             HeaderText2 = "Make appointment bookings here!",
-            FooterText1 = "Managed By ProAcc System Consulting."
+            FooterText1 = ""
         };
 
         public void OnActionExecuting(ActionExecutingContext context)
