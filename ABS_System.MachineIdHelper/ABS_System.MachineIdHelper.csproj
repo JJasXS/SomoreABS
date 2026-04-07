@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- net8: runtime more often installed than net10 on end-user PCs. For no runtime, publish self-contained (see Publish-SelfContained.cmd). -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ABS_System.MachineIdHelper</RootNamespace>
+    <AssemblyName>ABS_MachineIdHelper</AssemblyName>
+    <Description>Windows-only helper: stable machine fingerprint for ABS activation (paste on /Activation/Blocked).</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Management" Version="9.0.3" />
+  </ItemGroup>
+
+</Project>

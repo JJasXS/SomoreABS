@@ -1,9 +1,18 @@
 using Microsoft.EntityFrameworkCore;                 //@jasch_04
 using Microsoft.Extensions.FileProviders;            // PhysicalFileProvider for /images → project images folder
 using YourApp.Data;                                  //@jasch_04 // AppDbContext + FirebirdDb + DbInitializer
+using YourApp.Middleware;                            // activation gate
+using YourApp.Services;                              // activation validation
 using FirebirdWeb.Helpers;                           //@jasch_04 // DbHelper
 using Microsoft.AspNetCore.Authentication.Cookies;   //@jasch_04
 using QuestPDF.Infrastructure;                       //@jasch_04
+
+// CLI: dotnet run -- --print-machine-fingerprint (matches Activation LAAS Python SDK fingerprint)
+if (args.Any(a => string.Equals(a, "--print-machine-fingerprint", StringComparison.Ordinal)))
+{
+    Console.WriteLine(MachineFingerprint.Compute());
+    return;
+}
 
 var builder = WebApplication.CreateBuilder(args);    //@jasch_04
 QuestPDF.Settings.License = LicenseType.Community;   //@jasch_04 // Set QuestPDF license type
@@ -36,20 +45,35 @@ builder.Services.AddAuthorization();                            //@jasch_04
 builder.Services.AddSession();                                  //@jasch_04
 
 // ✅ SQL Server (EF Core)                                      //@jasch_04
-builder.Services.AddDbContext<AppDbContext>(options =>          //@jasch_04
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))); //@jasch_04
+// Factory is singleton; scoped AppDbContext is created from the factory so DbContextOptions stays singleton-compatible.
+var sqlConn = builder.Configuration.GetConnectionString("DefaultConnection");
+builder.Services.AddDbContextFactory<AppDbContext>(options =>
+    options.UseSqlServer(sqlConn));
+builder.Services.AddScoped(sp =>
+    sp.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext());
 
 // ✅ Existing helper                                           //@jasch_04
 builder.Services.AddSingleton<DbHelper>();                      //@jasch_04
+
+// ✅ Client Firebird: path from TENANT_DB_PROFILE when Activation is enabled; else ConnectionStrings:Firebird / Firebird:
+builder.Services.Configure<ClientFirebirdOptions>(builder.Configuration.GetSection(ClientFirebirdOptions.SectionName));
+builder.Services.AddSingleton<IClientFirebirdConnectionProvider, ClientFirebirdConnectionProvider>();
 
 // ✅ Firebird helper + schema initializer                       //@jasch_04
 builder.Services.AddSingleton<FirebirdDb>();                    //@jasch_04
 builder.Services.AddSingleton<DbInitializer>();                 //@jasch_04
 
+// ✅ License activation (ACTIVATION.FDB — separate from main Firebird DB)
+builder.Services.Configure<ActivationOptions>(builder.Configuration.GetSection(ActivationOptions.SectionName));
+builder.Services.AddSingleton<IActivationValidationService, ActivationValidationService>();
+
 var app = builder.Build();                                      //@jasch_04
 
 // =========================                                   //@jasch_04
-// Firebird schema init (runs once at startup)                  //@jasch_04
+// Startup: activation first, then client Firebird only if allowed (@jasch_04)
+// - Activation DB (ACTIVATION.FDB) is opened only inside IActivationValidationService.
+// - Tenant/client Firebird schema init must NOT run until IsActivationValid (or Activation disabled).
+// - No unhandled exceptions: Windows Service must not fail with 1053 during pending activation.
 // =========================                                   //@jasch_04
 using (var scope = app.Services.CreateScope())                  //@jasch_04
 {                                                               //@jasch_04
@@ -122,6 +146,7 @@ app.UseStaticFiles();                                           //@jasch_04
 
 
 app.UseRouting();                                               //@jasch_04
+app.UseMiddleware<ActivationGateMiddleware>();
 app.UseSession();                                               //@jasch_04
 
 app.UseAuthentication();                                        //@jasch_04

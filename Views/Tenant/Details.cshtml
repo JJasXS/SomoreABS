@@ -1,0 +1,40 @@
+@model YourApp.Models.TenantBrandingVm
+@{
+    ViewData["Title"] = "Tenant Details";
+}
+<h2>Tenant Details</h2>
+<div class="card">
+    <div class="card-body">
+        <dl class="row">
+            <dt class="col-sm-3">Tenant Code</dt>
+            <dd class="col-sm-9">@Model.TenantCode</dd>
+            <dt class="col-sm-3">Tenant Name</dt>
+            <dd class="col-sm-9">@Model.TenantName</dd>
+            <dt class="col-sm-3">Header Logo</dt>
+            <dd class="col-sm-9">
+                @if (!string.IsNullOrWhiteSpace(Model.HeaderLogoUrl))
+                {
+                    <img src="@Model.HeaderLogoUrl" style="max-width:160px; max-height:48px;" />
+                }
+            </dd>
+            <dt class="col-sm-3">Header Text 1</dt>
+            <dd class="col-sm-9">@Model.HeaderText1</dd>
+            <dt class="col-sm-3">Header Text 2</dt>
+            <dd class="col-sm-9">@Model.HeaderText2</dd>
+            <dt class="col-sm-3">Footer Text 1</dt>
+            <dd class="col-sm-9">@Model.FooterText1</dd>
+            <dt class="col-sm-3">Footer Text 2</dt>
+            <dd class="col-sm-9">@Model.FooterText2</dd>
+            <dt class="col-sm-3">Footer Text 3</dt>
+            <dd class="col-sm-9">@Model.FooterText3</dd>
+            <dt class="col-sm-3">Footer Image</dt>
+            <dd class="col-sm-9">
+                @if (!string.IsNullOrWhiteSpace(Model.FooterImageUrl))
+                {
+                    <img src="@Model.FooterImageUrl" style="max-width:160px; max-height:48px;" />
+                }
+            </dd>
+        </dl>
+        <a asp-action="Index" class="btn btn-secondary">Back to List</a>
+    </div>
+</div>

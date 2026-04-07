@@ -1,0 +1,338 @@
+@{
+    ViewData["Title"] = "Customer History";
+    string fromDate = (string)(ViewBag.FromDate ?? "");
+    string toDate = (string)(ViewBag.ToDate ?? "");
+
+    var fulfilled = ViewBag.Fulfilled as List<YourApp.Models.Appointment> ?? new List<YourApp.Models.Appointment>();
+    var booked = ViewBag.Booked as List<YourApp.Models.Appointment> ?? new List<YourApp.Models.Appointment>();
+    var cancelled = ViewBag.Cancelled as List<YourApp.Models.Appointment> ?? new List<YourApp.Models.Appointment>();
+    var logIdMap = ViewBag.AppointmentLogIds as Dictionary<long, long> ?? new Dictionary<long, long>();
+}
+
+<div class="history-page container-fluid px-3 px-md-4 px-lg-5 py-4">
+    <div class="history-header d-flex align-items-center justify-content-between gap-3 flex-wrap">
+        <a href="/Calendar/Index" class="btn btn-primary">&#8592; Back</a>
+        <h2 class="m-0">Customer History</h2>
+        <div class="history-spacer" aria-hidden="true"></div>
+    </div>
+
+    <div class="card shadow-sm border-0 history-filter-card mt-3 mb-4">
+        <div class="card-body">
+            <form method="get" asp-action="History" class="history-filter-form">
+                <div class="history-field">
+                    <label for="customerCode">Customer</label>
+                    @await Html.PartialAsync("_CustomerDropdownPartial", ViewBag.Customers as IEnumerable<YourApp.Models.AR_CUSTOMER>)
+                </div>
+                <div class="history-field">
+                    <label for="fromDate">From</label>
+                    <input type="date" id="fromDate" name="fromDate" class="form-control" value="@fromDate" />
+                </div>
+                <div class="history-field">
+                    <label for="toDate">To</label>
+                    <input type="date" id="toDate" name="toDate" class="form-control" value="@toDate" />
+                </div>
+                <button type="submit" class="btn btn-primary history-filter-btn">Filter</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-lg-4">
+            <div class="history-column history-column--fulfilled">
+                <div class="history-column-title">
+                    <span>Fulfilled</span>
+                    <span class="badge bg-success">@fulfilled.Count</span>
+                </div>
+
+                @if (fulfilled.Count == 0)
+                {
+                    <div class="history-empty">No data</div>
+                }
+                else
+                {
+                    <div class="history-list">
+                        @foreach (var appt in fulfilled)
+                        {
+                            long logId = logIdMap.ContainsKey(appt.ApptId) ? logIdMap[appt.ApptId] : 0;
+                            <div class="history-item">
+                                <div class="history-item-lines">
+                                    <div><span class="history-key">Code:</span> @appt.ApptId</div>
+                                    <div><span class="history-key">Title:</span> @appt.Title</div>
+                                    <div><span class="history-key">Date/Time:</span> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")</div>
+                                    <div><span class="history-key">Agent:</span> @(appt.AgentName?.Split("??")[0].Trim() ?? appt.AgentCode)</div>
+                                    @if (!string.IsNullOrWhiteSpace(appt.Notes))
+                                    {
+                                        <div class="history-note">@appt.Notes</div>
+                                    }
+                                </div>
+                                @if (logId > 0)
+                                {
+                                    <a href="@Url.Action("PrintPdfByLog", "Appointment", new { logId = logId })" target="_blank" class="btn btn-outline-success btn-sm" title="Print this appointment">Print</a>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-4">
+            <div class="history-column history-column--booked">
+                <div class="history-column-title">
+                    <span>Booked</span>
+                    <span class="badge bg-primary">@booked.Count</span>
+                </div>
+
+                @if (booked.Count == 0)
+                {
+                    <div class="history-empty">No data</div>
+                }
+                else
+                {
+                    <div class="history-list">
+                        @foreach (var appt in booked)
+                        {
+                            <div class="history-item">
+                                <div class="history-item-lines">
+                                    <div><span class="history-key">Code:</span> @appt.ApptId</div>
+                                    <div><span class="history-key">Title:</span> @appt.Title</div>
+                                    <div><span class="history-key">Date/Time:</span> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")</div>
+                                    <div><span class="history-key">Agent:</span> @(appt.AgentName?.Split("??")[0].Trim() ?? appt.AgentCode)</div>
+                                    @if (!string.IsNullOrWhiteSpace(appt.Notes))
+                                    {
+                                        <div class="history-note">@appt.Notes</div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-4">
+            <div class="history-column history-column--cancelled">
+                <div class="history-column-title">
+                    <span>Cancelled</span>
+                    <span class="badge bg-danger">@cancelled.Count</span>
+                </div>
+
+                @if (cancelled.Count == 0)
+                {
+                    <div class="history-empty">No data</div>
+                }
+                else
+                {
+                    <div class="history-list">
+                        @foreach (var appt in cancelled)
+                        {
+                            <div class="history-item">
+                                <div class="history-item-lines">
+                                    <div><span class="history-key">Code:</span> @appt.ApptId</div>
+                                    <div><span class="history-key">Title:</span> @appt.Title</div>
+                                    <div><span class="history-key">Date/Time:</span> @appt.ApptStart.ToString("yyyy-MM-dd HH:mm")</div>
+                                    <div><span class="history-key">Agent:</span> @(appt.AgentName?.Split("??")[0].Trim() ?? appt.AgentCode)</div>
+                                    @if (!string.IsNullOrWhiteSpace(appt.Notes))
+                                    {
+                                        <div class="history-note">@appt.Notes</div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .history-header .history-spacer {
+        width: 72px;
+    }
+
+    .history-filter-card {
+        border-radius: 14px;
+        border: 1px solid rgba(31,79,161,0.08) !important;
+        background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(246,249,255,0.98) 100%);
+    }
+
+    .history-filter-form {
+        display: grid;
+        grid-template-columns: minmax(260px, 1.8fr) minmax(150px, 1fr) minmax(150px, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+    }
+
+    .history-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .history-field label {
+        font-weight: 600;
+        margin: 0;
+        color: #223149;
+    }
+
+    .history-field #customerCode {
+        width: 100% !important;
+        text-align: left !important;
+    }
+
+    .history-filter-btn {
+        min-width: 110px;
+    }
+
+    .history-column {
+        border-radius: 14px;
+        min-height: 420px;
+        padding: 14px;
+        border: 1px solid rgba(31,79,161,.08);
+    }
+
+    .history-column--fulfilled {
+        background: linear-gradient(180deg, #f8fff8 0%, #effcf1 100%);
+    }
+
+    .history-column--booked {
+        background: linear-gradient(180deg, #f8f9ff 0%, #eff4ff 100%);
+    }
+
+    .history-column--cancelled {
+        background: linear-gradient(180deg, #fff8f8 0%, #fff0f0 100%);
+    }
+
+    .history-column-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #233146;
+    }
+
+    .history-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .history-item {
+        background: rgba(255,255,255,0.92);
+        border: 1px solid rgba(31,79,161,.08);
+        border-radius: 10px;
+        padding: 10px;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: flex-start;
+    }
+
+    .history-item .btn {
+        align-self: flex-start;
+        white-space: nowrap;
+    }
+
+    .history-item-lines {
+        font-size: 14px;
+        line-height: 1.4;
+        color: #223149;
+    }
+
+    .history-key {
+        font-weight: 700;
+    }
+
+    .history-note {
+        margin-top: 6px;
+        color: #5d6b80;
+        font-size: 12px;
+    }
+
+    .history-empty {
+        color: #6d7b8f;
+        text-align: center;
+        margin-top: 30px;
+    }
+
+    html.theme-dark .history-page,
+    html.theme-dark .history-page h2,
+    html.theme-dark .history-page label,
+    html.theme-dark .history-page .history-item-lines,
+    html.theme-dark .history-page .history-key,
+    html.theme-dark .history-page .history-column-title {
+        color: #e9eef5 !important;
+    }
+
+    html.theme-dark .history-filter-card {
+        background: linear-gradient(180deg, rgba(21,25,35,0.98) 0%, rgba(18,23,34,0.98) 100%) !important;
+        border: 1px solid rgba(255,255,255,.10) !important;
+        box-shadow: 0 2px 16px rgba(0,0,0,.28) !important;
+    }
+
+    html.theme-dark .history-filter-form .form-control,
+    html.theme-dark .history-filter-form .btn {
+        background: #121722 !important;
+        border-color: rgba(255,255,255,.10) !important;
+        color: #e9eef5 !important;
+    }
+
+    html.theme-dark .history-filter-form .form-control::placeholder {
+        color: #9aa8bc !important;
+    }
+
+    html.theme-dark .history-column {
+        border-color: rgba(255,255,255,.10) !important;
+    }
+
+    html.theme-dark .history-column--fulfilled {
+        background: #17251b !important;
+    }
+
+    html.theme-dark .history-column--booked {
+        background: #1a2030 !important;
+    }
+
+    html.theme-dark .history-column--cancelled {
+        background: #2b1c21 !important;
+    }
+
+    html.theme-dark .history-item {
+        background: #151923 !important;
+        border-color: rgba(255,255,255,.10) !important;
+        color: #e9eef5 !important;
+    }
+
+    html.theme-dark .history-note,
+    html.theme-dark .history-empty {
+        color: #b8c4d7 !important;
+    }
+
+    @@media (max-width: 991.98px) {
+        .history-filter-form {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .history-filter-btn {
+            width: 100%;
+            grid-column: 1 / -1;
+        }
+
+        .history-header .history-spacer {
+            display: none;
+        }
+    }
+
+    @@media (max-width: 575.98px) {
+        .history-filter-form {
+            grid-template-columns: 1fr;
+        }
+
+        .history-page {
+            padding-top: 16px !important;
+        }
+    }
+</style>

@@ -1,0 +1,22 @@
+@model IEnumerable<YourApp.Models.AR_CUSTOMER>
+@{
+    var selected = Context.Request.Query["customerCode"].ToString();
+}
+<input list="customerNames" id="customerCode" name="customerCode" class="form-control" style="width:160px; min-width:0; text-align:center;" value="@selected" placeholder="Type customer name..." autocomplete="on" />
+<datalist id="customerNames">
+    @foreach (var cust in Model ?? Enumerable.Empty<YourApp.Models.AR_CUSTOMER>())
+    {
+        <option value="@cust.Name">@cust.Name (@cust.CustomerCode)</option>
+    }
+</datalist>
+<style>
+html.theme-dark #customerCode {
+    background: #121722 !important;
+    border-color: rgba(255,255,255,0.10) !important;
+    color: #e9eef5 !important;
+}
+
+html.theme-dark #customerCode::placeholder {
+    color: #9aa8bc !important;
+}
+</style>

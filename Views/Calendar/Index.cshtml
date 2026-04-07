@@ -1,0 +1,1476 @@
+@model List<YourApp.Controllers.CalendarEventVm>
+@using System.Linq
+@using System.Collections.Generic
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = "Calendar";
+
+    int year = (int)ViewBag.Year;
+    int month = (int)ViewBag.Month;
+
+    DateTime firstDay = (DateTime)ViewBag.FirstDay;
+    int daysInMonth = DateTime.DaysInMonth(year, month);
+    int startOffset = (int)firstDay.DayOfWeek;
+
+    // pickDate flag (optional)
+    bool pickDate = false;
+    if (Context.Request.Query.ContainsKey("pickDate"))
+    {
+        var v = Context.Request.Query["pickDate"].ToString();
+        pickDate = (v == "1" || v.Equals("true", StringComparison.OrdinalIgnoreCase) || v.Equals("y", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Month dropdown list
+    var monthItems = System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.MonthNames
+        .Take(12)
+        .Select((name, idx) => new { Text = name, Value = idx + 1 })
+        .ToList();
+
+    int startYear = DateTime.Today.Year - 5;
+    int endYear = DateTime.Today.Year + 5;
+
+    // Appointments
+    var monthAppointments = ViewBag.MonthAppointments as List<YourApp.Models.Appointment>
+                            ?? new List<YourApp.Models.Appointment>();
+
+    // Lookups
+    var agentColors = ViewBag.AgentColors as Dictionary<string, string>
+                      ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    var agentNames = ViewBag.AgentNames as Dictionary<string, string>
+                     ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    var customerNames = ViewBag.CustomerNames as Dictionary<string, string>
+                        ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    // Birthdays list
+    var birthdays = ViewBag.CustomerBirthdays as List<YourApp.Controllers.CustomerBirthdayVm>
+                    ?? new List<YourApp.Controllers.CustomerBirthdayVm>();
+
+    // JSON options (keep property names as-is, do not camelCase)
+    var jsonOpt = new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = null
+    };
+}
+
+@functions{
+    private static string ToTitleCaseSafe(string? input)
+    {
+        var s = (input ?? "").Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(s)) return "";
+
+        // Uppercase first char of each word (space or dash separated)
+        return System.Text.RegularExpressions.Regex.Replace(
+            s,
+            @"(^|[\s-])([a-z])",
+            m => m.Groups[1].Value + m.Groups[2].Value.ToUpperInvariant()
+        );
+    }
+
+    private static bool IsFulfilledStatus(string? status)
+    {
+        var st = (status ?? "").Trim().ToUpperInvariant();
+        return st == "FULFILLED" || st == "DONE" || st == "COMPLETED" || st == "CANCELLED";
+    }
+}
+
+<link rel="stylesheet" href="~/css/calendar.css" />
+
+<div class="calendar-shell">
+
+    <!-- ✅ Hamburger (top-right) -->
+    <button type="button" id="hamburgerBtn" class="hamburger-btn" aria-label="Open menu">☰</button>
+
+    <h2 class="calendar-title">
+        Calendar -
+        <span id="calendarMonthLabel"
+              class="calendar-month-click"
+              onclick="showMonthModal('@year', '@month')">
+            @firstDay.ToString("MMMM yyyy")
+        </span>
+    </h2>
+
+    <!-- ✅ Anti-forgery token for AJAX -->
+    <form id="antiForgeryForm" style="display:none;">
+        @Html.AntiForgeryToken()
+    </form>
+
+    <!-- ✅ Shared overlay for modals -->
+    <div id="modalOverlay" class="modal-overlay" style="display:none;"></div>
+
+    <!-- =========================
+       ✅ BRANCH FILTER MODAL
+       ========================= -->
+    <div id="branchFilterModal" class="custom-modal" style="display:none; max-width:400px;">
+      <div class="custom-modal-content">
+        <div class="custom-modal-header">
+          <h5>Filter by Branch</h5>
+          <button type="button" id="closeBranchFilterModal" class="modal-close">&times;</button>
+        </div>
+        <div class="custom-modal-body">
+          <form id="branchFilterForm">
+            <div style="display:flex; gap:8px; margin-bottom:8px;">
+              <button type="button" class="btn btn-sm btn-outline-primary" id="toggleCheckAllBranchesBtn" type="button">Check All</button>
+            </div>
+            <div id="branchCheckboxList" style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;"></div>
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+              <button type="button" class="btn btn-secondary" id="cancelBranchFilterBtn">Cancel</button>
+              <button type="submit" class="btn btn-primary">Apply Filter</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================
+         ✅ MONTH MODAL
+         ========================= -->
+    <div id="monthAppointmentsModal" class="custom-modal" style="display:none;">
+        <div class="custom-modal-content">
+            <div class="custom-modal-header">
+                <h5 id="monthAppointmentsModalLabel">
+                    Appointments for <span id="modalMonthLabel"></span>
+                </h5>
+                <button type="button" id="closeMonthModal" class="modal-close">&times;</button>
+            </div>
+            <div class="custom-modal-body">
+                <div id="month-appointments-list" class="appt-card-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========================
+         ✅ DAY MODAL
+         ========================= -->
+    <div id="dayAppointmentsModal" class="custom-modal" style="display:none;">
+        <div class="custom-modal-content">
+            <div class="custom-modal-header">
+                <h5 id="dayAppointmentsModalLabel">
+                    Appointments for <span id="modalDayLabel"></span>
+                </h5>
+                <button type="button" id="closeDayModal" class="modal-close">&times;</button>
+            </div>
+
+            <div class="custom-modal-body">
+                <a id="add-appointment-btn" class="custom-modal-btn" href="#">+ New Booking</a>
+                <div id="day-appointments-list" class="appt-card-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========================
+         ✅ CONFIRM DELETE MODAL
+         ========================= -->
+    <div id="confirmDeleteModal"
+         class="custom-modal confirm-delete-modal"
+         style="display:none; width:min(340px,90vw) !important; background:#f1f1f1 !important;">
+        <div class="custom-modal-content">
+            <div class="custom-modal-header">
+                <h5>Confirm Delete</h5>
+                <button type="button" id="closeConfirmDeleteModal" class="modal-close">&times;</button>
+            </div>
+
+            <div class="custom-modal-body">
+                <div style="margin-bottom:12px;">
+                    Are you sure you want to cancel this appointment?
+                </div>
+
+                <div class="confirm-modal-actions">
+                    <button type="button" id="btnDeleteCancel" class="btn btn-secondary">Close</button>
+                    <button type="button" id="btnDeleteYes" class="btn btn-warning">Cancel Appointment</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========================
+         ✅ SIDE MENU (Hamburger)
+         ========================= -->
+    <div id="sideMenuOverlay" class="side-menu-overlay" style="display:none;"></div>
+
+    <div id="sideMenu" class="side-menu" style="display:none;">
+        <div class="side-menu-header">
+            <div class="side-menu-title">Menu</div>
+            <button type="button" id="sideMenuClose" class="side-menu-close" aria-label="Close menu">&times;</button>
+        </div>
+
+        <div class="side-menu-body">
+            <div class="side-menu-theme-card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; padding:10px 12px; border:1px solid rgba(0,0,0,0.10); border-radius:10px;">
+              <div style="font-weight:800;">Theme</div>
+              <label style="display:flex; align-items:center; gap:8px; margin:0; cursor:pointer; user-select:none;">
+                <span id="themeLabel" style="font-size:13px; font-weight:700; opacity:.85;">Light</span>
+                <input type="checkbox" id="themeToggle" style="width:44px; height:22px; margin:0;" />
+              </label>
+            </div>
+            <div class="side-menu-link side-menu-history-link" onclick="viewCustHistory()" style="width:100%; margin-bottom:16px; padding:12px; background:#e9f5ff; color:#007bff; border-radius:10px; font-weight:700; font-size:15px; text-align:center; cursor:pointer; transition:background 0.2s;">
+              View Customer History
+            </div>
+            <div class="side-menu-birthdays" style="margin-bottom:18px;">
+                <div style="display:flex; align-items:center; justify-content:center; margin-bottom:6px;">
+                  <span style="font-weight:700; font-size:15px;">
+                    Birthdays - <span id="birthdayMonthLabel">@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(month) @year</span>
+                  </span>
+                </div>
+
+                @{
+                    var today = DateTime.Today;
+                    var filtered = birthdays
+                        .Where(b => b.Birthday.HasValue && b.Birthday.Value.Month == month)
+                        .ToList();
+
+                    var sorted = filtered
+                        .Select(b =>
+                        {
+                            int? daysToNext = null;
+                            bool isToday = false;
+                            bool isPassed = false;
+
+                            if (b.Birthday.HasValue)
+                            {
+                                var bday = b.Birthday.Value;
+                                var thisYearBirthday = new DateTime(today.Year, bday.Month, bday.Day);
+
+                                if (thisYearBirthday == today)
+                                {
+                                    daysToNext = 0;
+                                    isToday = true;
+                                }
+                                else if (thisYearBirthday < today)
+                                {
+                                    var nextBirthday = new DateTime(today.Year + 1, bday.Month, bday.Day);
+                                    daysToNext = (nextBirthday - today).Days;
+                                    isPassed = true;
+                                }
+                                else
+                                {
+                                    daysToNext = (thisYearBirthday - today).Days;
+                                }
+                            }
+
+                            return new { b.Name, b.Birthday, DaysToNext = daysToNext, IsToday = isToday, IsPassed = isPassed };
+                        })
+                        .OrderByDescending(x => x.IsToday)
+                        .ThenBy(x => x.DaysToNext ?? int.MaxValue)
+                        .ToList();
+                }
+
+                @if (sorted.Count > 0)
+                {
+                    <table class="birthday-table" style="width:100%; font-size:11px; border-collapse:collapse;">
+                        <thead>
+                        <tr style="background:#f8f8f8;">
+                            <th style="padding:4px 8px; text-align:left; font-weight:600;">Name</th>
+                            <th style="padding:4px 8px; text-align:left; font-weight:600;">Birthday</th>
+                            <th style="padding:4px 8px; text-align:left; font-weight:600;">Days</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @for (var i = 0; i < sorted.Count; i++)
+                        {
+                            var b = sorted[i];
+                            var isHiddenBirthdayRow = i >= 10;
+                            <tr class="birthday-row@(isHiddenBirthdayRow ? " birthday-row-hidden" : "")">
+                                <td style="padding:4px 8px; font-weight:500; font-size:10px;">@b.Name</td>
+                                <td style="padding:4px 8px; color:#888;">@b.Birthday?.ToString("dd/MM/yyyy")</td>
+                                <td style="padding:4px 8px;">
+                                    @if (b.IsToday)
+                                    {
+                                        <span class="birthday-days-status birthday-days-today">Today</span>
+                                    }
+                                    else if ((b.DaysToNext ?? 0) > 0)
+                                    {
+                                        <span class="birthday-days-status @(b.IsPassed ? "birthday-days-passed" : "birthday-days-future")">
+                                            in @b.DaysToNext day@(b.DaysToNext == 1 ? "" : "s")
+                                        </span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+
+                    @if (sorted.Count > 10)
+                    {
+                        <button type="button" class="birthday-more-btn" id="birthdayMoreBtn" data-visible-count="10">
+                            more...
+                        </button>
+                    }
+                }
+                else
+                {
+                    <div class="birthday-empty" style="color:#888; font-size:13px;">No birthdays this month.</div>
+                }
+            </div>
+        </div>
+
+        <!-- ✅ Logout fixed at bottom -->
+        <div class="side-menu-footer">
+            <form method="post" action="@Url.Action("Logout","Account")" style="margin:0;">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="side-menu-logout">Log Out</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- =========================
+         ✅ TOOLBAR (month/year + nav)
+         ========================= -->
+    <div class="calendar-toolbar">
+
+        <div class="calendar-toolbar-flex" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+              @* Branch filter context vars for toolbar *@
+              @{
+                var selectedBranches = ViewBag.SelectedBranches as List<string>;
+                var allBranches = ViewBag.AllBranches as List<string> ?? new List<string>();
+              }
+            <form method="get" action="@Url.Action("Index")" class="calendar-search-form" style="margin-bottom:0;">
+                <select name="month" class="form-select calendar-month-select">
+                    @foreach (var mm in monthItems)
+                    {
+                        <option value="@mm.Value" selected="@(mm.Value == month ? "selected" : null)">@mm.Text</option>
+                    }
+                </select>
+
+                <select name="year" class="form-select calendar-year-select">
+                    @for (int y = startYear; y <= endYear; y++)
+                    {
+                        <option value="@y" selected="@(y == year ? "selected" : null)">@y</option>
+                    }
+                </select>
+
+                @if (pickDate)
+                {
+                    <input type="hidden" name="pickDate" value="1" />
+                }
+
+                @if (selectedBranches != null)
+                {
+                    foreach (var branch in selectedBranches)
+                    {
+                        <input type="hidden" name="branches" value="@branch" />
+                    }
+                }
+
+                <button type="submit" class="btn btn-primary">Search</button>
+            </form>
+
+            @if ((ViewBag.UserBranchNo as string) == "1" || (ViewBag.UserBranchNo as string) == "0")
+            {
+              <button class="btn btn-secondary" id="filterAppointmentsBtn">Filter Appointments</button>
+              if (selectedBranches != null && selectedBranches.Count > 0 && allBranches.Count > 0 && selectedBranches.Count != allBranches.Count)
+              {
+                
+                <a class="btn btn-outline-secondary btn-sm"
+                   style="margin-left:8px;"
+                   href="@Url.Action("Index", new { year = year, month = month, pickDate = pickDate ? 1 : (int?)null })">
+                  Clear Filter
+                </a>
+              }
+            }
+            <script>
+            // Branch filter modal logic
+
+            document.addEventListener('DOMContentLoaded', function () {
+                            var toggleCheckAllBtn = document.getElementById('toggleCheckAllBranchesBtn');
+              var filterBtn = document.getElementById('filterAppointmentsBtn');
+              var branchModal = document.getElementById('branchFilterModal');
+              var overlay = document.getElementById('modalOverlay');
+              var closeBtn = document.getElementById('closeBranchFilterModal');
+              var cancelBtn = document.getElementById('cancelBranchFilterBtn');
+              var form = document.getElementById('branchFilterForm');
+              var checkboxList = document.getElementById('branchCheckboxList');
+
+              var branchNames = @Html.Raw(JsonSerializer.Serialize(ViewBag.BranchNames ?? new Dictionary<string, string>(), jsonOpt));
+              var branchList = @Html.Raw(JsonSerializer.Serialize(ViewBag.AllBranches ?? new List<string>(), jsonOpt));
+
+              if (filterBtn) filterBtn.addEventListener('click', function () {
+                // Build checkboxes
+                checkboxList.innerHTML = '';
+                var selectedBranches = @Html.Raw(JsonSerializer.Serialize(ViewBag.SelectedBranches ?? new List<string>(), jsonOpt));
+                if (branchList.length === 0) {
+                  var msg = document.createElement('div');
+                  msg.textContent = 'No branches found.';
+                  msg.style.color = '#c00';
+                  checkboxList.appendChild(msg);
+                } else {
+                  branchList.forEach(function (branchNo) {
+                    var label = branchNames[branchNo] || branchNo;
+                    var id = 'branch_cb_' + branchNo;
+                    var cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.id = id;
+                    cb.name = 'branches';
+                    cb.value = branchNo;
+                    cb.checked = selectedBranches.length === 1 || selectedBranches.includes(branchNo);
+                    var lbl = document.createElement('label');
+                    lbl.htmlFor = id;
+                    lbl.style.marginLeft = '6px';
+                    lbl.textContent = label;
+                    var div = document.createElement('div');
+                    div.appendChild(cb);
+                    div.appendChild(lbl);
+                    checkboxList.appendChild(div);
+                  });
+                }
+                // Wire up toggle check/uncheck all after checkboxes are rendered
+                if (toggleCheckAllBtn) {
+                  // Initial state: Check All
+                  toggleCheckAllBtn.textContent = 'Check All';
+                  toggleCheckAllBtn.dataset.checked = 'false';
+                  toggleCheckAllBtn.onclick = function() {
+                    var checkboxes = checkboxList.querySelectorAll('input[type="checkbox"]');
+                    var allChecked = Array.from(checkboxes).every(function(cb){ return cb.checked; });
+                    if (!allChecked) {
+                      checkboxes.forEach(function(cb){ cb.checked = true; });
+                      toggleCheckAllBtn.textContent = 'Uncheck All';
+                      toggleCheckAllBtn.dataset.checked = 'true';
+                    } else {
+                      checkboxes.forEach(function(cb){ cb.checked = false; });
+                      toggleCheckAllBtn.textContent = 'Check All';
+                      toggleCheckAllBtn.dataset.checked = 'false';
+                    }
+                  };
+                  // Update button text if user manually checks/unchecks
+                  checkboxList.addEventListener('change', function() {
+                    var checkboxes = checkboxList.querySelectorAll('input[type="checkbox"]');
+                    var allChecked = Array.from(checkboxes).every(function(cb){ return cb.checked; });
+                    toggleCheckAllBtn.textContent = allChecked ? 'Uncheck All' : 'Check All';
+                    toggleCheckAllBtn.dataset.checked = allChecked ? 'true' : 'false';
+                  });
+                }
+                overlay.style.display = 'block';
+                branchModal.style.display = 'block';
+              });
+
+              function closeBranchModal() {
+                branchModal.style.display = 'none';
+                overlay.style.display = 'none';
+              }
+              if (closeBtn) closeBtn.addEventListener('click', closeBranchModal);
+              if (cancelBtn) cancelBtn.addEventListener('click', function(e){e.preventDefault();closeBranchModal();});
+              if (overlay) overlay.addEventListener('click', function(){
+                if (branchModal.style.display === 'block') closeBranchModal();
+              });
+
+              // Submit selected branches to server
+              form.addEventListener('submit', function(e){
+                e.preventDefault();
+                var checked = Array.from(form.elements['branches']).filter(function(cb){return cb.checked;}).map(function(cb){return cb.value;});
+                if (checked.length === 0) {
+                  alert('Please select at least one branch.');
+                  return;
+                }
+                // Build query string for GET
+                var url = new URL(window.location.href);
+                url.searchParams.delete('branches');
+                checked.forEach(function(b){ url.searchParams.append('branches', b); });
+                window.location.href = url.toString();
+              });
+            });
+            </script>
+        </div>
+
+        <div class="calendar-nav-actions">
+            <a class="btn btn-secondary"
+               href="@Url.Action("Index", new { year = firstDay.AddMonths(-1).Year, month = firstDay.AddMonths(-1).Month, pickDate = pickDate ? 1 : (int?)null, branches = selectedBranches })">
+                &lt; Prev
+            </a>
+
+            <a class="btn btn-secondary"
+               href="@Url.Action("Index", new { year = DateTime.Today.Year, month = DateTime.Today.Month, pickDate = pickDate ? 1 : (int?)null, branches = selectedBranches })">
+                This Month
+            </a>
+
+            <a class="btn btn-secondary"
+               href="@Url.Action("Index", new { year = firstDay.AddMonths(1).Year, month = firstDay.AddMonths(1).Month, pickDate = pickDate ? 1 : (int?)null, branches = selectedBranches })">
+                Next &gt;
+            </a>
+        </div>
+    </div>
+
+    <!-- =========================
+         ✅ CALENDAR GRID
+         ========================= -->
+    <table class="table table-bordered calendar-table">
+        <thead>
+        <tr>
+            <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
+        </tr>
+        </thead>
+
+        <tbody>
+        @{
+            int day = 1;
+            int cell = 0;
+
+            while (day <= daysInMonth)
+            {
+                <tr>
+                    @for (int i = 0; i < 7; i++)
+                    {
+                        if (cell < startOffset || day > daysInMonth)
+                        {
+                            <td class="calendar-cell calendar-cell-empty"></td>
+                        }
+                        else
+                        {
+                            var date = new DateTime(year, month, day);
+                            var appts = monthAppointments.Where(a => a.ApptStart.Date == date.Date).ToList();
+
+                            int visibleCount = 2; // ✅ set how many cards you want to show in the cell
+                            int hiddenCount = appts.Count - visibleCount;
+
+
+
+
+                            <td class="calendar-cell calendar-cell-day"
+                                data-date="@date.ToString("yyyy-MM-dd")"
+                                tabindex="0"
+                                role="button"
+                                aria-label="Show appointments for @date.ToString("yyyy-MM-dd")">
+
+                                <div class="calendar-cell-header">
+    <strong class="day-number">@day</strong>
+
+    @if (hiddenCount > 0)
+    {
+        <span class="appt-more-badge">+@hiddenCount more</span>
+    }
+</div>
+
+
+                                @if (appts.Count > 0)
+                                {
+                                    <div class="scrollable-appt-list appt-card-list in-cell">
+                                      @for (int apptIdx = 0; apptIdx < Math.Min(visibleCount, appts.Count); apptIdx++)
+
+                                      {
+                                        var appt = appts[apptIdx];
+                                        var agentCode = (appt.AgentCode ?? "").Trim();
+                                        string? cardColor = null;
+                                        if (!string.IsNullOrEmpty(agentCode) && agentColors.TryGetValue(agentCode, out var c))
+                                          cardColor = c;
+
+                                        var statusUp = (appt.Status ?? "").Trim().ToUpperInvariant();
+                                        var isDone = IsFulfilledStatus(statusUp);
+                                        var doneClass = isDone ? " is-fulfilled" : "";
+
+                                        var custCode = (appt.CustomerCode ?? "").Trim();
+                                        var custName = (!string.IsNullOrEmpty(custCode) && customerNames.TryGetValue(custCode, out var cn)) ? cn : "";
+
+                                        var agentName = (!string.IsNullOrEmpty(agentCode) && agentNames.TryGetValue(agentCode, out var an)) ? an : agentCode;
+                                        var displayTitle =
+                                          !string.IsNullOrWhiteSpace(custName)
+                                          ? (ToTitleCaseSafe(custName) + (string.IsNullOrWhiteSpace(agentName) ? "" : " / " + ToTitleCaseSafe(agentName)))
+                                          : (!string.IsNullOrWhiteSpace(custName)
+                                            ? custName
+                                            : ToTitleCaseSafe(appt.Title));
+
+                                        var style =
+                                          "display:flex !important; align-items:center !important; min-height:20px !important; " +
+                                          "padding:1px 8px !important; font-size:7px !important; line-height:1.2 !important;" +
+                                          (string.IsNullOrWhiteSpace(cardColor) ? "" : $" background-color:{cardColor} !important;");
+
+                                        <div class="appt-card in-cell@doneClass"
+                                          data-appt-id="@appt.ApptId"
+                                          data-status="@statusUp"
+                                          style="@style; min-height:auto !important;">
+                                          <span class="appt-title" style="@(isDone ? "opacity:0.45; font-weight:480;" : "font-weight:500;")">
+                                            @displayTitle
+                                          </span>
+                                        </div>
+                                      }
+                                    </div>
+                                }
+
+                            </td>
+
+                            day++;
+                        }
+
+                        cell++;
+                    }
+                </tr>
+            }
+        }
+        </tbody>
+    </table>
+</div>
+
+<!-- =========================
+     ✅ PAGE-LOCAL STYLE (kept, but cleaned)
+     ========================= -->
+<style>
+  /* ✅ Line-through ONLY for calendar cell cards, NOT modal */
+  .appt-card.in-cell.is-fulfilled .appt-title { text-decoration: line-through !important; }
+
+  /* Opacity for fulfilled and cancelled */
+  .appt-card.is-fulfilled,
+  .appt-card.modal-card.is-fulfilled,
+  .appt-card.in-cell.is-fulfilled { opacity: 0.65 !important; }
+  .appt-card.is-cancelled,
+  .appt-card.modal-card.is-cancelled,
+  .appt-card.in-cell.is-cancelled { opacity: 0.45 !important; }
+
+  /* Hamburger + Side Menu */
+  .calendar-shell { position: relative; width: 100% !important; max-width: none !important; margin: 0 !important; background:#fff; border:1px solid rgba(31,79,161,0.08); border-radius:14px; padding:14px; box-shadow:0 2px 14px rgba(0,0,0,0.06); }
+  .hamburger-btn{ position:absolute; top:10px; right:12px; width:42px; height:38px; border:1px solid rgba(31,79,161,0.10); border-radius:10px; background:#fff; box-shadow:0 2px 10px rgba(0,0,0,0.06); font-size:20px; line-height:1; cursor:pointer; z-index:20; color:#233146; }
+  .hamburger-btn:hover{ background: rgba(0,0,0,0.03); }
+
+  .side-menu-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1200; }
+  .side-menu{ position:fixed; top:0; right:0; width:280px; height:100vh; background:#fff; z-index:1201; box-shadow:-6px 0 20px rgba(0,0,0,0.18); display:flex; flex-direction:column; }
+  .side-menu-header{ display:flex; align-items:center; justify-content:space-between; padding:14px; border-bottom:1px solid rgba(0,0,0,0.08); }
+  .side-menu-title{ font-weight:800; font-size:16px; }
+  .side-menu-close{ width:38px; height:34px; border:1px solid rgba(0,0,0,0.12); border-radius:10px; background:#fff; font-size:22px; cursor:pointer; }
+  .side-menu-body{ padding:12px 14px; flex:1; overflow:auto; }
+  .side-menu-footer{ padding:12px 14px; border-top:1px solid rgba(0,0,0,0.08); }
+  .side-menu-logout{ width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgba(0,0,0,0.12); background:#dc3545; color:#fff; font-weight:800; cursor:pointer; }
+  .side-menu-logout:hover{ filter:brightness(0.95); }
+
+  /* Full-width calendar table */
+  .calendar-shell .calendar-toolbar{ width:100% !important; max-width:none !important; margin:0 0 12px 0 !important; }
+  .calendar-shell .calendar-table{ width:100% !important; margin:0 !important; table-layout:fixed; }
+  .calendar-shell .calendar-table th,
+  .calendar-shell .calendar-table td{ padding:6px !important; vertical-align:top; }
+
+  .calendar-shell .appt-card.in-cell .appt-title{ display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .calendar-shell .scrollable-appt-list{ max-height:86px; }
+
+  /* ===== MODAL SIZING ===== */
+  .custom-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+    display: none;
+    width: 1000px !important;/* ADJUST WIDTH OF MODAL POP UP*/
+    max-width: 99vw;
+    max-height: 95vh;
+    background: #fff !important;
+    border-radius: 18px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+    overflow: auto;
+    padding: 0;
+  }
+  .custom-modal-content {
+    padding: 28px 28px 18px 28px;
+    max-height: 80vh;
+    overflow-y: auto;
+    font-size: 1.08rem;
+  }
+
+  .modal-overlay{
+    position:fixed; inset:0;
+    background:rgba(0,0,0,0.55);
+    backdrop-filter:blur(1px);
+    z-index:900;
+    cursor:pointer;
+  }
+
+  .appt-more-badge{
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #dc3545;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+
+  .birthday-row-hidden{
+    display:none;
+  }
+
+  .birthday-more-btn{
+    margin-top:10px;
+    width:100%;
+    padding:8px 10px;
+    border-radius:10px;
+    border:1px solid rgba(0,0,0,0.10);
+    background:#eef4ff;
+    color:#315fc8;
+    font-weight:700;
+    cursor:pointer;
+  }
+
+  .birthday-days-status{
+    font-weight:700;
+  }
+
+  .birthday-days-today{
+    color:#28a745 !important;
+  }
+
+  .birthday-days-future{
+    color:#007bff !important;
+  }
+
+  .birthday-days-passed{
+    color:#dc3545 !important;
+  }
+
+  /* ===== PAGE-LOCAL DARK MODE FIXES ===== */
+  html.theme-dark .calendar-shell{
+    background:#121722 !important;
+    border-color:rgba(255,255,255,0.10) !important;
+    box-shadow:0 2px 18px rgba(0,0,0,0.35) !important;
+    color:#e9eef5 !important;
+  }
+
+  html.theme-dark .hamburger-btn{
+    background:#1b2230 !important;
+    color:#e9eef5 !important;
+    border-color:rgba(255,255,255,0.16) !important;
+    box-shadow:0 2px 10px rgba(0,0,0,0.28) !important;
+  }
+
+  html.theme-dark .hamburger-btn:hover{
+    background:#242e42 !important;
+  }
+
+  html.theme-dark .side-menu{
+    background:#151923 !important;
+    color:#e9eef5 !important;
+    box-shadow:-6px 0 24px rgba(0,0,0,0.40) !important;
+  }
+
+  html.theme-dark .calendar-toolbar .form-select,
+  html.theme-dark .calendar-toolbar .btn,
+  html.theme-dark .calendar-toolbar .btn.btn-outline-secondary{
+    background:#1b2230 !important;
+    color:#e9eef5 !important;
+    border-color:rgba(255,255,255,0.14) !important;
+  }
+
+  html.theme-dark .calendar-toolbar .btn:hover,
+  html.theme-dark .calendar-toolbar .btn.btn-outline-secondary:hover{
+    background:#242e42 !important;
+    color:#ffffff !important;
+  }
+
+  html.theme-dark .calendar-shell .calendar-table,
+  html.theme-dark .calendar-shell .calendar-table tbody,
+  html.theme-dark .calendar-shell .calendar-table tr{
+    background:#151b27 !important;
+    color:#e9eef5 !important;
+  }
+
+  html.theme-dark .calendar-shell .calendar-table th{
+    background:#1b2230 !important;
+    color:#e9eef5 !important;
+    border-color:rgba(255,255,255,0.12) !important;
+  }
+
+  html.theme-dark .calendar-shell .calendar-table td,
+  html.theme-dark .calendar-shell td.calendar-cell,
+  html.theme-dark .calendar-shell td.calendar-cell-day{
+    background:#151b27 !important;
+    color:#e9eef5 !important;
+    border-color:rgba(255,255,255,0.10) !important;
+  }
+
+  html.theme-dark .calendar-shell td.calendar-cell-empty{
+    background:#131925 !important;
+  }
+
+  html.theme-dark .calendar-shell td.calendar-cell-day:hover,
+  html.theme-dark .calendar-shell td.calendar-cell-day:focus{
+    background:#20283a !important;
+  }
+
+  html.theme-dark .day-number{
+    background:#273247 !important;
+    border-color:rgba(255,255,255,0.18) !important;
+    color:#e9eef5 !important;
+  }
+
+  html.theme-dark .side-menu-header,
+  html.theme-dark .side-menu-footer{
+    border-color:rgba(255,255,255,0.10) !important;
+  }
+
+  html.theme-dark .side-menu-title,
+  html.theme-dark .side-menu-body,
+  html.theme-dark .side-menu-body span,
+  html.theme-dark .side-menu-body div,
+  html.theme-dark .side-menu-body label,
+  html.theme-dark .side-menu-body td,
+  html.theme-dark .side-menu-body th{
+    color:#e9eef5 !important;
+  }
+
+  html.theme-dark .side-menu-close{
+    background:#1b2230 !important;
+    color:#e9eef5 !important;
+    border-color:rgba(255,255,255,0.16) !important;
+  }
+
+  html.theme-dark .side-menu-theme-card{
+    background:#1b2230 !important;
+    border-color:rgba(255,255,255,0.12) !important;
+  }
+
+  html.theme-dark .side-menu-history-link{
+    background:#21314a !important;
+    color:#8ac1ff !important;
+  }
+
+  html.theme-dark .birthday-table,
+  html.theme-dark .birthday-table tbody,
+  html.theme-dark .birthday-table tr{
+    background:transparent !important;
+    color:#e9eef5 !important;
+  }
+
+  html.theme-dark .birthday-table thead tr{
+    background:#1b2230 !important;
+  }
+
+  html.theme-dark .birthday-table th,
+  html.theme-dark .birthday-table td{
+    background:transparent !important;
+    color:#e9eef5 !important;
+    border-color:rgba(255,255,255,0.10) !important;
+  }
+
+  html.theme-dark .birthday-empty{
+    color:#b8c4d7 !important;
+  }
+
+  html.theme-dark .birthday-more-btn{
+    background:#1b2230 !important;
+    border-color:rgba(255,255,255,0.12) !important;
+    color:#8ac1ff !important;
+  }
+
+  html.theme-dark .side-menu-body .birthday-days-today{
+    color:#28a745 !important;
+  }
+
+  html.theme-dark .side-menu-body .birthday-days-future{
+    color:#007bff !important;
+  }
+
+  html.theme-dark .side-menu-body .birthday-days-passed{
+    color:#dc3545 !important;
+  }
+
+  html.theme-dark .confirm-delete-modal{
+    background:#151923 !important;
+    color:#e9eef5 !important;
+  }
+
+  html.theme-dark .custom-modal{
+    background:#151923 !important;
+    color:#e9eef5 !important;
+    box-shadow:0 8px 40px rgba(0,0,0,0.40) !important;
+  }
+
+  html.theme-dark .custom-modal-content{
+    background:#151923 !important;
+    color:#e9eef5 !important;
+  }
+</style>
+
+@section Scripts {
+<script>
+    // =========================
+    // ✅ View Customer History handler
+    // =========================
+    function viewCustHistory() {
+      window.location.href = '/Customer/History';
+    }
+  // =========================
+  // ✅ Injected data from Razor
+  // =========================
+  var allAppointments = @Html.Raw(JsonSerializer.Serialize(monthAppointments, jsonOpt));
+  window.agentNames   = @Html.Raw(JsonSerializer.Serialize(agentNames, jsonOpt));
+  window.customerNames= @Html.Raw(JsonSerializer.Serialize(customerNames, jsonOpt));
+  window.agentColors  = @Html.Raw(JsonSerializer.Serialize(agentColors, jsonOpt));
+  window.customerPhones = @Html.Raw(JsonSerializer.Serialize(ViewBag.CustomerPhones ?? new Dictionary<string, string[]>(), jsonOpt));
+
+  window.apptServices = @Html.Raw(JsonSerializer.Serialize(ViewBag.ApptServices ?? new Dictionary<long, List<string>>(), jsonOpt));
+  window.serviceNames = @Html.Raw(JsonSerializer.Serialize(ViewBag.ServiceNames ?? new Dictionary<string, string>(), jsonOpt));
+  window.itemDescriptions = @Html.Raw(JsonSerializer.Serialize(ViewBag.ItemDescriptions ?? new Dictionary<string, string>(), jsonOpt));
+
+  function getAntiForgeryToken() {
+    var el = document.querySelector('#antiForgeryForm input[name="__RequestVerificationToken"]');
+    return el ? el.value : '';
+  }
+
+  function escHtml(s) {
+    return (s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function toTitleCase(s) {
+    s = (s || '').toString().trim().toLowerCase();
+    if (!s) return s;
+    return s.replace(/(^|[\s-])([a-z])/g, function (_, p1, p2) { return p1 + p2.toUpperCase(); });
+  }
+
+  function isFulfilled(appt) {
+    var status = (appt.Status || '').toString().trim().toUpperCase();
+    return status === 'FULFILLED' || status === 'DONE' || status === 'COMPLETED' || status === 'CANCELLED';
+  }
+
+  // =========================
+  // ✅ Confirm Delete Modal
+  // =========================
+  var pendingDeleteId = null;
+
+  function openConfirmDeleteModal(apptId) {
+    pendingDeleteId = apptId || null;
+    var overlay = document.getElementById('modalOverlay');
+    var m = document.getElementById('confirmDeleteModal');
+    if (overlay) overlay.style.display = 'block';
+    if (m) m.style.display = 'block';
+  }
+
+  function closeConfirmDeleteModal() {
+    pendingDeleteId = null;
+    var m = document.getElementById('confirmDeleteModal');
+    if (m) m.style.display = 'none';
+
+    var dayOpen = document.getElementById('dayAppointmentsModal')?.style.display === 'block';
+    var monthOpen = document.getElementById('monthAppointmentsModal')?.style.display === 'block';
+    if (!dayOpen && !monthOpen) {
+      var overlay = document.getElementById('modalOverlay');
+      if (overlay) overlay.style.display = 'none';
+    }
+  }
+
+  async function cancelAppointmentAjax(apptId) {
+    var token = getAntiForgeryToken();
+
+    var body = new URLSearchParams();
+    body.append('id', apptId);
+    body.append('__RequestVerificationToken', token);
+
+    var res = await fetch('/Appointment/DeleteAjax', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+      body: body.toString()
+    });
+
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    var json = await res.json();
+    if (!json || json.ok !== true) {
+      throw new Error((json && json.message) ? json.message : 'Cancel failed');
+    }
+    return json;
+  }
+
+  function wireDeleteConfirm(containerEl) {
+    if (!containerEl) return;
+    containerEl.querySelectorAll('a.appt-delete').forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var apptId = a.getAttribute('data-appt-id');
+        openConfirmDeleteModal(apptId);
+      });
+    });
+  }
+
+  // =========================
+  // ✅ Status Update AJAX
+  // =========================
+  async function setAppointmentStatus(apptId, newStatus) {
+    var token = getAntiForgeryToken();
+
+    var body = new URLSearchParams();
+    body.append('id', apptId);
+    body.append('status', newStatus);
+    body.append('__RequestVerificationToken', token);
+
+    var res = await fetch('/Appointment/SetStatus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+      body: body.toString()
+    });
+
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    var json = await res.json();
+    if (!json || json.ok !== true) throw new Error((json && json.message) ? json.message : 'Update failed');
+
+    return json;
+  }
+
+  function wireTodoCheckboxes(containerEl) {
+    if (!containerEl) return;
+
+    containerEl.querySelectorAll('.appt-done-cb').forEach(function (cb) {
+      cb.addEventListener('click', function (e) { e.stopPropagation(); });
+
+      cb.addEventListener('change', async function (e) {
+        e.stopPropagation();
+
+        var card = cb.closest('.appt-card');
+        if (!card) return;
+
+        var apptId = cb.getAttribute('data-appt-id') || card.getAttribute('data-appt-id');
+        var wantDone = cb.checked;
+        var newStatus = wantDone ? 'FULFILLED' : 'BOOKED';
+
+        card.classList.toggle('is-fulfilled', wantDone);
+        card.classList.add('appt-saving');
+
+        try {
+          await setAppointmentStatus(apptId, newStatus);
+          var found = (allAppointments || []).find(function (a) { return String(a.ApptId) === String(apptId); });
+          if (found) found.Status = newStatus;
+
+        } catch (err) {
+          cb.checked = !wantDone;
+          card.classList.toggle('is-fulfilled', !wantDone);
+          alert('Failed to update status: ' + (err && err.message ? err.message : err));
+        } finally {
+          card.classList.remove('appt-saving');
+        }
+      });
+    });
+  }
+
+  // =========================
+  // ✅ Services dropdown (title click)
+  // =========================
+  function getServiceLinesHtml(apptId) {
+    var list = (window.apptServices && window.apptServices[apptId]) ? window.apptServices[apptId] : null;
+    if (!list || !Array.isArray(list) || list.length <= 1) return '';
+
+    var html = '<div class="appt-services" style="display:none; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(0,0,0,0.15);">';
+    html += '<div style="font-size:12px; font-weight:700; margin-bottom:4px;">Services</div>';
+
+    list.forEach(function (code) {
+      var name = (window.itemDescriptions && window.itemDescriptions[code])
+        ? window.itemDescriptions[code]
+        : (window.serviceNames && window.serviceNames[code])
+          ? window.serviceNames[code]
+          : code;
+      html += '<div class="appt-service-line" style="font-size:12px; line-height:1.35;">- ' + escHtml(name) + '</div>';
+    });
+
+    html += '</div>';
+    return html;
+  }
+
+  function wireTitleDropdown(containerEl) {
+    if (!containerEl) return;
+
+    containerEl.querySelectorAll('.appt-title-toggle').forEach(function (t) {
+      t.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        var card = t.closest('.appt-card');
+        if (!card) return;
+
+        var panel = card.querySelector('.appt-services');
+        if (!panel) return;
+
+        var isOpen = panel.style.display === 'block';
+        panel.style.display = isOpen ? 'none' : 'block';
+
+        var more = t.querySelector('.appt-more');
+        if (more) more.textContent = isOpen ? '(more)' : '(less)';
+      });
+    });
+  }
+
+  // =========================
+  // ✅ Build modal appointment card
+  // =========================
+  function buildApptCard(appt) {
+    var safeApptId = parseInt(appt && appt.ApptId, 10);
+    if (!Number.isFinite(safeApptId) || safeApptId <= 0) safeApptId = 0;
+    var when = '';
+    var timeOnly = '';
+    if (appt.ApptStart) {
+      timeOnly = appt.ApptStart.replace('T', ' ').substring(11, 16);
+      var hour = parseInt(timeOnly.substring(0, 2), 10);
+      var minute = timeOnly.substring(3, 5);
+      var ampm = hour >= 12 ? 'PM' : 'AM';
+      var displayHour = hour % 12;
+      if (displayHour === 0) displayHour = 12;
+      when = displayHour + ':' + minute + ' ' + ampm;
+    }
+
+    var cust = (window.customerNames && window.customerNames[appt.CustomerCode])
+      ? window.customerNames[appt.CustomerCode]
+      : (appt.CustomerCode || '');
+    // Get best phone number
+    var phoneArr = (window.customerPhones && window.customerPhones[appt.CustomerCode]) ? window.customerPhones[appt.CustomerCode] : [];
+    var bestPhone = '';
+    for (var i = 0; i < phoneArr.length; i++) {
+      if (phoneArr[i] && phoneArr[i].trim() !== '') { bestPhone = phoneArr[i]; break; }
+    }
+
+    var agent = (window.agentNames && window.agentNames[appt.AgentCode])
+      ? window.agentNames[appt.AgentCode]
+      : (appt.AgentCode || '');
+
+    var cardColor = (window.agentColors && window.agentColors[appt.AgentCode])
+      ? window.agentColors[appt.AgentCode]
+      : null;
+
+    var style = cardColor ? ' style="background-color:' + escHtml(cardColor) + ' !important;"' : '';
+    var statusUp = (appt.Status || '').trim().toUpperCase();
+    var done = statusUp === 'FULFILLED' || statusUp === 'DONE' || statusUp === 'COMPLETED';
+    var cancelled = statusUp === 'CANCELLED';
+    var doneClass = done ? ' is-fulfilled' : (cancelled ? ' is-cancelled' : '');
+
+    // Status letter logic
+    var statusLetter = 'B';
+    var statusColor = '#0275d8';
+    if (cancelled) { statusLetter = 'C'; statusColor = '#d9534f'; }
+    else if (done) { statusLetter = 'F'; statusColor = '#5cb85c'; }
+
+    // Services dropdown only if >1 service
+    var servicesHtml = getServiceLinesHtml(safeApptId);
+    var hasMultiServices = servicesHtml && servicesHtml.length > 0;
+
+    // Use itemDescriptions to map appt.Title (item code) to description
+    var itemDesc = (window.itemDescriptions && appt.Title && window.itemDescriptions[appt.Title])
+      ? window.itemDescriptions[appt.Title]
+      : null;
+    var displayTitle = itemDesc || toTitleCase(appt.Title || cust || '');
+    var titleHtml =
+      '<div class="appt-title appt-title-toggle" style="cursor:' + (hasMultiServices ? 'pointer' : 'default') + '; display:flex; align-items:center; gap:8px;">' +
+        '<span>' + escHtml(displayTitle) + '</span>' +
+        '<span class="appt-status-letter" style="font-size:13px; font-weight:700; margin-left:4px; color:' + statusColor + ';">[' + statusLetter + ']</span>' +
+        (hasMultiServices ? '<span class="appt-more" style="font-size:12px; font-weight:700; opacity:0.85;">(more)</span>' : '') +
+      '</div>';
+
+    // Actions: nothing for fulfilled/cancelled, edit/sign/delete for others
+    var actionsHtml = '';
+    if (!done && !cancelled) {
+      actionsHtml =
+        '<div class="appt-actions" style="margin-top:6px; display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between;">' +
+          '<div style="display:flex;gap:6px;margin-right:auto;">' +
+            '<a href="/Appointment/Edit/' + safeApptId + '" class="btn btn-sm btn-primary">Edit</a>' +
+            '<a href="#" class="btn btn-sm btn-danger appt-delete" data-appt-id="' + safeApptId + '">Cancelled?</a>' +
+          '</div>' +
+          '<div>' +
+            '<a href="/Appointment/Sign/' + safeApptId + '" class="btn btn-sm btn-success" style="background:#28a745;border-color:#28a745;">Submit E-Sign</a>' +
+          '</div>' +
+        '</div>';
+    }
+
+    return (
+      '<div class="appt-card modal-card' + doneClass + '" data-appt-id="' + safeApptId + '"' + style + '>' +
+        '<div class="appt-top">' +
+          '<div>' + titleHtml + '</div>' +
+          '<div class="appt-top-right"><div class="appt-time">' + escHtml(timeOnly || '') + '</div></div>' +
+        '</div>' +
+        servicesHtml +
+        '<div class="appt-meta" style="margin-top:6px;">' +
+          '<div class="appt-meta-line"><span class="appt-meta-label">When:</span> <span class="appt-meta-value">' + escHtml(when) + '</span></div>' +
+          '<div class="appt-meta-line"><span class="appt-meta-label">Cust:</span> <span class="appt-meta-value">' + escHtml(cust) + (bestPhone ? ' <span style="color:#007bff;font-weight:600;font-size:0.98em;">(' + escHtml(bestPhone) + ')</span>' : '') + '</span></div>' +
+          '<div class="appt-meta-line"><span class="appt-meta-label">Agent:</span> <span class="appt-meta-value">' + escHtml(agent) + '</span></div>' +
+          actionsHtml +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  // =========================
+  // ✅ Show modals
+  // =========================
+  function showMonthModal(year, month) {
+    var modalEl = document.getElementById('monthAppointmentsModal');
+    var label = document.getElementById('modalMonthLabel');
+    var list = document.getElementById('month-appointments-list');
+    var overlay = document.getElementById('modalOverlay');
+
+    var monthStr = year + '-' + (month.toString().length === 1 ? '0' + month : month);
+    label.textContent = monthStr;
+    list.innerHTML = '';
+
+    var appts = (allAppointments || []).filter(function (a) {
+      return a.ApptStart && a.ApptStart.startsWith(monthStr);
+    });
+
+    if (appts.length === 0) {
+      list.innerHTML = '<div class="appt-empty">No appointments.</div>';
+    } else {
+      appts.sort(function (a, b) { return (a.ApptStart || '').localeCompare(b.ApptStart || ''); });
+
+      var html = '';
+      appts.forEach(function (appt) { html += buildApptCard(appt); });
+      list.innerHTML = html;
+
+      wireTodoCheckboxes(list);
+      wireDeleteConfirm(list);
+      wireTitleDropdown(list);
+    }
+
+    overlay.style.display = 'block';
+    modalEl.style.display = 'block';
+  }
+
+  function showDayModal(date) {
+    var modalEl = document.getElementById('dayAppointmentsModal');
+    var label = document.getElementById('modalDayLabel');
+    var list = document.getElementById('day-appointments-list');
+    var addBtn = document.getElementById('add-appointment-btn');
+    var overlay = document.getElementById('modalOverlay');
+
+    try {
+      var d = new Date(date);
+      label.textContent = !isNaN(d.getTime())
+        ? (d.getDate() + ' ' + d.toLocaleString('default', { month: 'long' }) + ' ' + d.getFullYear())
+        : date;
+    } catch (e) {
+      label.textContent = date;
+    }
+
+    addBtn.href = '/Appointment/Create?apptStart=' + date + 'T09:00';
+    list.innerHTML = '';
+
+    var appts = (allAppointments || []).filter(function (a) {
+      return a.ApptStart && a.ApptStart.startsWith(date);
+    });
+
+    if (appts.length === 0) {
+      list.innerHTML = '<div class="appt-empty">No appointments.</div>';
+    } else {
+      appts.sort(function (a, b) { return (a.ApptStart || '').localeCompare(b.ApptStart || ''); });
+
+      var html = '';
+      appts.forEach(function (appt) { html += buildApptCard(appt); });
+      list.innerHTML = html;
+
+      wireTodoCheckboxes(list);
+      wireDeleteConfirm(list);
+      wireTitleDropdown(list);
+    }
+
+    overlay.style.display = 'block';
+    modalEl.style.display = 'block';
+  }
+
+  // =========================
+  // ✅ Init
+  // =========================
+  document.addEventListener('DOMContentLoaded', function () {
+
+    // Theme toggle in menu (uses global layout helpers)
+    (function(){
+      const cb = document.getElementById('themeToggle');
+      const label = document.getElementById('themeLabel');
+      if (!cb || !label || typeof window.getAppTheme !== 'function' || typeof window.setAppTheme !== 'function') return;
+
+      function sync(){
+        const t = window.getAppTheme();
+        cb.checked = (t === 'dark');
+        label.textContent = cb.checked ? 'Dark' : 'Light';
+      }
+
+      cb.addEventListener('change', function(){
+        window.setAppTheme(cb.checked ? 'dark' : 'light');
+      });
+
+      window.addEventListener('themechanged', sync);
+      sync();
+    })();
+
+    // Day cell click opens day modal
+    document.querySelectorAll('.calendar-cell-day').forEach(function (cell) {
+      cell.addEventListener('click', function (e) {
+        e.stopPropagation();
+        showDayModal(cell.getAttribute('data-date'));
+      });
+
+      cell.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          showDayModal(cell.getAttribute('data-date'));
+        }
+      });
+    });
+
+    function closeMainModals() {
+      var d = document.getElementById('dayAppointmentsModal');
+      var m = document.getElementById('monthAppointmentsModal');
+      var ov = document.getElementById('modalOverlay');
+      if (d) d.style.display = 'none';
+      if (m) m.style.display = 'none';
+      if (ov) ov.style.display = 'none';
+    }
+
+    var closeDay = document.getElementById('closeDayModal');
+    var closeMonth = document.getElementById('closeMonthModal');
+    var overlay = document.getElementById('modalOverlay');
+
+    if (closeDay) closeDay.addEventListener('click', closeMainModals);
+    if (closeMonth) closeMonth.addEventListener('click', closeMainModals);
+
+    if (overlay) {
+      overlay.addEventListener('click', closeMainModals);
+      overlay.addEventListener('touchstart', closeMainModals);
+    }
+
+    // Prevent clicking inside modal from closing
+    document.querySelectorAll('.custom-modal-content').forEach(function (modalContent) {
+      modalContent.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+      modalContent.addEventListener('touchstart', function (e) { e.stopPropagation(); });
+    });
+
+    // Confirm delete modal buttons
+    var btnCancel = document.getElementById('btnDeleteCancel');
+    var btnYes = document.getElementById('btnDeleteYes');
+    var btnCloseX = document.getElementById('closeConfirmDeleteModal');
+
+    if (btnCancel) btnCancel.addEventListener('click', function (e) {
+      e.preventDefault();
+      closeConfirmDeleteModal();
+    });
+
+    if (btnCloseX) btnCloseX.addEventListener('click', function (e) {
+      e.preventDefault();
+      closeConfirmDeleteModal();
+    });
+
+    if (btnYes) btnYes.addEventListener('click', async function (e) {
+      e.preventDefault();
+
+      if (!pendingDeleteId) {
+        closeConfirmDeleteModal();
+        return;
+      }
+
+      btnYes.disabled = true;
+
+      try {
+        await cancelAppointmentAjax(pendingDeleteId);
+        closeConfirmDeleteModal();
+        closeMainModals();
+        window.location.href = window.location.href; // refresh to show new status
+        return;
+
+      } catch (err) {
+        alert('Failed to cancel appointment: ' + (err && err.message ? err.message : err));
+        btnYes.disabled = false;
+      }
+    });
+
+
+    // Hamburger menu logic
+    var hb = document.getElementById('hamburgerBtn');
+    var menu = document.getElementById('sideMenu');
+    var menuOv = document.getElementById('sideMenuOverlay');
+    var closeBtn = document.getElementById('sideMenuClose');
+
+    function openMenu() {
+      if (menuOv) menuOv.style.display = 'block';
+      if (menu) menu.style.display = 'flex';
+    }
+
+    function closeMenu() {
+      if (menu) menu.style.display = 'none';
+      if (menuOv) menuOv.style.display = 'none';
+    }
+
+    if (hb) hb.addEventListener('click', function (e) {
+      e.preventDefault();
+      openMenu();
+    });
+
+    if (closeBtn) closeBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      closeMenu();
+    });
+
+    if (menuOv) menuOv.addEventListener('click', function () {
+      closeMenu();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeMenu();
+    });
+
+    var birthdayMoreBtn = document.getElementById('birthdayMoreBtn');
+    if (birthdayMoreBtn) {
+      birthdayMoreBtn.addEventListener('click', function () {
+        var visibleCount = parseInt(birthdayMoreBtn.getAttribute('data-visible-count') || '10', 10);
+        var rows = Array.prototype.slice.call(document.querySelectorAll('.birthday-row'));
+        var nextVisibleCount = visibleCount + 10;
+
+        rows.forEach(function (row, index) {
+          if (index < nextVisibleCount) {
+            row.classList.remove('birthday-row-hidden');
+          }
+        });
+
+        birthdayMoreBtn.setAttribute('data-visible-count', String(nextVisibleCount));
+        if (rows.length <= nextVisibleCount) {
+          birthdayMoreBtn.style.display = 'none';
+        }
+      });
+    }
+
+    // expose functions globally (called from onclick in header)
+    window.showMonthModal = showMonthModal;
+    window.showDayModal = showDayModal;
+  });
+</script>
+
+<script>
+  // =========================
+  // ✅ Birthday month navigation
+  // =========================
+  function wireBirthdayMonthNav() {
+    var prevBtn = document.getElementById('birthdayPrevMonth');
+    var nextBtn = document.getElementById('birthdayNextMonth');
+
+    var currentMonth = parseInt('@month');
+    var currentYear = parseInt('@year');
+    var baseUrl = '@Url.Action("Index", "Calendar")';
+
+    function navigateBirthdayMonth() {
+      var url = new URL(baseUrl, window.location.origin);
+      url.searchParams.set('year', currentYear);
+      url.searchParams.set('month', currentMonth);
+
+      var currentUrl = new URL(window.location.href);
+      var branches = currentUrl.searchParams.getAll('branches');
+      branches.forEach(function (b) {
+        url.searchParams.append('branches', b);
+      });
+
+      if (currentUrl.searchParams.get('pickDate') === '1') {
+        url.searchParams.set('pickDate', '1');
+      }
+
+      window.location.href = url.toString();
+    }
+
+    prevBtn && prevBtn.addEventListener('click', function () {
+      currentMonth--;
+      if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+      navigateBirthdayMonth();
+    });
+
+    nextBtn && nextBtn.addEventListener('click', function () {
+      currentMonth++;
+      if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+      navigateBirthdayMonth();
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', wireBirthdayMonthNav);
+</script>
+}
